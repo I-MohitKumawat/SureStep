@@ -1,8 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Button, StyleSheet, Text } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
+import type { HomeStackParamList } from '../navigation/RootNavigator';
 
-export const HomeScreen: React.FC = () => {
+type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
+
+export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <ScreenContainer>
       <Text style={styles.heading}>Home</Text>
@@ -10,6 +14,7 @@ export const HomeScreen: React.FC = () => {
         This is the initial SureStep mobile app shell. Navigation, roles, and feature modules will
         be wired in future tasks.
       </Text>
+      <Button title="Go to details" onPress={() => navigation.navigate('Details')} />
     </ScreenContainer>
   );
 };

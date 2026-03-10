@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import React from 'react';
 import AppShell from './app/App';
 
