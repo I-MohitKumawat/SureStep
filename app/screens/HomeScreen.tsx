@@ -3,14 +3,17 @@ import { Button, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
+import { useTheme } from '../../packages/ui/theme/ThemeProvider';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 
 export const HomeScreen: React.FC<Props> = ({ navigation }) => {
+  const theme = useTheme();
+
   return (
     <ScreenContainer>
-      <Text style={styles.heading}>SureStep</Text>
-      <Text style={styles.body}>
+      <Text style={[styles.heading, { color: theme.colors.textPrimary }]}>Home</Text>
+      <Text style={[styles.body, { color: theme.colors.textSecondary }]}>
         This is the initial SureStep mobile app shell. Navigation, roles, and feature modules will
         be wired in future tasks.
       </Text>
