@@ -11,7 +11,7 @@
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "noEmit": true,
     "isolatedModules": true,
@@ -27,7 +27,8 @@
     }
   },
   "include": [
+    "App.tsx",
     "app/**/*"
   ],
-  "extends": "expo/tsconfig.base"
+  "extends": "expo/tsconfig.base.json"
 }
