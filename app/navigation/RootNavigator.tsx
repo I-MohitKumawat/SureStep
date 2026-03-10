@@ -5,10 +5,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomeScreen } from '../screens/HomeScreen';
 import { DetailsScreen } from '../screens/DetailsScreen';
 import { MoreScreen } from '../screens/MoreScreen';
+import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 
 export type HomeStackParamList = {
   Home: undefined;
   Details: undefined;
+  CaregiverDashboard: undefined;
 };
 
 export type MoreStackParamList = {
@@ -29,6 +31,11 @@ function HomeStackNavigator() {
     <HomeStack.Navigator>
       <HomeStack.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <HomeStack.Screen name="Details" component={DetailsScreen} options={{ title: 'Details' }} />
+      <HomeStack.Screen
+        name="CaregiverDashboard"
+        component={CaregiverDashboardScreen}
+        options={{ title: 'Caregiver dashboard' }}
+      />
     </HomeStack.Navigator>
   );
 }
