@@ -15,20 +15,20 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "isolatedModules": true,
-    "types": [
-      "react",
-      "react-native"
-    ],
     "baseUrl": ".",
     "paths": {
       "app/*": [
         "app/*"
+      ],
+      "ui/*": [
+        "packages/ui/*"
       ]
     }
   },
   "include": [
     "App.tsx",
-    "app/**/*"
+    "app/**/*",
+    "packages/ui/**/*"
   ],
   "extends": "expo/tsconfig.base.json"
 }

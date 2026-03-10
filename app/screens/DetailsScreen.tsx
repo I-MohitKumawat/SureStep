@@ -1,12 +1,17 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { useTheme } from '../../packages/ui/theme/ThemeProvider';
 
 export const DetailsScreen: React.FC = () => {
+  const theme = useTheme();
+
   return (
     <ScreenContainer>
-      <Text style={styles.heading}>Details</Text>
-      <Text style={styles.body}>Placeholder detail screen for stack navigation.</Text>
+      <Text style={[styles.heading, { color: theme.colors.textPrimary }]}>Details</Text>
+      <Text style={[styles.body, { color: theme.colors.textSecondary }]}>
+        Placeholder detail screen for stack navigation.
+      </Text>
     </ScreenContainer>
   );
 };
