@@ -22,13 +22,17 @@
       ],
       "ui/*": [
         "packages/ui/*"
+      ],
+      "core/*": [
+        "packages/core/*"
       ]
     }
   },
   "include": [
     "App.tsx",
     "app/**/*",
-    "packages/ui/**/*"
+    "packages/ui/**/*",
+    "packages/core/**/*"
   ],
   "extends": "expo/tsconfig.base.json"
 }
