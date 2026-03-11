@@ -1,53 +1,59 @@
-import React from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
+import type { CaregiverSummaryTile } from '../api/reports';
+import { fetchCaregiverSummaryTiles } from '../api/reports';
 
-type PatientStatus = {
-  id: string;
-  name: string;
-  relationship: string;
-  adherencePercent: number;
-  hasRecentAlerts: boolean;
-  lastActivityLabel: string;
-};
-
-const MOCK_PATIENTS: PatientStatus[] = [
-  {
-    id: 'p1',
-    name: 'Alice Johnson',
-    relationship: 'Mother',
-    adherencePercent: 88,
-    hasRecentAlerts: false,
-    lastActivityLabel: 'Completed morning routine · 8:15 AM'
-  },
-  {
-    id: 'p2',
-    name: 'Robert Singh',
-    relationship: 'Father-in-law',
-    adherencePercent: 62,
-    hasRecentAlerts: true,
-    lastActivityLabel: 'Missed medication reminder · 9:30 AM'
-  },
-  {
-    id: 'p3',
-    name: 'Maria Lopez',
-    relationship: 'Aunt',
-    adherencePercent: 94,
-    hasRecentAlerts: false,
-    lastActivityLabel: 'All activities on track today'
-  }
-];
+type PatientStatus = CaregiverSummaryTile;
 
 export const CaregiverDashboardScreen: React.FC = () => {
+  const [patients, setPatients] = useState<PatientStatus[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const load = async () => {
+      try {
+        const data = await fetchCaregiverSummaryTiles();
+        if (!isMounted) return;
+        setPatients(data);
+      } catch (e) {
+        if (!isMounted) return;
+        setError('Unable to load caregiver summaries. Showing an empty list.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const listData = patients ?? [];
+
   return (
     <ScreenContainer>
       <Text style={styles.heading}>Caregiver dashboard</Text>
       <Text style={styles.subheading}>
-        Linked patients with a quick view of adherence and recent issues. Data is mocked for now and
-        will be wired to reports in later tasks.
+        Linked patients with a quick view of adherence and recent issues, backed by a
+        `GET /reports/summary`-style summary client.
       </Text>
+      {loading && (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator />
+          <Text style={styles.loadingText}>Loading summaries…</Text>
+        </View>
+      )}
+      {error && !loading && <Text style={styles.errorText}>{error}</Text>}
       <FlatList
-        data={MOCK_PATIENTS}
+        data={listData}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
@@ -101,6 +107,21 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#6b7280',
     marginBottom: 12
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: '#6b7280'
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#b91c1c',
+    marginBottom: 8
   },
   listContent: {
     paddingBottom: 16
