@@ -5,15 +5,23 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomeScreen } from '../screens/HomeScreen';
 import { DetailsScreen } from '../screens/DetailsScreen';
 import { MoreScreen } from '../screens/MoreScreen';
+import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
+import { PatientDetailScreen } from '../screens/PatientDetailScreen';
 
 import { useTheme } from '../../packages/ui/theme/ThemeProvider';
-import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
-
 
 export type HomeStackParamList = {
   Home: undefined;
   Details: undefined;
   CaregiverDashboard: undefined;
+  PatientDetail: {
+    patientId: string;
+    name: string;
+    relationship: string;
+    adherencePercent: number;
+    lastActivityLabel: string;
+    hasRecentAlerts: boolean;
+  };
 };
 
 export type MoreStackParamList = {
@@ -47,6 +55,11 @@ function HomeStackNavigator() {
         name="CaregiverDashboard"
         component={CaregiverDashboardScreen}
         options={{ title: 'Caregiver dashboard' }}
+      />
+      <HomeStack.Screen
+        name="PatientDetail"
+        component={PatientDetailScreen}
+        options={{ title: 'Patient details' }}
       />
     </HomeStack.Navigator>
   );

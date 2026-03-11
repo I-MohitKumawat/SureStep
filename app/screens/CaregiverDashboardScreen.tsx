@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { CaregiverSummaryTile } from '../api/reports';
 import { fetchCaregiverSummaryTiles } from '../api/reports';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { HomeStackParamList } from '../navigation/RootNavigator';
 
 type PatientStatus = CaregiverSummaryTile;
+type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverDashboard'>;
 
-export const CaregiverDashboardScreen: React.FC = () => {
+export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
   const [patients, setPatients] = useState<PatientStatus[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +62,19 @@ export const CaregiverDashboardScreen: React.FC = () => {
         renderItem={({ item }) => {
           const needsAttention = item.adherencePercent < 75 || item.hasRecentAlerts;
           return (
-            <View style={styles.card}>
+            <Pressable
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              onPress={() =>
+                navigation.navigate('PatientDetail', {
+                  patientId: item.id,
+                  name: item.name,
+                  relationship: item.relationship,
+                  adherencePercent: item.adherencePercent,
+                  lastActivityLabel: item.lastActivityLabel,
+                  hasRecentAlerts: item.hasRecentAlerts
+                })
+              }
+            >
               <View style={styles.cardHeader}>
                 <View>
                   <Text style={styles.patientName}>{item.name}</Text>
@@ -87,7 +102,7 @@ export const CaregiverDashboardScreen: React.FC = () => {
                   <Text style={styles.alertPillText}>Recent alerts · review in Alert Center</Text>
                 </View>
               )}
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -133,6 +148,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     borderWidth: 1,
     borderColor: '#e5e7eb'
+  },
+  cardPressed: {
+    backgroundColor: '#eff6ff'
   },
   cardHeader: {
     flexDirection: 'row',
