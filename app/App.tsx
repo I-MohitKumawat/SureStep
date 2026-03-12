@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavigationContainer, type Theme as NavigationTheme } from '@react-navigation/native';
-import { RootNavigator } from './navigation/RootNavigator';
 import { ThemeProvider, useTheme } from '../packages/ui/theme/ThemeProvider';
+import { AuthProvider } from '../packages/core/auth/AuthContext';
+import { RoleNavigator } from './navigation/RoleNavigator';
 
 function ThemedNavigation() {
   const theme = useTheme();
@@ -26,16 +27,18 @@ function ThemedNavigation() {
 
   return (
     <NavigationContainer theme={navigationTheme}>
-      <RootNavigator />
+      <RoleNavigator />
     </NavigationContainer>
   );
 }
 
 const App: React.FC = () => {
   return (
-    <ThemeProvider>
-      <ThemedNavigation />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <ThemedNavigation />
+      </ThemeProvider>
+    </AuthProvider>
   );
 };
 
