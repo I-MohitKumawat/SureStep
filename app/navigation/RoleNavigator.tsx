@@ -8,8 +8,8 @@ export const RoleNavigator: React.FC = () => {
 
   if (auth.status !== 'authenticated') {
     // Until real auth/role-switch UI exists (FE-AUTH / FE-ROLE-003),
-    // unauthenticated state renders nothing.
-    return null;
+    // unauthenticated users see the default app shell.
+    return <RootNavigator />;
   }
 
   // For now, all roles share the same navigator; later tasks will
