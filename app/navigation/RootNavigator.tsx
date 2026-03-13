@@ -7,7 +7,10 @@ import { DetailsScreen } from '../screens/DetailsScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 import { PatientDetailScreen } from '../screens/PatientDetailScreen';
+
 import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
+import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
+
 
 import { useTheme } from '../../packages/ui/theme/ThemeProvider';
 
@@ -22,6 +25,10 @@ export type HomeStackParamList = {
     adherencePercent: number;
     lastActivityLabel: string;
     hasRecentAlerts: boolean;
+  };
+  RoutineManager: {
+    patientId: string;
+    patientName: string;
   };
 };
 
@@ -62,6 +69,11 @@ function HomeStackNavigator() {
         name="PatientDetail"
         component={PatientDetailScreen}
         options={{ title: 'Patient details' }}
+      />
+      <HomeStack.Screen
+        name="RoutineManager"
+        component={RoutineManagerScreen}
+        options={{ title: 'Routines' }}
       />
     </HomeStack.Navigator>
   );
