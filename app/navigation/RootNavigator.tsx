@@ -11,7 +11,6 @@ import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
 
 import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
-import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 
 
 import { useTheme } from '../../packages/ui/theme/ThemeProvider';
