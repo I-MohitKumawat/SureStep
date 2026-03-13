@@ -7,7 +7,10 @@ import { DetailsScreen } from '../screens/DetailsScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 import { PatientDetailScreen } from '../screens/PatientDetailScreen';
+
+import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
 import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
+
 
 import { useTheme } from '../../packages/ui/theme/ThemeProvider';
 
@@ -31,6 +34,7 @@ export type HomeStackParamList = {
 
 export type MoreStackParamList = {
   More: undefined;
+  DevRoleSwitch: undefined;
 };
 
 export type RootTabParamList = {
@@ -88,6 +92,13 @@ function MoreStackNavigator() {
       }}
     >
       <MoreStack.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
+      {__DEV__ ? (
+        <MoreStack.Screen
+          name="DevRoleSwitch"
+          component={DevRoleSwitchScreen}
+          options={{ title: 'Dev role switch' }}
+        />
+      ) : null}
     </MoreStack.Navigator>
   );
 }
