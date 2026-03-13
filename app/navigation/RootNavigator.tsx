@@ -7,6 +7,8 @@ import { DetailsScreen } from '../screens/DetailsScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 import { PatientDetailScreen } from '../screens/PatientDetailScreen';
+import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
+import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
 
 import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
 import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
@@ -30,6 +32,24 @@ export type HomeStackParamList = {
     patientId: string;
     patientName: string;
   };
+  RoutineEditor:
+    | {
+        patientId: string;
+        patientName: string;
+        mode: 'create';
+      }
+    | {
+        patientId: string;
+        patientName: string;
+        mode: 'edit';
+        routine: {
+          id: string;
+          patientId: string;
+          name: string;
+          isActive: boolean;
+          scheduleLabel: string;
+        };
+      };
 };
 
 export type MoreStackParamList = {
@@ -74,6 +94,11 @@ function HomeStackNavigator() {
         name="RoutineManager"
         component={RoutineManagerScreen}
         options={{ title: 'Routines' }}
+      />
+      <HomeStack.Screen
+        name="RoutineEditor"
+        component={RoutineEditorScreen}
+        options={{ title: 'Routine' }}
       />
     </HomeStack.Navigator>
   );

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
@@ -9,43 +10,64 @@ import { fetchRoutinesForPatient } from '../api/routines';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'RoutineManager'>;
 
-export const RoutineManagerScreen: React.FC<Props> = ({ route }) => {
+export const RoutineManagerScreen: React.FC<Props> = ({ route, navigation }) => {
   const { patientId, patientName } = route.params;
   const [routines, setRoutines] = useState<RoutineSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     let isMounted = true;
 
-    const load = async () => {
-      try {
-        const data = await fetchRoutinesForPatient(patientId);
-        if (!isMounted) return;
-        setRoutines(data);
-      } catch (e) {
-        if (!isMounted) return;
-        setError('Unable to load routines. Showing an empty list.');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchRoutinesForPatient(patientId);
+      if (!isMounted) return;
+      setRoutines(data);
+    } catch (e) {
+      if (!isMounted) return;
+      setError('Unable to load routines. Showing an empty list.');
+      setRoutines([]);
+    } finally {
+      if (isMounted) {
+        setLoading(false);
       }
-    };
-
-    load();
+    }
 
     return () => {
       isMounted = false;
     };
   }, [patientId]);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
   const listData = routines ?? [];
 
   return (
     <ScreenContainer>
-      <Text style={styles.heading}>Routines</Text>
-      <Text style={styles.subheading}>For {patientName}</Text>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.heading}>Routines</Text>
+          <Text style={styles.subheading}>For {patientName}</Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+          onPress={() =>
+            navigation.navigate('RoutineEditor', { patientId, patientName, mode: 'create' })
+          }
+        >
+          <Text style={styles.primaryButtonText}>New</Text>
+        </Pressable>
+      </View>
 
       {loading && (
         <View style={styles.loadingRow}>
@@ -70,29 +92,61 @@ export const RoutineManagerScreen: React.FC<Props> = ({ route }) => {
               </View>
             </View>
             <Text style={styles.scheduleLabel}>{item.scheduleLabel}</Text>
+            <View style={styles.cardActionsRow}>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                onPress={() =>
+                  navigation.navigate('RoutineEditor', {
+                    patientId,
+                    patientName,
+                    mode: 'edit',
+                    routine: item
+                  })
+                }
+              >
+                <Text style={styles.secondaryButtonText}>Edit</Text>
+              </Pressable>
+            </View>
           </View>
         )}
         ListEmptyComponent={
           !loading ? <Text style={styles.emptyText}>No routines configured yet for this patient.</Text> : null
         }
       />
-
-      <Text style={styles.footerNote}>Routine creation and editing will be added in later tasks.</Text>
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
   heading: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 4
+    marginBottom: 2
   },
   subheading: {
     fontSize: 13,
-    color: '#6b7280',
-    marginBottom: 12
+    color: '#6b7280'
+  },
+  primaryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#111827'
+  },
+  primaryButtonPressed: {
+    backgroundColor: '#1f2937'
+  },
+  primaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff'
   },
   loadingRow: {
     flexDirection: 'row',
@@ -156,15 +210,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4b5563'
   },
+  cardActionsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'flex-end'
+  },
+  secondaryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#e5e7eb'
+  },
+  secondaryButtonPressed: {
+    backgroundColor: '#d1d5db'
+  },
+  secondaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827'
+  },
   emptyText: {
     fontSize: 13,
     color: '#6b7280',
     marginTop: 8
-  },
-  footerNote: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#9ca3af'
   }
 });
 

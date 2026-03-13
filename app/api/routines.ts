@@ -6,7 +6,7 @@ export type RoutineSummary = {
   scheduleLabel: string;
 };
 
-const MOCK_ROUTINES: RoutineSummary[] = [
+let routineStore: RoutineSummary[] = [
   {
     id: 'r1',
     patientId: 'p1',
@@ -36,6 +36,45 @@ const MOCK_ROUTINES: RoutineSummary[] = [
  */
 export async function fetchRoutinesForPatient(patientId: string): Promise<RoutineSummary[]> {
   await new Promise((resolve) => setTimeout(resolve, 300));
-  return MOCK_ROUTINES.filter((routine) => routine.patientId === patientId);
+  return routineStore.filter((routine) => routine.patientId === patientId);
+}
+
+export type RoutineDraft = {
+  patientId: string;
+  name: string;
+  isActive: boolean;
+  scheduleLabel: string;
+};
+
+export async function createRoutine(draft: RoutineDraft): Promise<RoutineSummary> {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const routine: RoutineSummary = {
+    id: `r_${Date.now()}`,
+    patientId: draft.patientId,
+    name: draft.name,
+    isActive: draft.isActive,
+    scheduleLabel: draft.scheduleLabel
+  };
+  routineStore = [routine, ...routineStore];
+  return routine;
+}
+
+export async function updateRoutine(
+  routineId: string,
+  patch: Partial<Omit<RoutineSummary, 'id' | 'patientId'>> & { patientId?: string }
+): Promise<RoutineSummary> {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const idx = routineStore.findIndex((r) => r.id === routineId);
+  if (idx === -1) {
+    throw new Error('Routine not found');
+  }
+  const current = routineStore[idx];
+  const updated: RoutineSummary = {
+    ...current,
+    ...patch,
+    patientId: patch.patientId ?? current.patientId
+  };
+  routineStore = routineStore.map((r) => (r.id === routineId ? updated : r));
+  return updated;
 }
 
