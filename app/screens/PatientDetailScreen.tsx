@@ -1,12 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Button, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDetail'>;
 
-export const PatientDetailScreen: React.FC<Props> = ({ route }) => {
+export const PatientDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { patientId, name, relationship, adherencePercent, lastActivityLabel, hasRecentAlerts } =
     route.params;
 
@@ -38,6 +38,13 @@ export const PatientDetailScreen: React.FC<Props> = ({ route }) => {
           </Text>
         </View>
       )}
+
+      <View style={styles.actionsSection}>
+        <Button
+          title="Manage routines"
+          onPress={() => navigation.navigate('RoutineManager', { patientId, patientName: name })}
+        />
+      </View>
     </ScreenContainer>
   );
 };
@@ -83,6 +90,9 @@ const styles = StyleSheet.create({
   alertBody: {
     fontSize: 13,
     color: '#b91c1c'
+  },
+  actionsSection: {
+    marginTop: 24
   }
 });
 
