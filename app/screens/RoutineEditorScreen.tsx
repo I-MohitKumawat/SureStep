@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -9,17 +9,19 @@ import { createRoutine, updateRoutine } from '../api/routines';
 type Props = NativeStackScreenProps<HomeStackParamList, 'RoutineEditor'>;
 
 export const RoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { patientId, patientName, mode, routine } = route.params;
+  const { patientId, patientName, mode } = route.params;
+  const routineForEdit = mode === 'edit' ? route.params.routine : undefined;
 
-  const initialName = useMemo(() => (mode === 'edit' ? routine.name : ''), [mode, routine]);
-  const initialActive = useMemo(() => (mode === 'edit' ? routine.isActive : true), [mode, routine]);
+  const initialName = useMemo(
+    () => (mode === 'edit' && routineForEdit ? routineForEdit.name : ''),
+    [mode, routineForEdit]
+  );
   const initialSchedule = useMemo(
-    () => (mode === 'edit' ? routine.scheduleLabel : ''),
-    [mode, routine]
+    () => (mode === 'edit' && routineForEdit ? routineForEdit.scheduleLabel : ''),
+    [mode, routineForEdit]
   );
 
   const [name, setName] = useState(initialName);
-  const [isActive, setIsActive] = useState(initialActive);
   const [scheduleLabel, setScheduleLabel] = useState(initialSchedule);
 
   const title = mode === 'edit' ? 'Edit routine' : 'New routine';
@@ -33,17 +35,17 @@ export const RoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
       }
       const schedule = scheduleLabel.trim();
       try {
-        if (mode === 'edit') {
-          await updateRoutine(routine.id, {
+        if (mode === 'edit' && routineForEdit) {
+          await updateRoutine(routineForEdit.id, {
             name: trimmed,
-            isActive,
+            isActive: routineForEdit.isActive,
             scheduleLabel: schedule
           });
         } else {
           await createRoutine({
             patientId,
             name: trimmed,
-            isActive,
+            isActive: true,
             scheduleLabel: schedule
           });
         }
@@ -74,18 +76,6 @@ export const RoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
       </View>
 
       <View style={styles.field}>
-        <View style={styles.switchRow}>
-          <View style={styles.switchTextCol}>
-            <Text style={styles.label}>Active</Text>
-            <Text style={styles.helperText}>
-              Active routines will generate scheduled activities for the patient.
-            </Text>
-          </View>
-          <Switch value={isActive} onValueChange={setIsActive} />
-        </View>
-      </View>
-
-      <View style={styles.field}>
         <Text style={styles.label}>Schedule</Text>
         <TextInput
           value={scheduleLabel}
@@ -95,7 +85,6 @@ export const RoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
           autoCapitalize="sentences"
           returnKeyType="done"
         />
-        <Text style={styles.helperText}>This is a display label for now (UI-only).</Text>
       </View>
 
       <Pressable style={({ pressed }) => [styles.saveButton, pressed && styles.saveButtonPressed]} onPress={onSave}>
@@ -140,15 +129,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: '#111827'
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  switchTextCol: {
-    flex: 1,
-    paddingRight: 12
   },
   saveButton: {
     marginTop: 8,

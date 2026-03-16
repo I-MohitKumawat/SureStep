@@ -1,5 +1,4 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { HomeScreen } from '../screens/HomeScreen';
@@ -9,13 +8,12 @@ import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 import { PatientDetailScreen } from '../screens/PatientDetailScreen';
 import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
-
 import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
-
-
+import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { useTheme } from '../../packages/ui/theme/ThemeProvider';
 
 export type HomeStackParamList = {
+  RoleEntry: undefined;
   Home: undefined;
   Details: undefined;
   CaregiverDashboard: undefined;
@@ -51,25 +49,14 @@ export type HomeStackParamList = {
       };
 };
 
-export type MoreStackParamList = {
-  More: undefined;
-  DevRoleSwitch: undefined;
-};
-
-export type RootTabParamList = {
-  HomeTab: undefined;
-  MoreTab: undefined;
-};
-
-const Tab = createBottomTabNavigator<RootTabParamList>();
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
-const MoreStack = createNativeStackNavigator<MoreStackParamList>();
 
 function HomeStackNavigator() {
   const theme = useTheme();
 
   return (
     <HomeStack.Navigator
+      initialRouteName="RoleEntry"
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.textPrimary,
@@ -77,6 +64,11 @@ function HomeStackNavigator() {
         contentStyle: { backgroundColor: theme.colors.background }
       }}
     >
+      <HomeStack.Screen
+        name="RoleEntry"
+        component={RoleEntryScreen}
+        options={{ headerShown: false }}
+      />
       <HomeStack.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <HomeStack.Screen name="Details" component={DetailsScreen} options={{ title: 'Details' }} />
       <HomeStack.Screen
@@ -103,48 +95,11 @@ function HomeStackNavigator() {
   );
 }
 
-function MoreStackNavigator() {
-  const theme = useTheme();
-
-  return (
-    <MoreStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: theme.colors.textPrimary,
-        headerShadowVisible: true,
-        contentStyle: { backgroundColor: theme.colors.background }
-      }}
-    >
-      <MoreStack.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
-      {__DEV__ ? (
-        <MoreStack.Screen
-          name="DevRoleSwitch"
-          component={DevRoleSwitchScreen}
-          options={{ title: 'Dev role switch' }}
-        />
-      ) : null}
-    </MoreStack.Navigator>
-  );
-}
-
 export function RootNavigator() {
   const theme = useTheme();
 
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.borderSubtle
-        },
-        tabBarActiveTintColor: theme.colors.accent,
-        tabBarInactiveTintColor: theme.colors.textSecondary
-      }}
-    >
-      <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Home' }} />
-      <Tab.Screen name="MoreTab" component={MoreStackNavigator} options={{ title: 'More' }} />
-    </Tab.Navigator>
+    <HomeStackNavigator />
   );
 }
 
