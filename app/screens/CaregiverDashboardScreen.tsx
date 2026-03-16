@@ -44,10 +44,6 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <ScreenContainer>
       <Text style={styles.heading}>Caregiver dashboard</Text>
-      <Text style={styles.subheading}>
-        Linked patients with a quick view of adherence and recent issues, backed by a
-        `GET /reports/summary`-style summary client.
-      </Text>
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator />
@@ -76,32 +72,11 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
               }
             >
               <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.patientName}>{item.name}</Text>
-                  <Text style={styles.relationship}>{item.relationship}</Text>
-                </View>
-                <View style={[styles.chip, needsAttention ? styles.chipWarning : styles.chipOkay]}>
-                  <Text style={needsAttention ? styles.chipTextWarning : styles.chipTextOkay}>
-                    {needsAttention ? 'Needs attention' : 'On track'}
-                  </Text>
-                </View>
+                <Text style={styles.patientName}>{item.name}</Text>
+                <Text style={needsAttention ? styles.statusIconWarning : styles.statusIconOkay}>
+                  {needsAttention ? '❗' : '🟢'}
+                </Text>
               </View>
-
-              <View style={styles.row}>
-                <Text style={styles.metricLabel}>Adherence</Text>
-                <Text style={styles.metricValue}>{item.adherencePercent}%</Text>
-              </View>
-
-              <View style={styles.row}>
-                <Text style={styles.metricLabel}>Recent</Text>
-                <Text style={styles.metricValue}>{item.lastActivityLabel}</Text>
-              </View>
-
-              {item.hasRecentAlerts && (
-                <View style={styles.alertPill}>
-                  <Text style={styles.alertPillText}>Recent alerts · review in Alert Center</Text>
-                </View>
-              )}
             </Pressable>
           );
         }}
@@ -163,58 +138,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827'
   },
-  relationship: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2
+  statusIconOkay: {
+    fontSize: 20
   },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 9999
-  },
-  chipOkay: {
-    backgroundColor: '#ecfdf3'
-  },
-  chipWarning: {
-    backgroundColor: '#fef2f2'
-  },
-  chipTextOkay: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#166534'
-  },
-  chipTextWarning: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#b91c1c'
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 4
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: '#6b7280'
-  },
-  metricValue: {
-    fontSize: 12,
-    color: '#111827',
-    maxWidth: '65%',
-    textAlign: 'right'
-  },
-  alertPill: {
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    backgroundColor: '#fef3c7'
-  },
-  alertPillText: {
-    fontSize: 11,
-    color: '#92400e'
+  statusIconWarning: {
+    fontSize: 20
   }
 });
 

@@ -83,18 +83,13 @@ export const RoutineManagerScreen: React.FC<Props> = ({ route, navigation }) => 
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.routineName}>{item.name}</Text>
-              <View style={[styles.chip, item.isActive ? styles.chipActive : styles.chipInactive]}>
-                <Text style={item.isActive ? styles.chipTextActive : styles.chipTextInactive}>
-                  {item.isActive ? 'Active' : 'Paused'}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.scheduleLabel}>{item.scheduleLabel}</Text>
+            <Text style={styles.routineName}>{item.name}</Text>
             <View style={styles.cardActionsRow}>
               <Pressable
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && styles.secondaryButtonPressed
+                ]}
                 onPress={() =>
                   navigation.navigate('RoutineEditor', {
                     patientId,
@@ -110,7 +105,9 @@ export const RoutineManagerScreen: React.FC<Props> = ({ route, navigation }) => 
           </View>
         )}
         ListEmptyComponent={
-          !loading ? <Text style={styles.emptyText}>No routines configured yet for this patient.</Text> : null
+          !loading ? (
+            <Text style={styles.emptyText}>No routines configured yet for this patient.</Text>
+          ) : null
         }
       />
     </ScreenContainer>
@@ -174,41 +171,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb'
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4
-  },
   routineName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827'
-  },
-  scheduleLabel: {
-    fontSize: 13,
-    color: '#6b7280'
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 9999
-  },
-  chipActive: {
-    backgroundColor: '#ecfdf3'
-  },
-  chipInactive: {
-    backgroundColor: '#f3f4f6'
-  },
-  chipTextActive: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#166534'
-  },
-  chipTextInactive: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4b5563'
   },
   cardActionsRow: {
     marginTop: 10,

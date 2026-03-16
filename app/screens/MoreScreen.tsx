@@ -1,13 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { useTheme, useThemePreference } from '../../packages/ui/theme/ThemeProvider';
-import type { MoreStackParamList } from '../navigation/RootNavigator';
-
-type Props = NativeStackScreenProps<MoreStackParamList, 'More'>;
-
-export const MoreScreen: React.FC<Props> = ({ navigation }) => {
+export const MoreScreen: React.FC = () => {
   const theme = useTheme();
   const { modePreference, setModePreference } = useThemePreference();
 
@@ -48,21 +43,6 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
 
-      {__DEV__ ? (
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Developer</Text>
-          <Pressable
-            onPress={() => navigation.navigate('DevRoleSwitch')}
-            style={[
-              styles.devLink,
-              { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }
-            ]}
-          >
-            <Text style={{ color: theme.colors.textPrimary }}>Role switch</Text>
-            <Text style={{ color: theme.colors.textSecondary }}>Simulate Patient/Caregiver/Doctor</Text>
-          </Pressable>
-        </View>
-      ) : null}
     </ScreenContainer>
   );
 };
@@ -99,12 +79,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999
-  },
-  devLink: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 12,
-    gap: 4
   }
 });
 
