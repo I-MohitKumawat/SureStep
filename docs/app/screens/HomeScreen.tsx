@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 

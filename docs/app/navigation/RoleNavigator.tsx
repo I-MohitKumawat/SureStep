@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { RootNavigator } from './RootNavigator';
-import { useAuth } from '../../packages/core/auth/AuthContext';
+import { useAuth } from '../../../packages/core/auth/AuthContext';
 import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import { DoctorRoleScreen } from '../screens/DoctorRoleScreen';
 

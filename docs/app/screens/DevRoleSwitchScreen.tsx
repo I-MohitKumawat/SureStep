@@ -1,10 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { UserRole } from '../../packages/core/auth/AuthContext';
-import { useAuth } from '../../packages/core/auth/AuthContext';
+import type { UserRole } from '../../../packages/core/auth/AuthContext';
+import { useAuth } from '../../../packages/core/auth/AuthContext';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 const roles: Array<{ id: UserRole; label: string }> = [
   { id: 'PATIENT', label: 'Patient' },

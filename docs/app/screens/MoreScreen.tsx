@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { useTheme, useThemePreference } from '../../packages/ui/theme/ThemeProvider';
+import { useTheme, useThemePreference } from '../../../packages/ui/theme/ThemeProvider';
 export const MoreScreen: React.FC = () => {
   const theme = useTheme();
   const { modePreference, setModePreference } = useThemePreference();

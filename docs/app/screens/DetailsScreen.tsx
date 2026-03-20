@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export const DetailsScreen: React.FC = () => {
   const theme = useTheme();

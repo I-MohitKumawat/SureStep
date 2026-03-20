@@ -2,8 +2,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenContainer } from '../components/ScreenContainer';
-import { useAuth } from '../../packages/core/auth/AuthContext';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { useAuth } from '../../../packages/core/auth/AuthContext';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export const DoctorRoleScreen: React.FC = () => {
   const { logout } = useAuth();

@@ -10,7 +10,7 @@ import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
 import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export type HomeStackParamList = {
   RoleEntry: undefined;

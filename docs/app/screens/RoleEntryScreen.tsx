@@ -4,8 +4,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
-import { useAuth } from '../../packages/core/auth/AuthContext';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
+import { useAuth } from '../../../packages/core/auth/AuthContext';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'RoleEntry'>;
 

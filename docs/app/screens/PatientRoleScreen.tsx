@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 
 import { ScreenContainer } from '../components/ScreenContainer';
-import { useAuth } from '../../packages/core/auth/AuthContext';
-import { useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { useAuth } from '../../../packages/core/auth/AuthContext';
+import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 import type { PatientActivity, PatientProfile, PatientRoutine, RoutineStatus } from '../patient/mockState';
 import {
   fetchPatientProfile,

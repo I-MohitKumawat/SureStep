@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer, type Theme as NavigationTheme } from '@react-navigation/native';
-import { ThemeProvider, useTheme } from '../packages/ui/theme/ThemeProvider';
-import { AuthProvider } from '../packages/core/auth/AuthContext';
+import { ThemeProvider, useTheme } from '../../packages/ui/theme/ThemeProvider';
+import { AuthProvider } from '../../packages/core/auth/AuthContext';
 import { RoleNavigator } from './navigation/RoleNavigator';
 
 function ThemedNavigation() {
