@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,10 +7,12 @@ import {
   Text,
   View
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import { useAuth } from '../../../packages/core/auth/AuthContext';
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
+import type { HomeStackParamList } from '../navigation/RootNavigator';
 import type { PatientActivity, PatientProfile, PatientRoutine, RoutineStatus } from '../patient/mockState';
 import {
   fetchPatientProfile,
@@ -24,6 +26,7 @@ import {
 
 type PatientTab = 'Home' | 'Profile';
 type DayGroup = 'Morning' | 'Afternoon' | 'Evening';
+type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 
 function groupForHour(hour: number): DayGroup {
   if (hour < 12) return 'Morning';
@@ -40,17 +43,17 @@ function ProfileIcon({ color }: { color: string }) {
   );
 }
 
-export const PatientRoleScreen: React.FC = () => {
+export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
   const { logout } = useAuth();
   const theme = useTheme();
 
-  const [tab, setTab] = useState<PatientTab>('Home');
-  const [profile, setProfile] = useState<PatientProfile | null>(null);
-  const [routines, setRoutines] = useState<PatientRoutine[] | null>(null);
-  const [activities, setActivities] = useState<PatientActivity[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = React.useState<PatientTab>('Home');
+  const [profile, setProfile] = React.useState<PatientProfile | null>(null);
+  const [routines, setRoutines] = React.useState<PatientRoutine[] | null>(null);
+  const [activities, setActivities] = React.useState<PatientActivity[] | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
-  const [routineIndex, setRoutineIndex] = useState(0);
+  const [routineIndex, setRoutineIndex] = React.useState(0);
 
   const refresh = async () => {
     setLoading(true);
@@ -61,11 +64,11 @@ export const PatientRoleScreen: React.FC = () => {
     setLoading(false);
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     void refresh();
   }, []);
 
-  const routineGroups = useMemo(() => {
+  const routineGroups = React.useMemo(() => {
     const result: Record<DayGroup, Array<PatientRoutine & { status: RoutineStatus; timeLabel: string }>> = {
       Morning: [],
       Afternoon: [],
@@ -87,7 +90,7 @@ export const PatientRoleScreen: React.FC = () => {
     return result;
   }, [routines]);
 
-  const orderedRoutines = useMemo(() => {
+  const orderedRoutines = React.useMemo(() => {
     const flat = (Object.keys(routineGroups) as DayGroup[]).flatMap((g) =>
       routineGroups[g].map((r) => ({ ...r, group: g }))
     );
@@ -95,7 +98,7 @@ export const PatientRoleScreen: React.FC = () => {
     return flat;
   }, [routineGroups]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (orderedRoutines.length === 0) {
       if (routineIndex !== 0) setRoutineIndex(0);
       return;
@@ -121,7 +124,19 @@ export const PatientRoleScreen: React.FC = () => {
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Home</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Home</Text>
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            style={({ pressed }) => [
+              styles.settingsButton,
+              { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface },
+              pressed && { opacity: 0.85 }
+            ]}
+          >
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>Settings</Text>
+          </Pressable>
+        </View>
         <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
           {routineCount} routines · {activityCount} activities
         </Text>
@@ -267,7 +282,19 @@ export const PatientRoleScreen: React.FC = () => {
     if (!profile) return null;
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Profile</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Profile</Text>
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            style={({ pressed }) => [
+              styles.settingsButton,
+              { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface },
+              pressed && { opacity: 0.85 }
+            ]}
+          >
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>Settings</Text>
+          </Pressable>
+        </View>
 
         <View style={[styles.profileCard, { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }]}>
           <View style={[styles.photoPlaceholder, { borderColor: theme.colors.borderSubtle }]} />
@@ -331,6 +358,21 @@ const styles = StyleSheet.create({
   shell: {
     paddingHorizontal: 0,
     paddingVertical: 0
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  settingsButton: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff'
   },
   loadingFill: {
     flex: 1,

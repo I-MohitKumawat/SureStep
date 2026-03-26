@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -12,17 +12,17 @@ export const RoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
   const { patientId, patientName, mode } = route.params;
   const routineForEdit = mode === 'edit' ? route.params.routine : undefined;
 
-  const initialName = useMemo(
+  const initialName = React.useMemo(
     () => (mode === 'edit' && routineForEdit ? routineForEdit.name : ''),
     [mode, routineForEdit]
   );
-  const initialSchedule = useMemo(
+  const initialSchedule = React.useMemo(
     () => (mode === 'edit' && routineForEdit ? routineForEdit.scheduleLabel : ''),
     [mode, routineForEdit]
   );
 
-  const [name, setName] = useState(initialName);
-  const [scheduleLabel, setScheduleLabel] = useState(initialSchedule);
+  const [name, setName] = React.useState(initialName);
+  const [scheduleLabel, setScheduleLabel] = React.useState(initialSchedule);
 
   const title = mode === 'edit' ? 'Edit routine' : 'New routine';
 

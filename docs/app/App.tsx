@@ -3,6 +3,7 @@ import { NavigationContainer, type Theme as NavigationTheme } from '@react-navig
 import { ThemeProvider, useTheme } from '../../packages/ui/theme/ThemeProvider';
 import { AuthProvider } from '../../packages/core/auth/AuthContext';
 import { RoleNavigator } from './navigation/RoleNavigator';
+import { UserProfileProvider } from './context/userProfileContext.js';
 
 function ThemedNavigation() {
   const theme = useTheme();
@@ -36,7 +37,9 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <ThemedNavigation />
+        <UserProfileProvider>
+          <ThemedNavigation />
+        </UserProfileProvider>
       </ThemeProvider>
     </AuthProvider>
   );

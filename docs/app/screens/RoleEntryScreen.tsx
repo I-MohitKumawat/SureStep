@@ -15,12 +15,10 @@ export const RoleEntryScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleSelectPatient = () => {
     login({ id: 'self-monitoring', email: 'patient@surestep.local', role: 'PATIENT' }, 'dev-token');
-    navigation.navigate('Home');
   };
 
   const handleSelectCaregiver = () => {
     login({ id: 'caregiver', email: 'caregiver@surestep.local', role: 'CAREGIVER' }, 'dev-token');
-    navigation.navigate('CaregiverDashboard');
   };
 
   return (

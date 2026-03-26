@@ -43,7 +43,18 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <ScreenContainer>
-      <Text style={styles.heading}>Caregiver dashboard</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>Caregiver dashboard</Text>
+        <Pressable
+          onPress={() => navigation.navigate('Settings')}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && { opacity: 0.85 }
+          ]}
+        >
+          <Text style={styles.settingsButtonText}>Settings</Text>
+        </Pressable>
+      </View>
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator />
@@ -86,10 +97,30 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
   heading: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 4,
+    color: '#111827'
+  },
+  settingsButton: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff'
+  },
+  settingsButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: '#111827'
   },
   subheading: {

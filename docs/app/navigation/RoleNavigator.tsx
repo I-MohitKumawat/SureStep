@@ -1,28 +1,45 @@
 import React from 'react';
+import { ActivityIndicator } from 'react-native';
 
 import { RootNavigator } from './RootNavigator';
 import { useAuth } from '../../../packages/core/auth/AuthContext';
-import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import { DoctorRoleScreen } from '../screens/DoctorRoleScreen';
+import { useUserProfile } from '../context/userProfileContext';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 export const RoleNavigator: React.FC = () => {
   const { auth } = useAuth();
+  const { profileLoading, profileExists } = useUserProfile();
 
   if (auth.status !== 'authenticated') {
-    // Until real auth/role-switch UI and login exist (FE-AUTH / FE-ROLE-003),
-    // unauthenticated users see the default caregiver-focused app shell.
-    return <RootNavigator />;
+    return <RootNavigator initialRouteName="RoleEntry" />;
   }
 
-  switch (auth.user.role) {
-    case 'PATIENT':
-      return <PatientRoleScreen />;
-    case 'DOCTOR':
-      return <DoctorRoleScreen />;
-    case 'CAREGIVER':
-    default:
-      // Caregivers see the current multi-patient dashboard shell.
-      return <RootNavigator />;
+  const userRole = auth.user?.role;
+
+  if (userRole === 'DOCTOR') {
+    return <DoctorRoleScreen />;
   }
+
+  if (profileLoading) {
+    return (
+      <ScreenContainer>
+        <ActivityIndicator />
+      </ScreenContainer>
+    );
+  }
+
+  const initialRouteName = !profileExists
+    ? 'ProfileSetup'
+    : userRole === 'PATIENT'
+      ? 'PatientDashboard'
+      : 'CaregiverDashboard';
+
+  return (
+    <RootNavigator
+      key={`${userRole ?? 'unknown'}-${initialRouteName}`}
+      initialRouteName={initialRouteName}
+    />
+  );
 };
 

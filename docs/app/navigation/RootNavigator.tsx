@@ -8,8 +8,13 @@ import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 import { PatientDetailScreen } from '../screens/PatientDetailScreen';
 import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
-import { DevRoleSwitchScreen } from '../screens/DevRoleSwitchScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
+
+import { PatientRoleScreen } from '../screens/PatientRoleScreen';
+import ProfileSetup from '../screens/ProfileSetup';
+import ProfileView from '../screens/ProfileView';
+import ProfileEdit from '../screens/ProfileEdit';
+
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export type HomeStackParamList = {
@@ -17,6 +22,14 @@ export type HomeStackParamList = {
   Home: undefined;
   Details: undefined;
   CaregiverDashboard: undefined;
+  PatientDashboard: undefined;
+
+  Settings: undefined;
+
+  ProfileSetup: undefined;
+  ProfileView: undefined;
+  ProfileEdit: undefined;
+
   PatientDetail: {
     patientId: string;
     name: string;
@@ -51,12 +64,12 @@ export type HomeStackParamList = {
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 
-function HomeStackNavigator() {
+function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof HomeStackParamList }) {
   const theme = useTheme();
 
   return (
     <HomeStack.Navigator
-      initialRouteName="RoleEntry"
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.textPrimary,
@@ -71,11 +84,24 @@ function HomeStackNavigator() {
       />
       <HomeStack.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <HomeStack.Screen name="Details" component={DetailsScreen} options={{ title: 'Details' }} />
+
       <HomeStack.Screen
         name="CaregiverDashboard"
         component={CaregiverDashboardScreen}
         options={{ title: 'Caregiver dashboard' }}
       />
+      <HomeStack.Screen
+        name="PatientDashboard"
+        component={PatientRoleScreen}
+        options={{ title: 'Patient dashboard' }}
+      />
+
+      <HomeStack.Screen name="Settings" component={MoreScreen} options={{ title: 'Settings' }} />
+
+      <HomeStack.Screen name="ProfileSetup" component={ProfileSetup} options={{ title: 'Profile' }} />
+      <HomeStack.Screen name="ProfileView" component={ProfileView} options={{ title: 'Profile' }} />
+      <HomeStack.Screen name="ProfileEdit" component={ProfileEdit} options={{ title: 'Edit profile' }} />
+
       <HomeStack.Screen
         name="PatientDetail"
         component={PatientDetailScreen}
@@ -95,11 +121,7 @@ function HomeStackNavigator() {
   );
 }
 
-export function RootNavigator() {
-  const theme = useTheme();
-
-  return (
-    <HomeStackNavigator />
-  );
+export function RootNavigator({ initialRouteName = 'RoleEntry' }: { initialRouteName?: keyof HomeStackParamList }) {
+  return <HomeStackNavigator initialRouteName={initialRouteName} />;
 }
 
