@@ -20,26 +20,35 @@ const UserProfileContext = React.createContext(undefined);
 
 export function UserProfileProvider({ children }) {
   const { auth } = useAuth();
+  const loadVersionRef = React.useRef(0);
 
   const [activeRole, setActiveRole] = React.useState(null); // 'patient' | 'caregiver' | null
   const [profile, setProfile] = React.useState(null);
   const [profileLoading, setProfileLoading] = React.useState(false);
   const [profileError, setProfileError] = React.useState(null);
+  const [hasProfileForRouting, setHasProfileForRouting] = React.useState(false);
 
   const loadProfileForRole = React.useCallback(async (roleSlug) => {
     if (!roleSlug) return;
     const storageKey = `${STORAGE_KEY_PREFIX}${roleSlug}`;
+    const requestVersion = ++loadVersionRef.current;
 
     setProfileLoading(true);
     setProfileError(null);
     try {
       const raw = await AsyncStorage.getItem(storageKey);
       const parsed = raw ? JSON.parse(raw) : null;
+      // Ignore stale load responses (for example, a pre-save load finishing after save).
+      if (requestVersion !== loadVersionRef.current) return;
       setProfile(parsed);
+      setHasProfileForRouting(Boolean(parsed));
     } catch (e) {
+      if (requestVersion !== loadVersionRef.current) return;
       setProfileError('Unable to load profile.');
       setProfile(null);
+      setHasProfileForRouting(false);
     } finally {
+      if (requestVersion !== loadVersionRef.current) return;
       setProfileLoading(false);
     }
   }, []);
@@ -50,6 +59,7 @@ export function UserProfileProvider({ children }) {
       setProfile(null);
       setProfileLoading(false);
       setProfileError(null);
+      setHasProfileForRouting(false);
       return;
     }
 
@@ -69,13 +79,23 @@ export function UserProfileProvider({ children }) {
     async (draft) => {
       if (!draft?.role) return;
       const key = `${STORAGE_KEY_PREFIX}${draft.role}`;
+      // Invalidate any in-flight load so it can't overwrite the newly saved profile.
+      loadVersionRef.current += 1;
 
       setProfileError(null);
       setProfile(draft);
+      setProfileLoading(false);
+    setHasProfileForRouting(true);
       try {
         await AsyncStorage.setItem(key, JSON.stringify(draft));
+        return true;
       } catch (e) {
-        setProfileError('Unable to save profile.');
+        // Fail-soft: keep in-memory profile so UX can proceed even if local persistence fails.
+        // This is common in dev builds when AsyncStorage native module/version is mismatched.
+        // eslint-disable-next-line no-console
+        console.warn('AsyncStorage setItem failed for profile:', e);
+        setProfileError('Saved for this session only (local storage unavailable).');
+        return true;
       }
     },
     []
@@ -88,10 +108,19 @@ export function UserProfileProvider({ children }) {
       profileLoading,
       profileError,
       profileExists: Boolean(profile),
+      hasProfileForRouting,
       refreshProfile: () => loadProfileForRole(activeRole),
       saveProfile
     }),
-    [activeRole, profile, profileLoading, profileError, loadProfileForRole, saveProfile]
+    [
+      activeRole,
+      profile,
+      profileLoading,
+      profileError,
+      hasProfileForRouting,
+      loadProfileForRole,
+      saveProfile
+    ]
   );
 
   return <UserProfileContext.Provider value={value}>{children}</UserProfileContext.Provider>;

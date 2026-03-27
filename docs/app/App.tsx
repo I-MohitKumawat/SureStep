@@ -36,7 +36,7 @@ function ThemedNavigation() {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <ThemeProvider>
+      <ThemeProvider initialMode="light">
         <UserProfileProvider>
           <ThemedNavigation />
         </UserProfileProvider>

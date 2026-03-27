@@ -9,7 +9,7 @@ export default function DropdownPicker({
   onValueChange,
   error,
   required,
-  placeholder = 'Select…',
+  placeholder = '',
   searchable = false,
   highContrast = false,
   minFontSize = 14
@@ -28,11 +28,6 @@ export default function DropdownPicker({
 
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, highContrast && styles.labelHighContrast, { fontSize: Math.max(minFontSize, 13) }]}>
-        {label}
-        {required ? ' *' : ''}
-      </Text>
-
       <Pressable
         onPress={() => setOpen(true)}
         style={[
@@ -42,78 +37,96 @@ export default function DropdownPicker({
             borderColor: theme.colors.borderSubtle,
             backgroundColor: theme.colors.surface
           },
-          { minHeight: 48, justifyContent: 'center' }
+          { minHeight: 48 }
         ]}
       >
-        <Text
-          style={[
-            styles.triggerText,
-            highContrast && styles.triggerTextHighContrast,
-            !highContrast && { color: theme.colors.textPrimary },
-            { fontSize: Math.max(minFontSize, 14) }
-          ]}
-        >
-          {selected ? selected.label : placeholder}
-        </Text>
+        <View style={styles.triggerInner}>
+          {label ? (
+            <Text
+              style={[
+                styles.innerLabel,
+                highContrast && styles.innerLabelHighContrast,
+                !highContrast && { color: theme.colors.textSecondary },
+                { fontSize: Math.max(minFontSize, 13) }
+              ]}
+            >
+              {label}
+              {required ? ' *' : ''}
+            </Text>
+          ) : null}
+
+          <Text
+            style={[
+              styles.valueText,
+              highContrast && styles.valueTextHighContrast,
+              !highContrast && { color: theme.colors.textPrimary },
+              { fontSize: Math.max(minFontSize, 14) }
+            ]}
+          >
+            {selected ? selected.label : placeholder}
+          </Text>
+        </View>
       </Pressable>
 
       {error ? <Text style={[styles.errorText, highContrast && styles.errorTextHighContrast]}>{error}</Text> : null}
 
       <Modal visible={open} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setOpen(false)} />
-        <View style={[styles.modalSheet, highContrast && styles.modalSheetHighContrast, !highContrast && { backgroundColor: theme.colors.surface }]}>
-          {searchable ? (
-            <View style={styles.searchRow}>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search…"
-                placeholderTextColor={highContrast ? '#9ca3af' : theme.colors.textSecondary}
-                style={[
-                  styles.searchInput,
-                  highContrast && styles.searchInputHighContrast,
-                  !highContrast && {
-                    borderColor: theme.colors.borderSubtle,
-                    color: theme.colors.textPrimary,
-                    backgroundColor: theme.colors.surface
-                  }
-                ]}
-              />
-            </View>
-          ) : null}
-
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => String(item.value)}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 8 }}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => {
-                  onValueChange(item.value);
-                  setOpen(false);
-                  setQuery('');
-                }}
-                style={({ pressed }) => [
-                  styles.itemRow,
-                  highContrast && styles.itemRowHighContrast,
-                  !highContrast && { borderBottomColor: theme.colors.borderSubtle },
-                  pressed && styles.itemRowPressed
-                ]}
-              >
-                <Text style={[styles.itemLabel, highContrast && styles.itemLabelHighContrast, !highContrast && { color: theme.colors.textPrimary }]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            )}
-            ListEmptyComponent={
-              <View style={{ padding: 16 }}>
-                <Text style={[styles.emptyText, highContrast && styles.emptyTextHighContrast, !highContrast && { color: theme.colors.textSecondary }]}>
-                  No matches.
-                </Text>
+        <View style={styles.modalRoot}>
+          <Pressable style={styles.modalOverlay} onPress={() => setOpen(false)} />
+          <View style={[styles.modalSheet, highContrast && styles.modalSheetHighContrast, !highContrast && { backgroundColor: theme.colors.surface }]}>
+            {searchable ? (
+              <View style={styles.searchRow}>
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder=""
+                  placeholderTextColor={highContrast ? '#9ca3af' : theme.colors.textSecondary}
+                  style={[
+                    styles.searchInput,
+                    highContrast && styles.searchInputHighContrast,
+                    !highContrast && {
+                      borderColor: theme.colors.borderSubtle,
+                      color: theme.colors.textPrimary,
+                      backgroundColor: theme.colors.surface
+                    }
+                  ]}
+                />
               </View>
-            }
-          />
+            ) : null}
+
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => String(item.value)}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 24 }}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => {
+                    onValueChange(item.value);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  style={({ pressed }) => [
+                    styles.itemRow,
+                    highContrast && styles.itemRowHighContrast,
+                    !highContrast && { borderBottomColor: theme.colors.borderSubtle },
+                    pressed && styles.itemRowPressed
+                  ]}
+                >
+                  <Text style={[styles.itemLabel, highContrast && styles.itemLabelHighContrast, !highContrast && { color: theme.colors.textPrimary }]}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              )}
+              ListEmptyComponent={
+                <View style={{ padding: 16 }}>
+                  <Text style={[styles.emptyText, highContrast && styles.emptyTextHighContrast, !highContrast && { color: theme.colors.textSecondary }]}>
+                    No matches.
+                  </Text>
+                </View>
+              }
+            />
+          </View>
         </View>
       </Modal>
     </View>
@@ -124,14 +137,6 @@ const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
     marginBottom: 12
-  },
-  label: {
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 6
-  },
-  labelHighContrast: {
-    color: '#ffffff'
   },
   trigger: {
     width: '100%',
@@ -146,12 +151,24 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff',
     backgroundColor: '#000000'
   },
-  triggerText: {
+  triggerInner: {
+    width: '100%',
+    flexDirection: 'column'
+  },
+  innerLabel: {
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 6
+  },
+  innerLabelHighContrast: {
+    color: '#ffffff'
+  },
+  valueText: {
     color: '#111827',
     fontSize: 14,
     fontWeight: '600'
   },
-  triggerTextHighContrast: {
+  valueTextHighContrast: {
     color: '#ffffff'
   },
   errorText: {
@@ -163,16 +180,24 @@ const styles = StyleSheet.create({
   errorTextHighContrast: {
     color: '#fecaca'
   },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end'
+  },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.35)'
   },
   modalSheet: {
-    marginTop: 72,
-    marginHorizontal: 16,
-    borderRadius: 14,
+    marginHorizontal: 12,
+    // Keep the dropdown above the keyboard when the user is editing near the bottom.
+    marginBottom: 80,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
     backgroundColor: '#ffffff',
-    maxHeight: '80%'
+    maxHeight: '68%'
   },
   modalSheetHighContrast: {
     backgroundColor: '#000000'

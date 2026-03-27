@@ -86,21 +86,16 @@ function validateProfileDraft(draft) {
     'Please select a preferred language.'
   );
 
-  errors.phone = validatePhone(draft.phoneCountryCallingCode, draft.phoneNumber);
-  errors.email = validateEmail(draft.email);
+  // Phone + email fields are removed from the UI.
+  // Ignore their validation so existing/invalid stored values never block saving.
+  errors.phone = null;
+  errors.email = null;
   errors.city = validateRequiredString(draft.city, 'City is required.');
   errors.country = validateRequiredString(draft.country, 'Country is required.');
 
   // Optional role-specific fields
-  if (draft.role === 'patient') {
-    errors.emergencyContact = validateEmergencyContact(
-      draft.emergencyContactName,
-      draft.emergencyPhoneCountryCallingCode,
-      draft.emergencyPhoneNumber
-    );
-  } else {
-    errors.emergencyContact = null;
-  }
+  // Emergency contact is removed from the UI.
+  errors.emergencyContact = null;
 
   return errors;
 }

@@ -9,7 +9,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 
 export const RoleNavigator: React.FC = () => {
   const { auth } = useAuth();
-  const { profileLoading, profileExists } = useUserProfile();
+  const { profileLoading, hasProfileForRouting } = useUserProfile();
 
   if (auth.status !== 'authenticated') {
     return <RootNavigator initialRouteName="RoleEntry" />;
@@ -29,7 +29,7 @@ export const RoleNavigator: React.FC = () => {
     );
   }
 
-  const initialRouteName = !profileExists
+  const initialRouteName = !hasProfileForRouting
     ? 'ProfileSetup'
     : userRole === 'PATIENT'
       ? 'PatientDashboard'

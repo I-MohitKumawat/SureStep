@@ -7,6 +7,7 @@ export default function TextInputField({
   value,
   onChangeText,
   onBlur,
+  onFocus,
   error,
   required,
   placeholder,
@@ -22,35 +23,49 @@ export default function TextInputField({
 
   return (
     <View style={styles.wrapper}>
-      {label ? (
-        <Text style={[styles.label, highContrast && styles.labelHighContrast, { fontSize: Math.max(minFontSize, 13) }]}>
-          {label}
-          {required ? ' *' : ''}
-        </Text>
-      ) : null}
-
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        onBlur={onBlur}
-        editable={editable}
-        placeholder={placeholder}
-        placeholderTextColor={highContrast ? '#9ca3af' : theme.colors.textSecondary}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-        secureTextEntry={secureTextEntry}
+      <View
         style={[
-          styles.input,
-          highContrast && styles.inputHighContrast,
+          styles.shell,
+          highContrast && styles.shellHighContrast,
           !highContrast && {
             borderColor: theme.colors.borderSubtle,
-            backgroundColor: theme.colors.surface,
-            color: theme.colors.textPrimary
-          },
-          { minHeight: 48, fontSize: Math.max(minFontSize, 14) },
-          style
+            backgroundColor: theme.colors.surface
+          }
         ]}
-      />
+      >
+        {label ? (
+          <Text
+            style={[
+              styles.innerLabel,
+              highContrast && styles.innerLabelHighContrast,
+              { fontSize: Math.max(minFontSize, 13) }
+            ]}
+          >
+            {label}
+            {required ? ' *' : ''}
+          </Text>
+        ) : null}
+
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          onBlur={onBlur}
+          onFocus={onFocus}
+          editable={editable}
+          placeholder={placeholder}
+          placeholderTextColor={highContrast ? '#9ca3af' : theme.colors.textSecondary}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          secureTextEntry={secureTextEntry}
+          style={[
+            styles.input,
+            highContrast && styles.inputHighContrast,
+            !highContrast && { color: theme.colors.textPrimary },
+            { fontSize: Math.max(minFontSize, 14) },
+            style
+          ]}
+        />
+      </View>
 
       {error ? <Text style={[styles.errorText, highContrast && styles.errorTextHighContrast]}>{error}</Text> : null}
     </View>
@@ -62,26 +77,35 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 12
   },
-  label: {
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 6
-  },
-  labelHighContrast: {
-    color: '#ffffff'
-  },
-  input: {
+  shell: {
     width: '100%',
+    minHeight: 48,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: '#ffffff'
   },
-  inputHighContrast: {
+  shellHighContrast: {
     borderColor: '#ffffff',
-    color: '#ffffff',
     backgroundColor: '#000000'
+  },
+  innerLabel: {
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 6
+  },
+  innerLabelHighContrast: {
+    color: '#ffffff'
+  },
+  input: {
+    width: '100%',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: 'transparent'
+  },
+  inputHighContrast: {
+    color: '#ffffff'
   },
   errorText: {
     marginTop: 6,

@@ -124,19 +124,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Home</Text>
-          <Pressable
-            onPress={() => navigation.navigate('Settings')}
-            style={({ pressed }) => [
-              styles.settingsButton,
-              { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface },
-              pressed && { opacity: 0.85 }
-            ]}
-          >
-            <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>Settings</Text>
-          </Pressable>
-        </View>
+        <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Home</Text>
         <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
           {routineCount} routines · {activityCount} activities
         </Text>
@@ -282,19 +270,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
     if (!profile) return null;
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Profile</Text>
-          <Pressable
-            onPress={() => navigation.navigate('Settings')}
-            style={({ pressed }) => [
-              styles.settingsButton,
-              { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface },
-              pressed && { opacity: 0.85 }
-            ]}
-          >
-            <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>Settings</Text>
-          </Pressable>
-        </View>
+        <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Profile</Text>
 
         <View style={[styles.profileCard, { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }]}>
           <View style={[styles.photoPlaceholder, { borderColor: theme.colors.borderSubtle }]} />
@@ -320,6 +296,18 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
           ]}
         >
           <Text style={{ color: theme.colors.textPrimary }}>Back to main app</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.navigate('Settings')}
+          style={({ pressed }) => [
+            styles.settingsInProfile,
+            {
+              borderColor: theme.colors.borderSubtle,
+              backgroundColor: pressed ? theme.colors.surface : 'transparent'
+            }
+          ]}
+        >
+          <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>Settings</Text>
         </Pressable>
       </ScrollView>
     );
@@ -358,21 +346,6 @@ const styles = StyleSheet.create({
   shell: {
     paddingHorizontal: 0,
     paddingVertical: 0
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6
-  },
-  settingsButton: {
-    minHeight: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff'
   },
   loadingFill: {
     flex: 1,
@@ -550,6 +523,15 @@ const styles = StyleSheet.create({
   backToMain: {
     marginTop: 16,
     alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10
+  },
+  settingsInProfile: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    minHeight: 48,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,

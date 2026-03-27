@@ -42,19 +42,8 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
   const listData = patients ?? [];
 
   return (
-    <ScreenContainer>
-      <View style={styles.headerRow}>
-        <Text style={styles.heading}>Caregiver dashboard</Text>
-        <Pressable
-          onPress={() => navigation.navigate('Settings')}
-          style={({ pressed }) => [
-            styles.settingsButton,
-            pressed && { opacity: 0.85 }
-          ]}
-        >
-          <Text style={styles.settingsButtonText}>Settings</Text>
-        </Pressable>
-      </View>
+    <ScreenContainer style={styles.shell}>
+      <Text style={styles.heading}>Caregiver dashboard</Text>
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator />
@@ -92,35 +81,29 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
           );
         }}
       />
+      <View style={styles.footerBar}>
+        <Pressable style={styles.footerTab}>
+          <Text style={styles.footerTabActive}>Dashboard</Text>
+        </Pressable>
+        <Pressable style={styles.footerTab} onPress={() => navigation.navigate('Settings')}>
+          <Text style={styles.footerTabText}>Settings</Text>
+        </Pressable>
+      </View>
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4
+  shell: {
+    paddingHorizontal: 0,
+    paddingVertical: 0
   },
   heading: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 4,
-    color: '#111827'
-  },
-  settingsButton: {
-    minHeight: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff'
-  },
-  settingsButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
+    marginHorizontal: 16,
+    marginTop: 12,
     color: '#111827'
   },
   subheading: {
@@ -145,7 +128,8 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   listContent: {
-    paddingBottom: 16
+    paddingBottom: 96,
+    paddingHorizontal: 16
   },
   card: {
     borderRadius: 12,
@@ -174,6 +158,35 @@ const styles = StyleSheet.create({
   },
   statusIconWarning: {
     fontSize: 20
+  },
+  footerBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 10,
+    paddingBottom: 18
+  },
+  footerTab: {
+    minWidth: 96,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  footerTabActive: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb'
+  },
+  footerTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6b7280'
   }
 });
 

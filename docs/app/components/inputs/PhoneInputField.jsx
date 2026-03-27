@@ -29,44 +29,59 @@ export default function PhoneInputField({
   error,
   required,
   highContrast = false,
-  minFontSize = 14
+  minFontSize = 14,
+  lockedCountryCallingCode
 }) {
   const theme = useTheme();
   const phoneErrorToShow = error ? error : null;
+  const [phoneFocused, setPhoneFocused] = React.useState(false);
 
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, highContrast && styles.labelHighContrast, !highContrast && { color: theme.colors.textPrimary }, { fontSize: Math.max(minFontSize, 13) }]}>
-        {label}
-        {required ? ' *' : ''}
-      </Text>
-
-      <DropdownPicker
-        label="Country code"
-        items={callingCodeItems}
-        value={countryCallingCode}
-        onValueChange={(v) => {
-          onChangeCountryCallingCode(v);
-          onCountryCodeTouched?.();
-        }}
-        placeholder="Select…"
-        searchable={false}
-        highContrast={highContrast}
-        minFontSize={minFontSize}
-      />
+      {lockedCountryCallingCode ? (
+        <View style={[styles.lockedCode, { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }]}>
+          <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>
+            Country code: {lockedCountryCallingCode}
+          </Text>
+        </View>
+      ) : (
+        <DropdownPicker
+          label="Country code"
+          items={callingCodeItems}
+          value={countryCallingCode}
+          onValueChange={(v) => {
+            onChangeCountryCallingCode(v);
+            onCountryCodeTouched?.();
+          }}
+          placeholder="Select…"
+          searchable={false}
+          highContrast={highContrast}
+          minFontSize={minFontSize}
+        />
+      )}
 
       <TextInputField
-        label=""
+        label={label}
         value={phoneNumber}
         onChangeText={onChangePhoneNumber}
-        onBlur={() => onPhoneTouched?.()}
-        required={false}
-        placeholder="Phone number"
+        onBlur={() => {
+          setPhoneFocused(false);
+          onPhoneTouched?.();
+        }}
+        onFocus={() => setPhoneFocused(true)}
+        required={required}
         keyboardType="phone-pad"
         autoCapitalize="none"
         error={phoneErrorToShow}
         highContrast={highContrast}
         minFontSize={minFontSize}
+      />
+
+      <View
+        style={[
+          styles.phoneUnderline,
+          phoneFocused ? { backgroundColor: '#16a34a' } : { backgroundColor: 'transparent' }
+        ]}
       />
     </View>
   );
@@ -84,6 +99,20 @@ const styles = StyleSheet.create({
   },
   labelHighContrast: {
     color: '#ffffff'
+  },
+  lockedCode: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    marginBottom: 12
+  },
+  phoneUnderline: {
+    height: 3,
+    borderRadius: 2,
+    marginTop: 2,
+    backgroundColor: 'transparent'
   }
 });
 
