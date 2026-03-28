@@ -40,7 +40,7 @@ export const RoleEntryScreen: React.FC<Props> = ({ navigation }) => {
   const handleSelectCaregiver = () => handleSelect('CAREGIVER');
 
   return (
-    <ScreenContainer>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.centerContent}>
         <View style={styles.header}>
           <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>SureStep</Text>

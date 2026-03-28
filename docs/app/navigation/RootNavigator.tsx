@@ -9,6 +9,7 @@ import { PatientDetailScreen } from '../screens/PatientDetailScreen';
 import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
+import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 
 import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import ProfileSetup from '../screens/ProfileSetup';
@@ -18,6 +19,7 @@ import ProfileEdit from '../screens/ProfileEdit';
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export type HomeStackParamList = {
+  PhoneAuth: undefined;
   RoleEntry: undefined;
   Home: undefined;
   Details: undefined;
@@ -74,9 +76,17 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.textPrimary,
         headerShadowVisible: true,
-        contentStyle: { backgroundColor: theme.colors.background }
+        contentStyle: { backgroundColor: theme.colors.background },
+        // Native stack integrates with Android hardware back (pop until root, then exit).
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}
     >
+      <HomeStack.Screen
+        name="PhoneAuth"
+        component={PhoneAuthScreen}
+        options={{ headerShown: false }}
+      />
       <HomeStack.Screen
         name="RoleEntry"
         component={RoleEntryScreen}
@@ -88,12 +98,12 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
       <HomeStack.Screen
         name="CaregiverDashboard"
         component={CaregiverDashboardScreen}
-        options={{ title: 'Caregiver dashboard' }}
+        options={{ headerShown: false }}
       />
       <HomeStack.Screen
         name="PatientDashboard"
         component={PatientRoleScreen}
-        options={{ title: 'Patient dashboard' }}
+        options={{ headerShown: false }}
       />
 
       <HomeStack.Screen name="Settings" component={MoreScreen} options={{ title: 'Settings' }} />
@@ -105,7 +115,10 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
       <HomeStack.Screen
         name="PatientDetail"
         component={PatientDetailScreen}
-        options={{ title: 'Patient details' }}
+        options={({ route }) => ({
+          title: route.params.name,
+          headerBackTitle: 'Back'
+        })}
       />
       <HomeStack.Screen
         name="RoutineManager"
@@ -121,7 +134,7 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
   );
 }
 
-export function RootNavigator({ initialRouteName = 'RoleEntry' }: { initialRouteName?: keyof HomeStackParamList }) {
+export function RootNavigator({ initialRouteName = 'PhoneAuth' }: { initialRouteName?: keyof HomeStackParamList }) {
   return <HomeStackNavigator initialRouteName={initialRouteName} />;
 }
 

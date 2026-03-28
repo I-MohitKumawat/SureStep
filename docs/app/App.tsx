@@ -1,9 +1,14 @@
 import React from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, type Theme as NavigationTheme } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { enableScreens } from 'react-native-screens';
 import { ThemeProvider, useTheme } from '../../packages/ui/theme/ThemeProvider';
 import { AuthProvider } from '../../packages/core/auth/AuthContext';
 import { RoleNavigator } from './navigation/RoleNavigator';
 import { UserProfileProvider } from './context/userProfileContext.js';
+
+enableScreens(true);
 
 function ThemedNavigation() {
   const theme = useTheme();
@@ -35,13 +40,17 @@ function ThemedNavigation() {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <ThemeProvider initialMode="light">
-        <UserProfileProvider>
-          <ThemedNavigation />
-        </UserProfileProvider>
-      </ThemeProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <ThemeProvider initialMode="light">
+          <UserProfileProvider>
+            <SafeAreaProvider>
+              <ThemedNavigation />
+            </SafeAreaProvider>
+          </UserProfileProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 };
 

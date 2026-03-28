@@ -1,3 +1,5 @@
+export type CaregiverPatientStatusGroup = 'next_due' | 'missed' | 'completed';
+
 export type CaregiverSummaryTile = {
   id: string;
   name: string;
@@ -5,6 +7,8 @@ export type CaregiverSummaryTile = {
   adherencePercent: number;
   hasRecentAlerts: boolean;
   lastActivityLabel: string;
+  /** Dashboard grouping: next due, missed, or completed / on track. */
+  statusGroup: CaregiverPatientStatusGroup;
 };
 
 const MOCK_SUMMARY_TILES: CaregiverSummaryTile[] = [
@@ -14,7 +18,8 @@ const MOCK_SUMMARY_TILES: CaregiverSummaryTile[] = [
     relationship: 'Mother',
     adherencePercent: 88,
     hasRecentAlerts: false,
-    lastActivityLabel: 'Completed morning routine · 8:15 AM'
+    lastActivityLabel: 'Lunch check-in due · 1:00 PM',
+    statusGroup: 'next_due'
   },
   {
     id: 'p2',
@@ -22,7 +27,8 @@ const MOCK_SUMMARY_TILES: CaregiverSummaryTile[] = [
     relationship: 'Father-in-law',
     adherencePercent: 62,
     hasRecentAlerts: true,
-    lastActivityLabel: 'Missed medication reminder · 9:30 AM'
+    lastActivityLabel: 'Missed medication reminder · 9:30 AM',
+    statusGroup: 'missed'
   },
   {
     id: 'p3',
@@ -30,7 +36,8 @@ const MOCK_SUMMARY_TILES: CaregiverSummaryTile[] = [
     relationship: 'Aunt',
     adherencePercent: 94,
     hasRecentAlerts: false,
-    lastActivityLabel: 'All activities on track today'
+    lastActivityLabel: 'All activities on track today',
+    statusGroup: 'completed'
   }
 ];
 
