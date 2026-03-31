@@ -1,8 +1,14 @@
 import React from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 import { ScreenContainer } from '../components/ScreenContainer';
+import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useTheme, useThemePreference } from '../../../packages/ui/theme/ThemeProvider';
-export const MoreScreen: React.FC = () => {
+
+type Props = NativeStackScreenProps<HomeStackParamList, 'Settings'>;
+
+export const MoreScreen: React.FC<Props> = ({ navigation }) => {
   const theme = useTheme();
   const { modePreference, setModePreference } = useThemePreference();
 
@@ -43,6 +49,21 @@ export const MoreScreen: React.FC = () => {
         </View>
       </View>
 
+      <View style={styles.section}>
+        <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Profile</Text>
+        <Pressable
+          onPress={() => navigation.navigate('ProfileView')}
+          style={({ pressed }) => [
+            styles.profileButton,
+            {
+              borderColor: theme.colors.borderSubtle,
+              backgroundColor: pressed ? theme.colors.surface : theme.colors.surface
+            }
+          ]}
+        >
+          <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>View & edit profile</Text>
+        </Pressable>
+      </View>
     </ScreenContainer>
   );
 };
@@ -79,6 +100,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999
+  },
+  profileButton: {
+    minHeight: 48,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    borderRadius: 12
   }
 });
 

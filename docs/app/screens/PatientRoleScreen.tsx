@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,10 +7,12 @@ import {
   Text,
   View
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import { useAuth } from '../../../packages/core/auth/AuthContext';
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
+import type { HomeStackParamList } from '../navigation/RootNavigator';
 import type { PatientActivity, PatientProfile, PatientRoutine, RoutineStatus } from '../patient/mockState';
 import {
   fetchPatientProfile,
@@ -22,13 +24,21 @@ import {
   toggleActivity
 } from '../patient/mockState';
 
-type PatientTab = 'Home' | 'Profile';
+type PatientTab = 'Today' | 'Profile';
 type DayGroup = 'Morning' | 'Afternoon' | 'Evening';
+type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 
 function groupForHour(hour: number): DayGroup {
   if (hour < 12) return 'Morning';
   if (hour < 17) return 'Afternoon';
   return 'Evening';
+}
+
+function greetingLine(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 function ProfileIcon({ color }: { color: string }) {
@@ -40,17 +50,15 @@ function ProfileIcon({ color }: { color: string }) {
   );
 }
 
-export const PatientRoleScreen: React.FC = () => {
+export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
   const { logout } = useAuth();
   const theme = useTheme();
 
-  const [tab, setTab] = useState<PatientTab>('Home');
-  const [profile, setProfile] = useState<PatientProfile | null>(null);
-  const [routines, setRoutines] = useState<PatientRoutine[] | null>(null);
-  const [activities, setActivities] = useState<PatientActivity[] | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [routineIndex, setRoutineIndex] = useState(0);
+  const [tab, setTab] = React.useState<PatientTab>('Today');
+  const [profile, setProfile] = React.useState<PatientProfile | null>(null);
+  const [routines, setRoutines] = React.useState<PatientRoutine[] | null>(null);
+  const [activities, setActivities] = React.useState<PatientActivity[] | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
   const refresh = async () => {
     setLoading(true);
@@ -61,11 +69,11 @@ export const PatientRoleScreen: React.FC = () => {
     setLoading(false);
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     void refresh();
   }, []);
 
-  const routineGroups = useMemo(() => {
+  const routineGroups = React.useMemo(() => {
     const result: Record<DayGroup, Array<PatientRoutine & { status: RoutineStatus; timeLabel: string }>> = {
       Morning: [],
       Afternoon: [],
@@ -87,7 +95,7 @@ export const PatientRoleScreen: React.FC = () => {
     return result;
   }, [routines]);
 
-  const orderedRoutines = useMemo(() => {
+  const orderedRoutines = React.useMemo(() => {
     const flat = (Object.keys(routineGroups) as DayGroup[]).flatMap((g) =>
       routineGroups[g].map((r) => ({ ...r, group: g }))
     );
@@ -95,15 +103,12 @@ export const PatientRoleScreen: React.FC = () => {
     return flat;
   }, [routineGroups]);
 
-  useEffect(() => {
-    if (orderedRoutines.length === 0) {
-      if (routineIndex !== 0) setRoutineIndex(0);
-      return;
+  const nextRoutine = React.useMemo(() => {
+    for (const r of orderedRoutines) {
+      if (r.status !== 'completed') return r;
     }
-    if (routineIndex > orderedRoutines.length - 1) {
-      setRoutineIndex(0);
-    }
-  }, [orderedRoutines.length, routineIndex]);
+    return null;
+  }, [orderedRoutines]);
 
   const onMarkRoutineDone = async (routineId: string) => {
     await markRoutineDone(routineId);
@@ -115,113 +120,73 @@ export const PatientRoleScreen: React.FC = () => {
     await refresh();
   };
 
-  const renderHome = () => {
+  const renderToday = () => {
     const routineCount = (routines ?? []).length;
     const activityCount = (activities ?? []).length;
+    const displayName = profile?.name ?? 'there';
+    const summaryLine =
+      routineCount === 0 && activityCount === 0
+        ? 'Nothing scheduled for today'
+        : `${routineCount} ${routineCount === 1 ? 'routine' : 'routines'} · ${activityCount} ${activityCount === 1 ? 'activity' : 'activities'}`;
+
+    const cardMissed = nextRoutine?.status === 'missed';
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Home</Text>
-        <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
-          {routineCount} routines · {activityCount} activities
-        </Text>
+        <View style={styles.headerBlock}>
+          <Text style={[styles.greeting, { color: theme.colors.textPrimary }]}>
+            {greetingLine()}, {displayName}
+          </Text>
+          <Text style={[styles.summary, { color: theme.colors.textSecondary }]}>{summaryLine}</Text>
+        </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Routines</Text>
+          <Text style={[styles.sectionLabel, { color: theme.colors.textPrimary }]}>Next routine</Text>
 
-          {orderedRoutines.length === 0 ? (
+          {!nextRoutine ? (
             <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              No routines scheduled.
+              {orderedRoutines.length === 0
+                ? 'No routines scheduled.'
+                : "You're all caught up for today."}
             </Text>
           ) : (
-            (() => {
-              const current = orderedRoutines[routineIndex];
-              const missed = current.status === 'missed';
-              const completed = current.status === 'completed';
-              const borderColor = missed ? '#fecaca' : theme.colors.borderSubtle;
-              const bg = missed ? '#fef2f2' : theme.colors.surface;
+            <View
+              style={[
+                styles.nextCard,
+                {
+                  borderColor: theme.colors.borderSubtle,
+                  backgroundColor: theme.colors.surface
+                }
+              ]}
+            >
+              <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]} numberOfLines={2}>
+                {nextRoutine.name}
+              </Text>
+              <Text style={[styles.cardTime, { color: theme.colors.textSecondary }]}>{nextRoutine.timeLabel}</Text>
+              {cardMissed ? (
+                <Text style={[styles.cardHint, { color: theme.colors.textSecondary }]}>
+                  This time has passed — you can still mark it when you’re ready.
+                </Text>
+              ) : null}
 
-              return (
-                <View
-                  style={[
-                    styles.singleRoutineCard,
-                    { borderColor, backgroundColor: bg, opacity: completed ? 0.7 : 1 }
-                  ]}
-                >
-                  <View style={styles.singleRoutineHeader}>
-                    <Text style={[styles.groupTitle, { color: theme.colors.textPrimary }]}>
-                      {current.group}
-                    </Text>
-                    <Text style={[styles.groupMeta, { color: theme.colors.textSecondary }]}>
-                      {routineIndex + 1} / {orderedRoutines.length}
-                    </Text>
-                  </View>
-
-                  <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{current.name}</Text>
-                  <Text style={[styles.itemMeta, { color: theme.colors.textSecondary }]}>
-                    {current.timeLabel}
-                  </Text>
-
-                  <View style={styles.singleRoutineActions}>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          backgroundColor: completed ? '#ecfdf3' : missed ? '#fee2e2' : '#eff6ff',
-                          borderColor: completed ? '#bbf7d0' : missed ? '#fecaca' : '#bfdbfe'
-                        }
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusText,
-                          { color: completed ? '#166534' : missed ? '#b91c1c' : '#1d4ed8' }
-                        ]}
-                      >
-                        {current.status}
-                      </Text>
-                    </View>
-
-                    <Pressable
-                      onPress={() => onMarkRoutineDone(current.id)}
-                      disabled={completed}
-                      style={({ pressed }) => [
-                        styles.devButton,
-                        {
-                          borderColor: theme.colors.borderSubtle,
-                          backgroundColor: pressed ? theme.colors.background : theme.colors.surface,
-                          opacity: completed ? 0.5 : 1
-                        }
-                      ]}
-                    >
-                      <Text style={{ color: theme.colors.textPrimary, fontWeight: '700', fontSize: 12 }}>
-                        Mark done
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setRoutineIndex((i) => (i + 1) % orderedRoutines.length)}
-                      style={({ pressed }) => [
-                        styles.devButton,
-                        {
-                          borderColor: theme.colors.borderSubtle,
-                          backgroundColor: pressed ? theme.colors.background : theme.colors.surface
-                        }
-                      ]}
-                    >
-                      <Text style={{ color: theme.colors.textPrimary, fontWeight: '700', fontSize: 12 }}>
-                        Next
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })()
+              <Pressable
+                onPress={() => onMarkRoutineDone(nextRoutine.id)}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  {
+                    backgroundColor: theme.colors.accent,
+                    opacity: pressed ? 0.88 : 1
+                  }
+                ]}
+              >
+                <Text style={styles.primaryButtonLabel}>Mark as done</Text>
+              </Pressable>
+            </View>
           )}
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Activities</Text>
+          <Text style={[styles.sectionLabel, { color: theme.colors.textPrimary }]}>Activities</Text>
 
           {(activities ?? []).length === 0 ? (
             <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>No activities today.</Text>
@@ -231,30 +196,40 @@ export const PatientRoleScreen: React.FC = () => {
                 key={a.id}
                 onPress={() => onToggleActivity(a.id)}
                 style={[
-                  styles.activityCard,
+                  styles.activityRow,
                   {
                     borderColor: theme.colors.borderSubtle,
-                    backgroundColor: a.completed ? '#ecfdf3' : theme.colors.surface
+                    backgroundColor: theme.colors.background
                   }
                 ]}
               >
-                <View style={styles.activityHeader}>
-                  <Text style={[styles.activityTitle, { color: theme.colors.textPrimary }]}>{a.name}</Text>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      {
-                        borderColor: a.completed ? '#16a34a' : theme.colors.borderSubtle,
-                        backgroundColor: a.completed ? '#16a34a' : 'transparent'
-                      }
-                    ]}
-                  />
+                <View
+                  style={[
+                    styles.checkbox,
+                    {
+                      borderColor: a.completed ? theme.colors.accent : theme.colors.borderSubtle,
+                      backgroundColor: a.completed ? theme.colors.accent : 'transparent'
+                    }
+                  ]}
+                >
+                  {a.completed ? <Text style={styles.checkMark}>✓</Text> : null}
                 </View>
-                {a.description ? (
-                  <Text style={[styles.activityDescription, { color: theme.colors.textSecondary }]}>
-                    {a.description}
+                <View style={styles.activityTextCol}>
+                  <Text
+                    style={[styles.activityTitle, { color: theme.colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {a.name}
                   </Text>
-                ) : null}
+                  {a.description ? (
+                    <Text
+                      style={[styles.activityMeta, { color: theme.colors.textSecondary }]}
+                      numberOfLines={2}
+                    >
+                      {a.description}
+                    </Text>
+                  ) : null}
+                </View>
               </Pressable>
             ))
           )}
@@ -267,9 +242,17 @@ export const PatientRoleScreen: React.FC = () => {
     if (!profile) return null;
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: theme.colors.textPrimary }]}>Profile</Text>
+        <View style={styles.headerBlock}>
+          <Text style={[styles.greeting, { color: theme.colors.textPrimary }]}>{profile.name}</Text>
+          <Text style={[styles.summary, { color: theme.colors.textSecondary }]}>Your profile</Text>
+        </View>
 
-        <View style={[styles.profileCard, { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }]}>
+        <View
+          style={[
+            styles.profileCard,
+            { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }
+          ]}
+        >
           <View style={[styles.photoPlaceholder, { borderColor: theme.colors.borderSubtle }]} />
           <View style={styles.profileTextCol}>
             <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>{profile.name}</Text>
@@ -285,7 +268,7 @@ export const PatientRoleScreen: React.FC = () => {
         <Pressable
           onPress={logout}
           style={({ pressed }) => [
-            styles.backToMain,
+            styles.secondaryButton,
             {
               borderColor: theme.colors.borderSubtle,
               backgroundColor: pressed ? theme.colors.surface : 'transparent'
@@ -294,25 +277,43 @@ export const PatientRoleScreen: React.FC = () => {
         >
           <Text style={{ color: theme.colors.textPrimary }}>Back to main app</Text>
         </Pressable>
+        <Pressable
+          onPress={() => navigation.navigate('Settings')}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            {
+              borderColor: theme.colors.borderSubtle,
+              backgroundColor: pressed ? theme.colors.surface : 'transparent',
+              marginTop: 12
+            }
+          ]}
+        >
+          <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Settings</Text>
+        </Pressable>
       </ScrollView>
     );
   };
 
   return (
-    <ScreenContainer style={styles.shell}>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.shell}>
       {loading ? (
         <View style={styles.loadingFill}>
-          <ActivityIndicator />
+          <ActivityIndicator color={theme.colors.accent} />
           <Text style={[styles.loadingLabel, { color: theme.colors.textSecondary }]}>Loading…</Text>
         </View>
       ) : tab === 'Profile' ? (
         renderProfile()
       ) : (
-        renderHome()
+        renderToday()
       )}
 
-      <View style={[styles.tabBar, { borderTopColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surface }]}>
-        {(['Home', 'Profile'] as PatientTab[]).map((t) => {
+      <View
+        style={[
+          styles.tabBar,
+          { borderTopColor: theme.colors.borderSubtle, backgroundColor: theme.colors.background }
+        ]}
+      >
+        {(['Today', 'Profile'] as PatientTab[]).map((t) => {
           const active = tab === t;
           const color = active ? theme.colors.accent : theme.colors.textSecondary;
           return (
@@ -344,145 +345,106 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 96
   },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 6
+  headerBlock: {
+    marginBottom: 8
   },
-  pageSubtitle: {
+  greeting: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: 4
+  },
+  summary: {
     fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12
+    lineHeight: 20
   },
   section: {
-    marginTop: 16
+    marginTop: 24
   },
-  sectionTitle: {
+  sectionLabel: {
     fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 10
-  },
-  groupCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    fontWeight: '600',
     marginBottom: 12
-  },
-  singleRoutineCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 12
-  },
-  singleRoutineHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10
-  },
-  singleRoutineActions: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    alignItems: 'center'
-  },
-  devButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10
-  },
-  groupHeader: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  groupTitle: {
-    fontSize: 14,
-    fontWeight: '700'
-  },
-  groupMeta: {
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  groupBody: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    gap: 10
   },
   emptyText: {
-    fontSize: 13
+    fontSize: 14,
+    lineHeight: 20
   },
-  itemRow: {
+  nextCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+    padding: 16
   },
-  itemLeft: {
-    flex: 1,
-    paddingRight: 10
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 4
   },
-  itemRight: {
-    alignItems: 'flex-end'
-  },
-  itemTitle: {
+  cardTime: {
     fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 2
+    lineHeight: 20,
+    marginBottom: 8
   },
-  itemMeta: {
-    fontSize: 12
-  },
-  statusPill: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'capitalize'
-  },
-  activityCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  cardHint: {
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: 12
   },
-  activityHeader: {
+  primaryButton: {
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 4
+  },
+  primaryButtonLabel: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  activityRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 12
+  },
+  activityTextCol: {
+    flex: 1,
+    paddingLeft: 4
   },
   activityTitle: {
-    fontSize: 14,
-    fontWeight: '700'
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2
   },
-  activityDescription: {
-    fontSize: 12,
-    marginTop: 6,
-    lineHeight: 16
+  activityMeta: {
+    fontSize: 13,
+    lineHeight: 18
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12
+  },
+  checkMark: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800'
   },
   profileCard: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     flexDirection: 'row',
     gap: 12
   },
@@ -498,18 +460,18 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     marginBottom: 6
   },
   profileMeta: {
     fontSize: 13,
     lineHeight: 18
   },
-  backToMain: {
-    marginTop: 16,
+  secondaryButton: {
+    marginTop: 24,
     alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10
   },
@@ -552,4 +514,3 @@ const styles = StyleSheet.create({
     marginTop: 2
   }
 });
-

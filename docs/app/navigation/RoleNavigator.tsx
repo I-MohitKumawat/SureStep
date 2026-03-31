@@ -1,28 +1,51 @@
 import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { RootNavigator } from './RootNavigator';
+import { DoctorNavigator } from './DoctorNavigator';
 import { useAuth } from '../../../packages/core/auth/AuthContext';
-import { PatientRoleScreen } from '../screens/PatientRoleScreen';
-import { DoctorRoleScreen } from '../screens/DoctorRoleScreen';
+import { useUserProfile } from '../context/userProfileContext';
+import { ProfileLoadingScreen } from '../screens/ProfileLoadingScreen';
+
+const ProfileLoadingStack = createNativeStackNavigator<{ ProfileLoading: undefined }>();
+
+function ProfileLoadingNavigator() {
+  return (
+    <ProfileLoadingStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileLoadingStack.Screen name="ProfileLoading" component={ProfileLoadingScreen} />
+    </ProfileLoadingStack.Navigator>
+  );
+}
 
 export const RoleNavigator: React.FC = () => {
   const { auth } = useAuth();
+  const { profileLoading, hasProfileForRouting } = useUserProfile();
 
   if (auth.status !== 'authenticated') {
-    // Until real auth/role-switch UI and login exist (FE-AUTH / FE-ROLE-003),
-    // unauthenticated users see the default caregiver-focused app shell.
-    return <RootNavigator />;
+    return <RootNavigator initialRouteName="PhoneAuth" />;
   }
 
-  switch (auth.user.role) {
-    case 'PATIENT':
-      return <PatientRoleScreen />;
-    case 'DOCTOR':
-      return <DoctorRoleScreen />;
-    case 'CAREGIVER':
-    default:
-      // Caregivers see the current multi-patient dashboard shell.
-      return <RootNavigator />;
+  const userRole = auth.user?.role;
+
+  if (userRole === 'DOCTOR') {
+    return <DoctorNavigator />;
   }
+
+  if (profileLoading) {
+    return <ProfileLoadingNavigator />;
+  }
+
+  const initialRouteName = !hasProfileForRouting
+    ? 'ProfileSetup'
+    : userRole === 'PATIENT'
+      ? 'PatientDashboard'
+      : 'CaregiverDashboard';
+
+  return (
+    <RootNavigator
+      key={`${userRole ?? 'unknown'}-${initialRouteName}`}
+      initialRouteName={initialRouteName}
+    />
+  );
 };
 

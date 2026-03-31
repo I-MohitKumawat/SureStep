@@ -11,20 +11,36 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'RoleEntry'>;
 
 export const RoleEntryScreen: React.FC<Props> = ({ navigation }) => {
   const theme = useTheme();
-  const { login } = useAuth();
+  const { login, auth } = useAuth();
+  const [isSelecting, setIsSelecting] = React.useState(false);
 
-  const handleSelectPatient = () => {
-    login({ id: 'self-monitoring', email: 'patient@surestep.local', role: 'PATIENT' }, 'dev-token');
-    navigation.navigate('Home');
-  };
+  React.useEffect(() => {
+    // Reset button lock when returning to role-entry.
+    if (auth.status === 'unauthenticated') {
+      setIsSelecting(false);
+    }
+  }, [auth.status]);
 
-  const handleSelectCaregiver = () => {
-    login({ id: 'caregiver', email: 'caregiver@surestep.local', role: 'CAREGIVER' }, 'dev-token');
-    navigation.navigate('CaregiverDashboard');
-  };
+  const handleSelect = React.useCallback(
+    (role: 'PATIENT' | 'CAREGIVER') => {
+      if (isSelecting) return;
+      setIsSelecting(true);
+      const user =
+        role === 'PATIENT'
+          ? { id: 'self-monitoring', email: 'patient@surestep.local', role: 'PATIENT' as const }
+          : { id: 'caregiver', email: 'caregiver@surestep.local', role: 'CAREGIVER' as const };
+
+      // Keep role transitions single-fire to avoid intermittent double taps/racey navigation.
+      login(user, 'dev-token');
+    },
+    [isSelecting, login]
+  );
+
+  const handleSelectPatient = () => handleSelect('PATIENT');
+  const handleSelectCaregiver = () => handleSelect('CAREGIVER');
 
   return (
-    <ScreenContainer>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.centerContent}>
         <View style={styles.header}>
           <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>SureStep</Text>
@@ -34,24 +50,28 @@ export const RoleEntryScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.buttons}>
           <Pressable
             onPress={handleSelectPatient}
+            disabled={isSelecting}
+            hitSlop={8}
             style={({ pressed }) => [
               styles.primaryButton,
               {
                 backgroundColor: pressed ? theme.colors.accent : theme.colors.accent,
-                opacity: pressed ? 0.85 : 1
+                opacity: isSelecting ? 0.65 : pressed ? 0.85 : 1
               }
             ]}
           >
-            <Text style={styles.primaryButtonText}>Self monitoring</Text>
+            <Text style={styles.primaryButtonText}>{isSelecting ? 'Opening...' : 'Self monitoring'}</Text>
           </Pressable>
 
           <Pressable
             onPress={handleSelectCaregiver}
+            disabled={isSelecting}
+            hitSlop={8}
             style={({ pressed }) => [
               styles.primaryButton,
               {
                 backgroundColor: pressed ? theme.colors.accent : theme.colors.accent,
-                opacity: pressed ? 0.85 : 1
+                opacity: isSelecting ? 0.65 : pressed ? 0.85 : 1
               }
             ]}
           >
