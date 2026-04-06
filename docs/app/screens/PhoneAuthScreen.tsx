@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Keyboard,
+  Keyboard
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
@@ -18,343 +18,415 @@ import type { HomeStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PhoneAuth'>;
 
+const PRIMARY_LAVENDER = '#BFA2DB';
+const INPUT_BG = '#F5F0FA';
+
 export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showOTP, setShowOTP] = useState(false);
-  const [otp, setOtp] = useState(['', '', '', '']);
+  const [otp, setOtp] = useState('');
+
   const [resendTimer, setResendTimer] = useState(0);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const otpRefs = useRef<(TextInput | null)[]>([]);
+
+  const [focusedField, setFocusedField] = useState<'phone' | 'otp' | null>(null);
+
   const phoneInputRef = useRef<TextInput>(null);
+  const otpInputRef = useRef<TextInput>(null);
+
+  const phoneValid = useMemo(() => /^\d{10}$/.test(phoneNumber), [phoneNumber]);
+
+  const otpDigits = useMemo(() => otp.replace(/\D/g, '').slice(0, 6), [otp]);
+  const otpValid = useMemo(() => /^\d{4,6}$/.test(otpDigits), [otpDigits]);
 
   useEffect(() => {
-    if (resendTimer > 0) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    }
+    if (resendTimer <= 0) return;
+    const timer = setTimeout(() => setResendTimer((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
   }, [resendTimer]);
 
   useEffect(() => {
-    if (showOTP && otpRefs.current[0]) {
-      otpRefs.current[0]?.focus();
+    // Keep focus flow consistent with the two-step UX.
+    if (showOTP) {
+      otpInputRef.current?.focus();
+      return;
     }
+    phoneInputRef.current?.focus();
   }, [showOTP]);
 
+  const formatPhoneNumber = (text: string) => {
+    const cleaned = text.replace(/\D/g, '');
+    return cleaned.slice(0, 10);
+  };
+
   const handleSendOTP = async () => {
-    if (phoneNumber.length < 10) {
-      setError('Please enter a valid phone number');
+    if (!phoneValid) {
+      setError('Enter a valid phone number');
       return;
     }
 
     setIsLoading(true);
     setError('');
-    
+    setOtp('');
+
     // Simulate API call
     setTimeout(() => {
       setShowOTP(true);
       setResendTimer(30);
       setIsLoading(false);
-      Keyboard.dismiss();
     }, 1000);
   };
 
-  const handleOTPChange = (value: string, index: number) => {
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Auto-advance to next input
-    if (value && index < 3) {
-      otpRefs.current[index + 1]?.focus();
+  const handleVerifyOTP = async (otpValue: string) => {
+    if (!otpValid) {
+      setError('Enter a valid OTP');
+      return;
     }
 
-    // Auto-submit when all 4 digits are entered
-    if (newOtp.every(digit => digit !== '')) {
-      handleVerifyOTP(newOtp.join(''));
-    }
-  };
-
-  const handleVerifyOTP = (otpValue: string) => {
+    setIsLoading(true);
     setError('');
-    
-    // Mock verification - accept "0000" as valid
-    if (otpValue === '0000') {
-      // Navigate to role selection
-      navigation.replace('RoleEntry');
-    } else {
+
+    // Simulate verification
+    setTimeout(() => {
+      // Mock verification - accept test OTPs for now.
+      if (otpValue === '0000' || otpValue === '1111') {
+        navigation.replace('RoleEntry');
+        return;
+      }
+
       setError('Invalid OTP. Please try again.');
-      // Clear OTP inputs
-      setOtp(['', '', '', '']);
-      otpRefs.current[0]?.focus();
-    }
+      setOtp('');
+      otpInputRef.current?.focus();
+      setIsLoading(false);
+    }, 650);
   };
 
   const handleResendOTP = () => {
-    if (resendTimer === 0) {
-      setResendTimer(30);
-      setError('');
-      // In real app, this would trigger another API call
-    }
+    if (resendTimer > 0 || isLoading) return;
+    setError('');
+    setResendTimer(30);
   };
 
   const handleBackToPhone = () => {
     setShowOTP(false);
-    setOtp(['', '', '', '']);
+    setOtp('');
     setError('');
     setResendTimer(0);
-    phoneInputRef.current?.focus();
   };
 
-  const formatPhoneNumber = (text: string) => {
-    // Remove all non-numeric characters
-    const cleaned = text.replace(/\D/g, '');
-    // Limit to 10 digits
-    return cleaned.slice(0, 10);
+  const handlePrimary = () => {
+    if (isLoading) return;
+    if (!showOTP && otpValid) {
+      setShowOTP(true);
+      void handleVerifyOTP(otpDigits);
+      return;
+    }
+    if (!showOTP) {
+      void handleSendOTP();
+      return;
+    }
+    void handleVerifyOTP(otpDigits);
   };
+
+  const primaryDisabled = isLoading || (!showOTP ? !phoneValid : !otpValid);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }
-        ]}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={[styles.safe, { backgroundColor: '#FFFFFF' }]}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>
-            Welcome to SureStep
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            {showOTP ? 'Enter the 4-digit code sent to your phone' : 'Enter your phone number to continue'}
-          </Text>
+        <View pointerEvents="none" style={styles.bottomShapeWrap}>
+          <View style={[styles.bottomShape, { backgroundColor: PRIMARY_LAVENDER }]} />
+        </View>
 
-          {!showOTP ? (
-            <View style={styles.phoneInputContainer}>
-              <View style={[styles.countryCode, { borderColor: theme.colors.borderSubtle }]}>
-                <Text style={[styles.countryCodeText, { color: theme.colors.textPrimary }]}>+1</Text>
-              </View>
-              <TextInput
-                ref={phoneInputRef}
-                style={[
-                  styles.phoneInput,
-                  { 
-                    borderColor: error ? theme.colors.error : theme.colors.borderSubtle,
-                    color: theme.colors.textPrimary
-                  }
-                ]}
-                placeholder="(555) 123-4567"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={phoneNumber}
-                onChangeText={(text) => {
-                  setPhoneNumber(formatPhoneNumber(text));
-                  setError('');
-                }}
-                keyboardType="phone-pad"
-                maxLength={10}
-                autoFocus
-              />
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }
+          ]}
+        >
+          <View style={styles.content}>
+            <View style={[styles.logoBox, { backgroundColor: PRIMARY_LAVENDER }]}>
+              <Text style={styles.logoText}>logo</Text>
             </View>
-          ) : (
-            <View style={styles.otpContainer}>
-              <View style={styles.otpInputs}>
-                {otp.map((digit, index) => (
+
+            <Text style={styles.brandName}>SURE STEP</Text>
+
+            <View style={styles.middle}>
+              <Text style={styles.loginTitle}>Login</Text>
+              <Text style={styles.loginSubtitle}>Sign in to continue.</Text>
+
+              <View style={styles.inputs}>
+                <TextInput
+                  ref={phoneInputRef}
+                  style={[
+                    styles.input,
+                    { backgroundColor: INPUT_BG },
+                    {
+                      borderColor: focusedField === 'phone' ? PRIMARY_LAVENDER : theme.colors.borderSubtle
+                    },
+                    focusedField === 'phone' && styles.inputFocused
+                  ]}
+                  placeholder="Enter phone number"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={phoneNumber}
+                  onChangeText={(text) => {
+                    setPhoneNumber(formatPhoneNumber(text));
+                    setError('');
+                  }}
+                  onFocus={() => setFocusedField('phone')}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  autoFocus
+                />
+
+                <View style={{ marginTop: 14, width: '100%' }}>
                   <TextInput
-                    key={index}
-                    ref={(ref) => {
-                      otpRefs.current[index] = ref;
-                    }}
+                    ref={otpInputRef}
                     style={[
-                      styles.otpInput,
-                      { 
-                        borderColor: error ? theme.colors.error : theme.colors.borderSubtle,
-                        color: theme.colors.textPrimary
-                      }
+                      styles.input,
+                      { backgroundColor: INPUT_BG },
+                      {
+                        borderColor: focusedField === 'otp' ? PRIMARY_LAVENDER : theme.colors.borderSubtle
+                      },
+                      focusedField === 'otp' && styles.inputFocused,
+                      !showOTP && { opacity: 0.6 }
                     ]}
-                    value={digit}
-                    onChangeText={(value) => handleOTPChange(value, index)}
+                    placeholder="Enter OTP"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={otpDigits}
+                    onChangeText={(text) => {
+                      setOtp(text.replace(/\D/g, '').slice(0, 6));
+                      setError('');
+                    }}
+                    onFocus={() => {
+                      if (!showOTP) {
+                        setShowOTP(true);
+                        setError('');
+                      }
+                      setFocusedField('otp');
+                    }}
+                    onBlur={() => setFocusedField((f) => (f === 'otp' ? null : f))}
                     keyboardType="numeric"
-                    maxLength={1}
+                    maxLength={6}
                     secureTextEntry
-                    textAlign="center"
+                    editable
                   />
-                ))}
+                </View>
               </View>
-              
-              <Pressable onPress={handleBackToPhone} style={styles.backButton}>
-                <Text style={[styles.backButtonText, { color: theme.colors.accent }]}>
-                  ← Back to phone number
-                </Text>
-              </Pressable>
-            </View>
-          )}
 
-          {error ? (
-            <Text style={[styles.errorText, { color: theme.colors.error }]}>
-              {error}
-            </Text>
-          ) : null}
+              {error ? (
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
+              ) : null}
 
-          {!showOTP ? (
-            <Pressable
-              onPress={handleSendOTP}
-              disabled={isLoading || phoneNumber.length < 10}
-              style={({ pressed }) => [
-                styles.sendButton,
-                {
-                  backgroundColor: 
-                    isLoading || phoneNumber.length < 10
-                      ? theme.colors.borderSubtle
-                      : theme.colors.accent,
-                  opacity: pressed ? 0.85 : 1
-                }
-              ]}
-            >
-              <Text style={[
-                styles.sendButtonText,
-                { color: isLoading || phoneNumber.length < 10 ? theme.colors.textSecondary : '#ffffff' }
-              ]}>
-                {isLoading ? 'Sending...' : 'Send OTP'}
-              </Text>
-            </Pressable>
-          ) : (
-            <View style={styles.resendContainer}>
-              <Text style={[styles.resendText, { color: theme.colors.textSecondary }]}>
-                Didn't receive the code?
-              </Text>
               <Pressable
-                onPress={handleResendOTP}
-                disabled={resendTimer > 0}
+                onPress={handlePrimary}
+                disabled={primaryDisabled}
                 style={({ pressed }) => [
-                  styles.resendButton,
-                  { opacity: resendTimer > 0 ? 0.5 : pressed ? 0.7 : 1 }
+                  styles.loginButton,
+                  {
+                    backgroundColor: primaryDisabled ? theme.colors.borderSubtle : PRIMARY_LAVENDER
+                  },
+                  pressed && !primaryDisabled && { opacity: 0.9, transform: [{ scale: 0.99 }] }
                 ]}
               >
-                <Text style={[styles.resendButtonText, { color: theme.colors.accent }]}>
-                  {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+                <Text style={styles.loginButtonText}>
+                  {isLoading ? 'Please wait...' : 'Log in'}
                 </Text>
               </Pressable>
+
+              {showOTP ? (
+                <View style={styles.otpFooter}>
+                  <Pressable onPress={handleBackToPhone} style={styles.backLink}>
+                    <Text style={[styles.backLinkText, { color: PRIMARY_LAVENDER }]}>
+                      ← Back to phone number
+                    </Text>
+                  </Pressable>
+
+                  <View style={styles.resendContainer}>
+                    <Text style={[styles.resendText, { color: theme.colors.textSecondary }]}>
+                      Didn't receive the code?
+                    </Text>
+                    <Pressable
+                      onPress={handleResendOTP}
+                      disabled={resendTimer > 0 || isLoading}
+                      style={({ pressed }) => [
+                        styles.resendButton,
+                        { opacity: resendTimer > 0 ? 0.5 : pressed ? 0.85 : 1 }
+                      ]}
+                    >
+                      <Text style={[styles.resendButtonText, { color: PRIMARY_LAVENDER }]}>
+                        {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
             </View>
-          )}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safe: { flex: 1 },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF'
   },
   scrollContent: {
-    flexGrow: 1,
+    flexGrow: 1
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
+    justifyContent: 'flex-start',
+    alignItems: 'center'
+  },
+
+  logoBox: {
+    width: 110,
+    height: 110,
+    borderRadius: 14,
+    alignItems: 'center',
     justifyContent: 'center',
-    minHeight: '100%',
+    marginBottom: 18
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
+  logoText: {
+    color: 'rgba(17, 24, 39, 0.65)',
+    fontWeight: '800',
+    fontSize: 18
   },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
+  brandName: {
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 2.6,
+    marginBottom: 34,
+    color: '#1A1A1A'
   },
-  phoneInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  countryCode: {
-    borderWidth: 1,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRightWidth: 0,
-  },
-  countryCodeText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  phoneInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  otpContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  otpInputs: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+
+  middle: {
     width: '100%',
-    marginBottom: 24,
+    alignItems: 'center'
   },
-  otpInput: {
-    width: 70,
-    height: 70,
-    borderWidth: 1,
-    borderRadius: 12,
-    fontSize: 24,
-    fontWeight: '600',
+  loginTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    textAlign: 'center'
   },
-  backButton: {
-    paddingVertical: 8,
-  },
-  backButtonText: {
-    fontSize: 14,
+  loginSubtitle: {
+    fontSize: 16,
     fontWeight: '500',
+    color: '#7A7A7A',
+    marginBottom: 28,
+    textAlign: 'center'
+  },
+
+  inputs: {
+    width: '100%'
+  },
+  input: {
+    width: '100%',
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 0,
+    fontSize: 16,
+    color: '#1A1A1A',
+    fontWeight: '500'
+  },
+  inputFocused: {
+    shadowColor: PRIMARY_LAVENDER,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2
   },
   errorText: {
-    textAlign: 'center',
+    width: '100%',
+    marginTop: 10,
     fontSize: 14,
-    marginBottom: 16,
+    textAlign: 'left'
   },
-  sendButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+
+  loginButton: {
+    width: '100%',
+    minHeight: 56,
+    borderRadius: 30,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4
   },
-  sendButtonText: {
+  loginButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800'
+  },
+
+  otpFooter: {
+    width: '100%',
+    marginTop: 18,
+    alignItems: 'center'
+  },
+  backLink: {
+    width: '100%',
+    alignItems: 'flex-start'
+  },
+  backLinkText: {
+    fontSize: 14,
+    fontWeight: '700'
   },
   resendContainer: {
-    alignItems: 'center',
     marginTop: 16,
+    alignItems: 'center'
   },
   resendText: {
     fontSize: 14,
-    marginBottom: 8,
+    fontWeight: '600',
+    marginBottom: 8
   },
   resendButton: {
-    paddingVertical: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10
   },
   resendButtonText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '800'
   },
+
+  bottomShapeWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 320,
+    justifyContent: 'flex-end'
+  },
+  bottomShape: {
+    position: 'absolute',
+    left: -60,
+    right: -60,
+    bottom: -190,
+    height: 320,
+    borderTopLeftRadius: 70,
+    borderTopRightRadius: 70,
+    transform: [{ rotate: '-6deg' }]
+  }
 });
+
