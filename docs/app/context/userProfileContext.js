@@ -101,11 +101,9 @@ export function UserProfileProvider({ children }) {
       setProfileError(null);
       setProfile(draft);
       setProfileLoading(false);
-      setHasProfileForRouting(true);
-      sessionProfileCacheRef.current[draft.role] = draft;
+    setHasProfileForRouting(true);
       try {
-        const serializedData = JSON.stringify(draft);
-        await AsyncStorage.setItem(key, serializedData);
+        await AsyncStorage.setItem(key, JSON.stringify(draft));
         return true;
       } catch (e) {
         // Fail-soft: keep in-memory profile so UX can proceed even if local persistence fails.

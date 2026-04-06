@@ -22,7 +22,7 @@ export const RoleNavigator: React.FC = () => {
   const { profileLoading, hasProfileForRouting } = useUserProfile();
 
   if (auth.status !== 'authenticated') {
-    return <RootNavigator initialRouteName="Welcome" />;
+    return <RootNavigator initialRouteName="PhoneAuth" />;
   }
 
   const userRole = auth.user?.role;

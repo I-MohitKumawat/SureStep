@@ -10,7 +10,6 @@ import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
-import { WelcomeScreen } from '../screens/WelcomeScreen';
 
 import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import ProfileSetup from '../screens/ProfileSetup';
@@ -20,7 +19,6 @@ import ProfileEdit from '../screens/ProfileEdit';
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export type HomeStackParamList = {
-  Welcome: undefined;
   PhoneAuth: undefined;
   RoleEntry: undefined;
   Home: undefined;
@@ -141,7 +139,7 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
   );
 }
 
-export function RootNavigator({ initialRouteName = 'Welcome' }: { initialRouteName?: keyof HomeStackParamList }) {
+export function RootNavigator({ initialRouteName = 'PhoneAuth' }: { initialRouteName?: keyof HomeStackParamList }) {
   return <HomeStackNavigator initialRouteName={initialRouteName} />;
 }
 
