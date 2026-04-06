@@ -21,6 +21,8 @@ const UserProfileContext = React.createContext(undefined);
 export function UserProfileProvider({ children }) {
   const { auth } = useAuth();
   const loadVersionRef = React.useRef(0);
+  // Session fallback cache by role for cases where AsyncStorage is unavailable in dev.
+  const sessionProfileCacheRef = React.useRef({});
 
   const [activeRole, setActiveRole] = React.useState(null); // 'patient' | 'caregiver' | null
   const [profile, setProfile] = React.useState(null);
@@ -37,7 +39,21 @@ export function UserProfileProvider({ children }) {
     setProfileError(null);
     try {
       const raw = await AsyncStorage.getItem(storageKey);
-      const parsed = raw ? JSON.parse(raw) : null;
+      let parsedFromStorage = null;
+      if (raw) {
+        try {
+          parsedFromStorage = JSON.parse(raw);
+        } catch (parseError) {
+          console.warn('Failed to parse stored profile data:', parseError);
+          // Clear corrupted data
+          try {
+            await AsyncStorage.removeItem(storageKey);
+          } catch (removeError) {
+            console.warn('Failed to remove corrupted profile data:', removeError);
+          }
+        }
+      }
+      const parsed = parsedFromStorage ?? sessionProfileCacheRef.current[roleSlug] ?? null;
       // Ignore stale load responses (for example, a pre-save load finishing after save).
       if (requestVersion !== loadVersionRef.current) return;
       setProfile(parsed);

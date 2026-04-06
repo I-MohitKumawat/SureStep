@@ -83,6 +83,11 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
       }}
     >
       <HomeStack.Screen
+        name="Welcome"
+        component={WelcomeScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
         name="PhoneAuth"
         component={PhoneAuthScreen}
         options={{ headerShown: false }}
