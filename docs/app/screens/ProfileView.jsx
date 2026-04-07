@@ -2,9 +2,10 @@ import React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
-
 import { useUserProfile } from '../context/userProfileContext';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { C } from '../theme/colors';
+import { F } from '../theme/fonts';
 
 const { countries } = require('../utils/profile/profileData');
 
@@ -164,83 +165,82 @@ export default function ProfileView({ navigation }) {
 const styles = StyleSheet.create({
   topBackButton: {
     alignSelf: 'flex-start',
-    minHeight: 48,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 12
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 14,
+    backgroundColor: C.surface,
   },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24
-  },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 28 },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 12,
-    color: '#111827'
+    fontFamily: F.extraBold,
+    fontSize: 24,
+    marginBottom: 14,
+    color: C.textPrimary,
   },
   subtitle: {
+    fontFamily: F.regular,
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 16,
-    color: '#4b5563'
+    marginBottom: 18,
+    color: C.textSecondary,
   },
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 12,
-    borderColor: '#e5e7eb',
-    marginBottom: 16
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+    marginBottom: 18,
   },
-  row: {
-    marginBottom: 12
-  },
+  row: { marginBottom: 14 },
   label: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '700',
-    marginBottom: 4
+    fontFamily: F.semiBold,
+    fontSize: 11,
+    color: C.textSecondary,
+    letterSpacing: 0.8,
+    marginBottom: 4,
+    textTransform: 'uppercase',
   },
-  labelHighContrast: {
-    color: '#9ca3af'
-  },
+  labelHighContrast: { color: '#9ca3af' },
   value: {
+    fontFamily: F.medium,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827'
+    color: C.textPrimary,
   },
-  valueHighContrast: {
-    color: '#ffffff'
-  },
-  actions: {
-    gap: 12
-  },
+  valueHighContrast: { color: '#ffffff' },
+  actions: { gap: 12 },
   primaryButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    minHeight: 48,
+    backgroundColor: C.primary,
+    borderRadius: 14,
+    minHeight: 50,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    shadowColor: C.primary,
+    shadowOpacity: 0.24,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 10,
+    elevation: 5,
   },
   primaryButtonText: {
-    color: '#ffffff',
-    fontWeight: '800'
+    fontFamily: F.bold,
+    color: C.primaryText,
   },
   secondaryButton: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    minHeight: 50,
+    borderWidth: 1.5,
+    borderColor: C.border,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: '#111827',
-    fontWeight: '800'
+    fontFamily: F.bold,
+    color: C.textPrimary,
   },
 });
 

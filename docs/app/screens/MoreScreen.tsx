@@ -5,6 +5,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useTheme, useThemePreference } from '../../../packages/ui/theme/ThemeProvider';
+import { C } from '../theme/colors';
+import { F } from '../theme/fonts';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Settings'>;
 
@@ -26,23 +28,17 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
       </Text>
 
       <View style={styles.section}>
-        <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Theme</Text>
-        <View style={[styles.row, { borderColor: theme.colors.borderSubtle }]}>
+        <Text style={styles.label}>Theme</Text>
+        <View style={styles.row}>
           {options.map((opt) => {
             const selected = modePreference === opt.id;
             return (
               <Pressable
                 key={opt.id}
                 onPress={() => setModePreference(opt.id)}
-                style={[
-                  styles.pill,
-                  {
-                    borderColor: theme.colors.borderSubtle,
-                    backgroundColor: selected ? theme.colors.surface : 'transparent'
-                  }
-                ]}
+                style={[styles.pill, selected && styles.pillActive]}
               >
-                <Text style={{ color: theme.colors.textPrimary }}>{opt.label}</Text>
+                <Text style={[styles.pillText, selected && styles.pillTextActive]}>{opt.label}</Text>
               </Pressable>
             );
           })}
@@ -50,18 +46,12 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <View style={styles.section}>
-        <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Profile</Text>
+        <Text style={styles.label}>Profile</Text>
         <Pressable
           onPress={() => navigation.navigate('ProfileView')}
-          style={({ pressed }) => [
-            styles.profileButton,
-            {
-              borderColor: theme.colors.borderSubtle,
-              backgroundColor: pressed ? theme.colors.surface : theme.colors.surface
-            }
-          ]}
+          style={({ pressed }) => [styles.profileButton, pressed && { opacity: 0.88 }]}
         >
-          <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>View & edit profile</Text>
+          <Text style={styles.profileButtonText}>View & edit profile</Text>
         </Pressable>
       </View>
     </ScreenContainer>
@@ -70,43 +60,55 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   heading: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#111827'
+    fontFamily: F.extraBold,
+    fontSize: 22,
+    marginBottom: 6,
+    color: C.textPrimary,
   },
   body: {
+    fontFamily: F.regular,
     fontSize: 14,
     lineHeight: 20,
-    color: '#4b5563'
+    color: C.textSecondary,
   },
-  section: {
-    marginTop: 16
-  },
+  section: { marginTop: 20 },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8
+    fontFamily: F.bold,
+    fontSize: 13,
+    marginBottom: 10,
+    color: C.textPrimary,
   },
   row: {
     flexDirection: 'row',
     gap: 8,
-    padding: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12
+    padding: 6,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: C.surface,
   },
   pill: {
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999
-  },
-  profileButton: {
-    minHeight: 48,
-    borderWidth: 1,
     paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  pillActive: {
+    backgroundColor: C.primaryLight,
+    borderColor: C.primary,
+  },
+  pillText: { fontFamily: F.medium, fontSize: 14, color: C.textPrimary },
+  pillTextActive: { fontFamily: F.bold, color: C.primary },
+  profileButton: {
+    minHeight: 50,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
     justifyContent: 'center',
-    borderRadius: 12
-  }
+    borderRadius: 14,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+  },
+  profileButtonText: { fontFamily: F.semiBold, color: C.textPrimary },
 });
 

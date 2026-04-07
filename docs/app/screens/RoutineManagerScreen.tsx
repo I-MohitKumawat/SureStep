@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { C } from '../theme/colors';
+import { F } from '../theme/fonts';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
@@ -119,31 +121,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8
+    marginBottom: 14
   },
   heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontFamily: F.bold,
+    fontSize: 22,
+    color: C.textPrimary,
     marginBottom: 2
   },
   subheading: {
+    fontFamily: F.regular,
     fontSize: 13,
-    color: '#6b7280'
+    color: C.textSecondary
   },
   primaryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#111827'
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: C.primary,
+    shadowColor: C.primary,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryButtonPressed: {
-    backgroundColor: '#1f2937'
-  },
+  primaryButtonPressed: { opacity: 0.88 },
   primaryButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff'
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.primaryText
   },
   loadingRow: {
     flexDirection: 'row',
@@ -152,29 +158,34 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginLeft: 8,
+    fontFamily: F.regular,
     fontSize: 13,
-    color: '#6b7280'
+    color: C.textSecondary
   },
   errorText: {
+    fontFamily: F.regular,
     fontSize: 13,
-    color: '#b91c1c',
+    color: C.error,
     marginBottom: 8
   },
-  listContent: {
-    paddingBottom: 16
-  },
+  listContent: { paddingBottom: 16 },
   card: {
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 12,
-    backgroundColor: '#f9fafb',
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: '#e5e7eb'
+    borderColor: C.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 1,
   },
   routineName: {
+    fontFamily: F.semiBold,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827'
+    color: C.textPrimary
   },
   cardActionsRow: {
     marginTop: 10,
@@ -182,23 +193,22 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end'
   },
   secondaryButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: '#e5e7eb'
+    backgroundColor: C.primaryLight
   },
-  secondaryButtonPressed: {
-    backgroundColor: '#d1d5db'
-  },
+  secondaryButtonPressed: { opacity: 0.88 },
   secondaryButtonText: {
+    fontFamily: F.semiBold,
     fontSize: 13,
-    fontWeight: '700',
-    color: '#111827'
+    color: C.primary
   },
   emptyText: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 8
+    fontFamily: F.regular,
+    fontSize: 14,
+    color: C.textSecondary,
+    marginTop: 12
   }
 });
 
