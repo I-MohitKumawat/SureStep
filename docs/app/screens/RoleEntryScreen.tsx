@@ -4,78 +4,69 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
-import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
-import { useAuth } from '../../../packages/core/auth/AuthContext';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'RoleEntry'>;
 
 export const RoleEntryScreen: React.FC<Props> = ({ navigation }) => {
-  const theme = useTheme();
-  const { login, auth } = useAuth();
-  const [isSelecting, setIsSelecting] = React.useState(false);
+  const [selectedRole, setSelectedRole] = React.useState<'caregiver' | 'patient' | null>(null);
 
-  React.useEffect(() => {
-    // Reset button lock when returning to role-entry.
-    if (auth.status === 'unauthenticated') {
-      setIsSelecting(false);
-    }
-  }, [auth.status]);
-
-  const handleSelect = React.useCallback(
-    (role: 'PATIENT' | 'CAREGIVER') => {
-      if (isSelecting) return;
-      setIsSelecting(true);
-      const user =
-        role === 'PATIENT'
-          ? { id: 'self-monitoring', email: 'patient@surestep.local', role: 'PATIENT' as const }
-          : { id: 'caregiver', email: 'caregiver@surestep.local', role: 'CAREGIVER' as const };
-
-      // Keep role transitions single-fire to avoid intermittent double taps/racey navigation.
-      login(user, 'dev-token');
-    },
-    [isSelecting, login]
-  );
-
-  const handleSelectPatient = () => handleSelect('PATIENT');
-  const handleSelectCaregiver = () => handleSelect('CAREGIVER');
+  const proceed = () => {
+    if (!selectedRole) return;
+    navigation.navigate('ProfileSetup', { role: selectedRole });
+  };
 
   return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.centerContent}>
-        <View style={styles.header}>
-          <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>SureStep</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Continue as:</Text>
-        </View>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.container}>
+      <View pointerEvents="none" style={styles.bottomShapeWrap}>
+        <View style={styles.bottomShape} />
+      </View>
 
-        <View style={styles.buttons}>
+      <View style={styles.content}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </Pressable>
+
+        <View style={styles.logoBox}>
+          <Text style={styles.logoText}>logo</Text>
+        </View>
+        <Text style={styles.brand}>SURE STEP</Text>
+
+        <Text style={styles.title}>Choose your role</Text>
+        <Text style={styles.subtitle}>to continue.</Text>
+
+        <View style={styles.roleCards}>
           <Pressable
-            onPress={handleSelectPatient}
-            disabled={isSelecting}
-            hitSlop={8}
             style={({ pressed }) => [
-              styles.primaryButton,
-              {
-                backgroundColor: pressed ? theme.colors.accent : theme.colors.accent,
-                opacity: isSelecting ? 0.65 : pressed ? 0.85 : 1
-              }
+              styles.roleInput,
+              selectedRole === 'caregiver' ? styles.roleInputSelected : null,
+              pressed ? styles.roleCardPressed : null
             ]}
+            onPress={() => setSelectedRole('caregiver')}
           >
-            <Text style={styles.primaryButtonText}>{isSelecting ? 'Opening...' : 'Self monitoring'}</Text>
+            <Text style={styles.roleInputText}>caregiver</Text>
           </Pressable>
 
           <Pressable
-            onPress={handleSelectCaregiver}
-            disabled={isSelecting}
-            hitSlop={8}
             style={({ pressed }) => [
-              styles.primaryButton,
-              {
-                backgroundColor: pressed ? theme.colors.accent : theme.colors.accent,
-                opacity: isSelecting ? 0.65 : pressed ? 0.85 : 1
-              }
+              styles.roleInput,
+              selectedRole === 'patient' ? styles.roleInputSelected : null,
+              pressed ? styles.roleCardPressed : null
             ]}
+            onPress={() => setSelectedRole('patient')}
           >
-            <Text style={styles.primaryButtonText}>Caregiver</Text>
+            <Text style={styles.roleInputText}>patient</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.proceedButton,
+              !selectedRole ? styles.proceedButtonDisabled : null,
+              pressed && selectedRole ? { opacity: 0.9 } : null
+            ]}
+            onPress={proceed}
+            disabled={!selectedRole}
+          >
+            <Text style={styles.proceedText}>Proceed</Text>
           </Pressable>
         </View>
       </View>
@@ -84,41 +75,105 @@ export const RoleEntryScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  centerContent: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: '#F5F5F6'
+  },
+  bottomShapeWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 280,
+    overflow: 'hidden'
+  },
+  bottomShape: {
+    position: 'absolute',
+    left: -40,
+    right: -40,
+    bottom: -80,
+    height: 260,
+    transform: [{ rotate: '-8deg' }],
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: '#BFA2DB'
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'flex-start',
     alignItems: 'center'
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 24
+  backButton: {
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 2
   },
-  appName: {
+  backButtonText: {
+    fontSize: 16,
+    color: '#3B3B3B',
+    fontWeight: '600'
+  },
+  logoBox: {
+    marginTop: 16,
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#BFA2DB'
+  },
+  logoText: { color: 'rgba(17, 24, 39, 0.75)', fontWeight: '700' },
+  brand: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: 1.2,
+    marginTop: 12,
+    marginBottom: 52
+  },
+  title: {
     fontSize: 24,
     fontWeight: '700',
+    color: '#2A2A31',
+    textAlign: 'center',
     marginBottom: 4
   },
   subtitle: {
-    fontSize: 16,
-    textAlign: 'center'
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    marginBottom: 24
   },
-  buttons: {
-    gap: 12,
-    alignItems: 'center'
+  roleCards: {
+    width: '100%',
+    maxWidth: 400,
+    gap: 16
   },
-  primaryButton: {
-    width: 320,
+  roleInput: {
+    backgroundColor: '#D0CED0',
+    borderRadius: 18,
     paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 999,
+    paddingHorizontal: 24
+  },
+  roleInputSelected: { backgroundColor: '#BFA2DB' },
+  roleCardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9
+  },
+  roleInputText: {
+    fontSize: 30,
+    color: '#3B3B3B'
+  },
+  proceedButton: {
+    marginTop: 16,
+    backgroundColor: '#BFA2DB',
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center'
   },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  secondaryButton: {},
-  secondaryButtonText: {}
+  proceedButtonDisabled: { opacity: 0.55 },
+  proceedText: { color: '#1A1A1A', fontSize: 24, fontWeight: '700' }
 });
-

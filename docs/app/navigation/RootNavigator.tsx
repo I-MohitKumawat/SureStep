@@ -10,6 +10,7 @@ import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
+import { WelcomeScreen } from '../screens/WelcomeScreen';
 
 import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import ProfileSetup from '../screens/ProfileSetup';
@@ -19,6 +20,7 @@ import ProfileEdit from '../screens/ProfileEdit';
 import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 
 export type HomeStackParamList = {
+  Welcome: undefined;
   PhoneAuth: undefined;
   RoleEntry: undefined;
   Home: undefined;
@@ -28,7 +30,9 @@ export type HomeStackParamList = {
 
   Settings: undefined;
 
-  ProfileSetup: undefined;
+  ProfileSetup: {
+    role: 'caregiver' | 'patient';
+  };
   ProfileView: undefined;
   ProfileEdit: undefined;
 
