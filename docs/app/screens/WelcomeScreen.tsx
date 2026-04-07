@@ -2,24 +2,18 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { useTheme } from '../../../packages/ui/theme/ThemeProvider';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Welcome'>;
 
 export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
-  const theme = useTheme();
-
   const lavender = '#BFA2DB';
   const bg = '#F6F5F8';
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={[styles.shell, { backgroundColor: bg }]}>
-      <Pressable
-        onPress={() => navigation.replace('PhoneAuth')}
-        style={styles.pressableFill}
-      >
+      <View style={styles.pressableFill}>
         {/* Bottom lavender angled base */}
         <View pointerEvents="none" style={[styles.bottomShapeWrap]}>
           <View style={[styles.bottomShape, { backgroundColor: lavender }]} />
@@ -32,8 +26,11 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
 
           <Text style={[styles.appName, { color: '#111827' }]}>SURE STEP</Text>
           <Text style={[styles.welcome, { color: '#374151' }]}>Welcome</Text>
+          <Pressable onPress={() => navigation.navigate('PhoneAuth')} style={styles.proceedButton}>
+            <Text style={styles.proceedText}>click to proceed</Text>
+          </Pressable>
         </View>
-      </Pressable>
+      </View>
     </ScreenContainer>
   );
 };
@@ -72,10 +69,20 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   welcome: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 52,
+    fontWeight: '700',
     letterSpacing: 0.3
   },
+  proceedButton: {
+    marginTop: 28,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E7E5EA'
+  },
+  proceedText: { fontSize: 16, color: '#2A2A31', fontWeight: '600' },
   bottomShapeWrap: {
     position: 'absolute',
     left: 0,
