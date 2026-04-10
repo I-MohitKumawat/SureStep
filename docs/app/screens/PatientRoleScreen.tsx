@@ -340,7 +340,7 @@ const CompletedTasksModal = ({
 );
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export const PatientRoleScreen: React.FC<Props> = () => {
+export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
   const { profile } = useUserProfile();
   const { tasks, updateTaskStatus } = useTasks();
   const [activeTab, setActiveTab] = useState<BottomTab>('Home');
@@ -506,7 +506,14 @@ export const PatientRoleScreen: React.FC<Props> = () => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
-              <Pressable key={tab} onPress={() => setActiveTab(tab)} style={styles.bottomTab}>
+              <Pressable
+                key={tab}
+                onPress={() => {
+                  setActiveTab(tab);
+                  if (tab === 'Family') navigation.navigate('PatientFamily');
+                }}
+                style={styles.bottomTab}
+              >
                 <View style={styles.bottomTabIconWrap}>
                   <IconComponent active={isActive} />
                 </View>
@@ -530,7 +537,14 @@ export const PatientRoleScreen: React.FC<Props> = () => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
-              <Pressable key={tab} onPress={() => setActiveTab(tab)} style={styles.bottomTab}>
+              <Pressable
+                key={tab}
+                onPress={() => {
+                  setActiveTab(tab);
+                  if (tab === 'Activity') navigation.navigate('PatientActivities');
+                }}
+                style={styles.bottomTab}
+              >
                 <View style={styles.bottomTabIconWrap}>
                   <IconComponent active={isActive} />
                 </View>

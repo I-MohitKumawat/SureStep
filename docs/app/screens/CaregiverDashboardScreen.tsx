@@ -11,22 +11,22 @@ import { F } from '../theme/fonts';
 import {
   IconDashboard,
   IconBell,
-  IconPatients,
+  IconActivity,
   IconProfile,
 } from '../assets/icons/NavIcons';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverDashboard'>;
-type CaregiverTab = 'Home' | 'Alerts' | 'Patients' | 'Profile';
+type CaregiverTab = 'Home' | 'Alerts' | 'Manage' | 'Profile';
 
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
   Home:     ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
   Alerts:   ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Patients: ({ active }) => <IconPatients size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Manage:   ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
   Profile:  ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
-export const CaregiverDashboardScreen: React.FC<Props> = () => {
+export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
   const { tasks } = useTasks();
   const [showReminderSent, setShowReminderSent] = useState(false);
   const [activeTab, setActiveTab] = useState<CaregiverTab>('Home');
@@ -196,20 +196,25 @@ export const CaregiverDashboardScreen: React.FC<Props> = () => {
       {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
       <View style={styles.bottomBarBand}>
         <View style={styles.bottomBar}>
-          {(['Home', 'Alerts', 'Patients', 'Profile'] as CaregiverTab[]).map((tab) => {
+          {(['Home', 'Alerts', 'Manage', 'Profile'] as CaregiverTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
               <Pressable
                 key={tab}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => {
+                  setActiveTab(tab);
+                  if (tab === 'Manage') {
+                    navigation.navigate('CaregiverManage');
+                  }
+                }}
                 style={styles.bottomTab}
               >
                 <View style={styles.bottomTabIconWrap}>
                   <IconComponent active={isActive} />
                 </View>
                 <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab}
+                  {tab === 'Manage' ? 'manage' : tab}
                 </Text>
                 {isActive && <View style={styles.activeIndicator} />}
               </Pressable>

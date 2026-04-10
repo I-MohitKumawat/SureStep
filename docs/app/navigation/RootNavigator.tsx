@@ -8,6 +8,10 @@ import { CaregiverDashboardScreen } from '../screens/CaregiverDashboardScreen';
 import { PatientDetailScreen } from '../screens/PatientDetailScreen';
 import { RoutineManagerScreen } from '../screens/RoutineManagerScreen';
 import { RoutineEditorScreen } from '../screens/RoutineEditorScreen';
+import { CaregiverManageScreen } from '../screens/CaregiverManageScreen';
+import { PatientFamilyScreen } from '../screens/PatientFamilyScreen';
+import { PatientFamilyProfileScreen } from '../screens/PatientFamilyProfileScreen';
+import { PatientActivitiesScreen } from '../screens/PatientActivitiesScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
@@ -26,7 +30,15 @@ export type HomeStackParamList = {
   Home: undefined;
   Details: undefined;
   CaregiverDashboard: undefined;
+  CaregiverManage: undefined;
   PatientDashboard: undefined;
+  PatientFamily: undefined;
+  PatientFamilyProfile: {
+    name: string;
+    role: string;
+    photoUrl: string;
+  };
+  PatientActivities: undefined;
 
   Settings: undefined;
 
@@ -110,8 +122,28 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
         options={{ headerShown: false }}
       />
       <HomeStack.Screen
+        name="CaregiverManage"
+        component={CaregiverManageScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
         name="PatientDashboard"
         component={PatientRoleScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="PatientFamily"
+        component={PatientFamilyScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="PatientFamilyProfile"
+        component={PatientFamilyProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="PatientActivities"
+        component={PatientActivitiesScreen}
         options={{ headerShown: false }}
       />
 
