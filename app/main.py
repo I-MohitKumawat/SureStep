@@ -1,10 +1,8 @@
 from fastapi import FastAPI
-from app.routers import auth
+from app.routers import auth, users, links, geofence
 from app.database import engine, Base
-from app.models import user
-from app.models import token  
+from app.models import user, token, link, location
 
-# Creates all tables in database automatically
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -14,6 +12,9 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(links.router)
+app.include_router(geofence.router)
 
 @app.get("/health")
 def health_check():
