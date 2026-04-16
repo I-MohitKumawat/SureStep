@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -14,25 +15,37 @@ import {
   IconActivity,
   IconProfile,
 } from '../assets/icons/NavIcons';
+import {
+  haversineMeters,
+  PATIENT_GEOFENCES,
+  DEFAULT_GEOFENCE,
+  type Coords,
+} from '../utils/geofence';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverDashboard'>;
 type CaregiverTab = 'Home' | 'Alerts' | 'Manage' | 'Profile';
 
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
-  Home:     ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Alerts:   ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Manage:   ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Profile:  ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Home: ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Alerts: ({ active }) => <IconBell size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Manage: ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Profile: ({ active }) => <IconProfile size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
 export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
+  const CAPSULE_HEIGHT = 84;
+  const CAPSULE_GAP = 12;
+  const CAPSULE_STEP = CAPSULE_HEIGHT + CAPSULE_GAP;
   const { tasks } = useTasks();
-  const [showReminderSent, setShowReminderSent] = useState(false);
+  const [reminderSentKeys, setReminderSentKeys] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<CaregiverTab>('Home');
   const [patientName, setPatientName] = useState('Srinivas');
   const [batteryLevel, setBatteryLevel] = useState(82);
+  const [patientCoords, setPatientCoords] = useState<Coords | null>(null);
   const reminderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geoSubRef = useRef<Location.LocationSubscription | null>(null);
+  const capsuleScrollY = useRef(new Animated.Value(0)).current;
 
   // ── Last activity: derive from most recent completedAt across tasks ──────
   const lastActivityLabel = (() => {
@@ -66,33 +79,84 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
   }, [loadProfile]);
 
   const patientId = 'p1';
-  const patientTasks  = tasks.filter((t) => t.patientId === patientId);
+  const patientTasks = tasks.filter((t) => t.patientId === patientId);
   const completedTasks = patientTasks.filter((t) => t.status === 'done').length;
-  const totalTasks     = patientTasks.length;
+  const totalTasks = patientTasks.length;
 
   const routineStatus = {
     medication: patientTasks.find((t) => t.title.toLowerCase().includes('med'))?.status === 'done',
-    breakfast:  patientTasks.find((t) => t.title.toLowerCase().includes('breakfast'))?.status === 'done',
-    walk:       patientTasks.find((t) => t.title.toLowerCase().includes('walk'))?.status === 'done',
+    breakfast: patientTasks.find((t) => t.title.toLowerCase().includes('breakfast'))?.status === 'done',
+    walk: patientTasks.find((t) => t.title.toLowerCase().includes('walk'))?.status === 'done',
   };
 
   useEffect(() => () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); }, []);
 
+  // ── Location tracking (expo-location) ────────────────────────────────
+  useEffect(() => {
+    const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
+    const init = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') throw new Error('permission denied');
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        setPatientCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        geoSubRef.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, distanceInterval: 20 },
+          (l) => setPatientCoords({ latitude: l.coords.latitude, longitude: l.coords.longitude }),
+        );
+      } catch {
+        // Simulator / permission denied — demo offset for testing
+        setPatientCoords({
+          latitude:  fence.center.latitude  + 0.0018,
+          longitude: fence.center.longitude - 0.0012,
+        });
+      }
+    };
+    void init();
+    return () => { geoSubRef.current?.remove(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openDialPad = async () => Linking.openURL('tel:');
 
-  const sendReminder = () => {
-    setShowReminderSent(true);
+  const sendReminder = (key: string) => {
+    setReminderSentKeys((prev) => new Set(prev).add(key));
     if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
-    reminderTimerRef.current = setTimeout(() => setShowReminderSent(false), 2500);
+    reminderTimerRef.current = setTimeout(() => {
+      setReminderSentKeys((prev) => { const s = new Set(prev); s.delete(key); return s; });
+    }, 2500);
   };
 
   const batteryColor = batteryLevel >= 50 ? C.safeText : batteryLevel >= 20 ? '#D97706' : C.error;
 
   const routineItems = [
-    { key: 'medication', emoji: '💊', title: 'Morning Medication', meta: 'Taken at 08:30 AM',  done: routineStatus.medication },
-    { key: 'breakfast',  emoji: '🍽️', title: 'Healthy Breakfast',  meta: 'Completed at 09:15 AM', done: routineStatus.breakfast },
-    { key: 'walk',       emoji: '🚶', title: 'Daily Walk',         meta: 'Scheduled for 11:00 AM', done: routineStatus.walk },
+    { key: 'medication', emoji: '💊', title: 'Morning Medication', meta: 'Taken at 08:30 AM', done: routineStatus.medication },
+    { key: 'breakfast', emoji: '🍽️', title: 'Healthy Breakfast', meta: 'Completed at 09:15 AM', done: routineStatus.breakfast },
+    { key: 'walk', emoji: '🚶', title: 'Daily Walk', meta: 'Scheduled for 11:00 AM', done: routineStatus.walk },
   ];
+
+  const activeRoutineIndex = useMemo(() => {
+    const firstPendingIndex = routineItems.findIndex((item) => !item.done);
+    return firstPendingIndex === -1 ? Math.max(routineItems.length - 1, 0) : firstPendingIndex;
+  }, [routineItems]);
+
+  const getCapsuleColors = (itemIndex: number, done: boolean) => {
+    if (itemIndex < activeRoutineIndex) {
+      return done
+        ? { backgroundColor: C.safeText, borderColor: C.safeText, titleColor: C.primaryText, metaColor: C.primaryText, statusColor: C.primaryText }
+        : { backgroundColor: C.error, borderColor: C.error, titleColor: C.primaryText, metaColor: C.primaryText, statusColor: C.primaryText };
+    }
+    if (itemIndex === activeRoutineIndex) {
+      return { backgroundColor: C.primary, borderColor: C.primary, titleColor: C.primaryText, metaColor: C.primaryText, statusColor: C.primaryText };
+    }
+    return {
+      backgroundColor: C.borderMid,
+      borderColor: C.borderMid,
+      titleColor: C.textPrimary,
+      metaColor: C.textSecondary,
+      statusColor: C.textSecondary,
+    };
+  };
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
@@ -101,7 +165,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
         {/* ── Patient Header ─────────────────────────────────────────── */}
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
-            {/* Avatar placeholder */}
+            {/* Avatar */}
             <View style={styles.avatar}>
               <Text style={styles.avatarInitial}>{patientName[0]?.toUpperCase() ?? 'S'}</Text>
             </View>
@@ -109,83 +173,144 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.overview}>PATIENT OVERVIEW</Text>
               <Text style={styles.name}>{patientName}</Text>
               <Text style={styles.lastActivity}>LAST ACTIVITY · {lastActivityLabel}</Text>
-            </View>
-            <View style={styles.safePill}>
-              <Text style={styles.safeIcon}>◉</Text>
-              <Text style={styles.safeText}>Safe</Text>
-            </View>
-          </View>
-
-          {/* Routine progress row */}
-          <View style={styles.routineHeaderRow}>
-            <Text style={styles.sectionTitle}>Daily Routine</Text>
-            <View style={styles.completedPill}>
-              <Text style={styles.completedText}>
-                <Text style={styles.completedCount}>{completedTasks}/{totalTasks}</Text> Completed
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Routine List ────────────────────────────────────────────── */}
-        <View style={styles.routineList}>
-          {routineItems.map((item) => (
-            <View key={item.key} style={[styles.routineRowCard, !item.done && styles.routineRowCardPending]}>
-              <View style={[styles.routineIconBubble, item.done ? styles.bubbleDone : styles.bubblePending]}>
-                <Text style={styles.routineEmoji}>{item.emoji}</Text>
-              </View>
-              <View style={styles.routineTextCol}>
-                <Text style={styles.routineTitle}>{item.title}</Text>
-                <Text style={styles.routineMeta}>{item.meta}</Text>
-              </View>
-              <View style={item.done ? styles.doneCircle : styles.pendingCircle}>
-                {item.done && <Text style={styles.checkMark}>✓</Text>}
+              {/* Call + battery inline beneath name */}
+              <View style={styles.headerActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.headerActionBtn, styles.headerCallBtn, pressed && { opacity: 0.8 }]}
+                  onPress={() => void openDialPad()}
+                >
+                  <Text style={styles.headerActionIcon}>📞</Text>
+                  <Text style={styles.headerCallLabel}>Call</Text>
+                </Pressable>
+                <View style={styles.headerBatteryChip}>
+                  <Text style={styles.headerActionIcon}>🔋</Text>
+                  <Text style={[styles.headerBatteryLabel, { color: batteryColor }]}>{batteryLevel}%</Text>
+                </View>
               </View>
             </View>
-          ))}
-        </View>
-
-        {/* ── Stats Card ──────────────────────────────────────────────── */}
-        <View style={styles.statsCard}>
-          <View style={styles.metricCol}>
-            <Text style={styles.metricIcon}>🦶</Text>
-            <Text style={styles.metricLabel}>STEPS</Text>
-            <Text style={styles.metricValue}>1,246</Text>
           </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricCol}>
-            <Text style={styles.metricIcon}>🔋</Text>
-            <Text style={styles.metricLabel}>BATTERY</Text>
-            <Text style={[styles.metricValue, { color: batteryColor }]}>
-              {batteryLevel}<Text style={styles.metricUnit}>%</Text>
-            </Text>
+
+          {/* Routine section + geofence card sibling block */}
+        </View>
+        {/* ── Daily Routine ──────────────────────────────────── */}
+        <View style={styles.routineOuterContainer}>
+          <View style={styles.routineListViewport}>
+            <Animated.ScrollView
+              nestedScrollEnabled
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={CAPSULE_STEP}
+              decelerationRate="fast"
+              disableIntervalMomentum
+              contentContainerStyle={styles.routineListContent}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { y: capsuleScrollY } } }],
+                  { useNativeDriver: true },
+                )}
+                scrollEventThrottle={16}
+              >
+                {routineItems.map((item, index) => {
+                  const capsuleColors = getCapsuleColors(index, item.done);
+                  const scale = capsuleScrollY.interpolate({
+                    inputRange: [(index - 1) * CAPSULE_STEP, index * CAPSULE_STEP, (index + 1) * CAPSULE_STEP],
+                    outputRange: [0.92, 1, 0.92],
+                    extrapolate: 'clamp',
+                  });
+
+                  return (
+                    <Animated.View
+                      key={item.key}
+                      style={[
+                        styles.routineCapsule,
+                        {
+                          backgroundColor: capsuleColors.backgroundColor,
+                          borderColor: capsuleColors.borderColor,
+                          transform: [{ scale }],
+                          opacity: 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.routineCapsuleTextCol}>
+                        <Text style={[styles.routineCapsuleTitle, { color: capsuleColors.titleColor }]}>
+                          {item.title}
+                        </Text>
+                        <Text style={[styles.routineCapsuleMeta, { color: capsuleColors.metaColor }]}>
+                          {item.meta}
+                        </Text>
+                      </View>
+
+                      <View style={styles.capsuleRight}>
+                        <Text style={[styles.routineCapsuleStatus, { color: capsuleColors.statusColor }]}>
+                          {index < activeRoutineIndex
+                            ? (item.done ? 'Done' : 'Missed')
+                            : index === activeRoutineIndex
+                            ? 'Now'
+                            : 'Next'}
+                        </Text>
+
+                        <Pressable
+                          onPress={() => sendReminder(item.key)}
+                          style={({ pressed }) => [styles.capsuleReminderBtn, pressed && { opacity: 0.72 }]}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.capsuleReminderIcon}>
+                            {reminderSentKeys.has(item.key) ? '✓' : '🔔'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </Animated.View>
+                  );
+                })}
+            </Animated.ScrollView>
           </View>
-        </View>
 
-        {/* ── Action Buttons ──────────────────────────────────────────── */}
-        <View style={styles.actionsCard}>
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, styles.primaryAction, pressed && { opacity: 0.88 }]}
-            onPress={() => void openDialPad()}
-          >
-            <Text style={styles.actionIcon}>📞</Text>
-            <Text style={styles.actionLabelPrimary}>Call {patientName}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, styles.secondaryAction, pressed && { opacity: 0.88 }]}
-            onPress={sendReminder}
-          >
-            <Text style={styles.actionIcon}>🔔</Text>
-            <Text style={styles.actionLabelSecondary}>
-              {showReminderSent ? 'Reminder sent!' : 'Send Reminder'}
-            </Text>
-          </Pressable>
+          {/* ── Geofence Status Card ───────────────────────────────── */}
+          {(() => {
+            const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
+            const dist = patientCoords
+              ? haversineMeters(
+                  fence.center.latitude, fence.center.longitude,
+                  patientCoords.latitude, patientCoords.longitude,
+                )
+              : null;
+            const inZone   = dist !== null && dist <= fence.radiusM;
+            const zoneColor = inZone ? C.primary : '#DC2626';
+            const zoneBg    = inZone ? C.primaryLight : '#FEE2E2';
+            const distLabel = dist === null
+              ? 'Acquiring location…'
+              : inZone
+                ? `${Math.round(fence.radiusM - dist)} m inside boundary`
+                : `${Math.round(dist - fence.radiusM)} m from boundary`;
+            return (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.geoCard,
+                  { backgroundColor: zoneBg, borderColor: zoneColor },
+                  pressed && { opacity: 0.86 },
+                ]}
+                onPress={() =>
+                  navigation.navigate('GeofenceMap', {
+                    patientId,
+                    patientName,
+                  })
+                }
+              >
+                <View style={[styles.geoDot, { backgroundColor: zoneColor }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.geoTitle, { color: zoneColor }]}>
+                    {dist === null ? 'Locating patient…' : inZone ? 'In Safe Zone' : 'Outside Safe Zone'}
+                  </Text>
+                  <Text style={styles.geoMeta}>{distLabel}</Text>
+                </View>
+                <Text style={styles.geoChevron}>›</Text>
+              </Pressable>
+            );
+          })()}
         </View>
-
       </ScrollView>
 
       {/* ── Reminder Toast ─────────────────────────────────────────────── */}
-      {showReminderSent && (
+      {reminderSentKeys.size > 0 && (
         <View style={styles.reminderToastWrap} pointerEvents="none">
           <View style={styles.reminderToast}>
             <Text style={styles.reminderToastText}>✓  Reminder sent to {patientName}</Text>
@@ -204,9 +329,8 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation }) => {
                 key={tab}
                 onPress={() => {
                   setActiveTab(tab);
-                  if (tab === 'Manage') {
-                    navigation.navigate('CaregiverManage');
-                  }
+                  if (tab === 'Home') navigation.navigate('CaregiverPatients');
+                  if (tab === 'Manage') navigation.navigate('CaregiverManage');
                 }}
                 style={styles.bottomTab}
               >
@@ -243,18 +367,31 @@ const styles = StyleSheet.create({
   avatarInitial: { fontFamily: F.bold, fontSize: 22, color: C.primary },
 
   headerCenter: { flex: 1, marginLeft: 12 },
-  overview:     { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.2, color: C.primary },
-  name:         { fontFamily: F.extraBold, fontSize: 26, color: C.textPrimary, marginTop: 1 },
+  overview: { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.2, color: C.primary },
+  name: { fontFamily: F.extraBold, fontSize: 26, color: C.textPrimary, marginTop: 1 },
   lastActivity: { fontFamily: F.medium, fontSize: 10, color: C.textSecondary, marginTop: 1, letterSpacing: 0.4 },
 
-  safePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: C.safe, borderRadius: 999,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderWidth: 1, borderColor: C.safeBorder,
+  // inline header actions (call + battery)
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  headerActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  headerCallBtn: { backgroundColor: C.primary },
+  headerActionIcon: { fontSize: 14 },
+  headerCallLabel: { fontFamily: F.bold, fontSize: 13, color: C.primaryText },
+  headerBatteryChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.surface, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: C.border },
+  headerBatteryLabel: { fontFamily: F.bold, fontSize: 13 },
+
+  // Geofence card
+  geoCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 16, borderWidth: 1.5,
+    paddingHorizontal: 14, paddingVertical: 13,
+    marginTop: 10,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
   },
-  safeIcon: { fontSize: 12, color: C.safeText },
-  safeText: { fontFamily: F.bold, fontSize: 14, color: C.safeText },
+  geoDot:     { width: 10, height: 10, borderRadius: 5 },
+  geoTitle:   { fontFamily: F.bold, fontSize: 15, marginBottom: 2 },
+  geoMeta:    { fontFamily: F.regular, fontSize: 13, color: C.textSecondary },
+  geoChevron: { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 26 },
 
   routineHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontFamily: F.bold, fontSize: 18, color: C.textPrimary },
@@ -262,36 +399,56 @@ const styles = StyleSheet.create({
   completedText: { fontFamily: F.semiBold, fontSize: 14, color: C.primary },
   completedCount: { fontFamily: F.extraBold },
 
-  // ── Routine rows ────────────────────────────────────────────────────────────
-  routineList: { gap: 10, marginBottom: 14 },
-  routineRowCard: {
-    backgroundColor: C.surface,
-    borderRadius: 18,
-    paddingHorizontal: 14, paddingVertical: 14,
-    flexDirection: 'row', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 1,
+  // ── Routine outer wrapper ──────────────────────────────────────────
+  routineOuterContainer: { marginBottom: 14 },
+
+  // ── Routine capsules ────────────────────────────────────────────────────────
+  routineListViewport: {
+    height: 276,
+    marginBottom: 14,
+    overflow: 'hidden',
   },
-  routineRowCardPending: { borderWidth: 1.5, borderColor: C.border },
-
-  bubbleDone:    { backgroundColor: '#A7F3D0' },   // green tint for done
-  bubblePending: { backgroundColor: '#EAF6F8' },   // blue-teal tint for pending
-
-  routineIconBubble: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  routineEmoji:   { fontSize: 22 },
-  routineTextCol: { flex: 1, marginLeft: 12 },
-  routineTitle:   { fontFamily: F.bold, fontSize: 15, color: C.textPrimary },
-  routineMeta:    { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 2 },
-
-  doneCircle: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: C.done, alignItems: 'center', justifyContent: 'center',
+  routineListContent: {
+    paddingVertical: 96,
   },
-  pendingCircle: {
-    width: 32, height: 32, borderRadius: 16,
-    borderWidth: 2, borderColor: C.pendingBorder, backgroundColor: C.pending,
+  routineCapsule: {
+    height: 84,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 2,
   },
-  checkMark: { fontFamily: F.bold, fontSize: 18, color: C.primaryText },
+  routineCapsuleTextCol: { flex: 1, paddingRight: 8 },
+  routineCapsuleTitle: { fontFamily: F.bold, fontSize: 16 },
+  routineCapsuleMeta: { fontFamily: F.regular, fontSize: 13, marginTop: 3 },
+  routineCapsuleStatus: { fontFamily: F.bold, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 6 },
+  capsuleRight: { alignItems: 'center', gap: 4 },
+  capsuleReminderBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  capsuleReminderIcon: { fontSize: 16 },
 
+   routineOuterContainer: {
+    backgroundColor: '#f0fff8ff', // creamish white
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+
+    // optional depth (makes it look like a card)
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
   // ── Stats ───────────────────────────────────────────────────────────────────
   statsCard: {
     backgroundColor: C.surface,
@@ -301,32 +458,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-around',
     shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 1,
   },
-  metricCol:   { alignItems: 'center', minWidth: 88 },
-  metricIcon:  { fontSize: 18, marginBottom: 4 },
+  metricCol: { alignItems: 'center', minWidth: 88 },
+  metricIcon: { fontSize: 18, marginBottom: 4 },
   metricLabel: { fontFamily: F.bold, fontSize: 10, color: C.textSecondary, letterSpacing: 0.8 },
   metricValue: { fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, marginTop: 2 },
-  metricUnit:  { fontFamily: F.semiBold, fontSize: 13 },
+  metricUnit: { fontFamily: F.semiBold, fontSize: 13 },
   metricDivider: { width: 1, backgroundColor: C.borderMid, marginVertical: 4 },
 
-  // ── Actions ─────────────────────────────────────────────────────────────────
-  actionsCard: {
-    flexDirection: 'row', justifyContent: 'space-between', gap: 12,
-  },
-  actionButton: {
-    flex: 1, borderRadius: 18,
-    paddingVertical: 16, alignItems: 'center', justifyContent: 'center',
-  },
-  primaryAction:   {
-    backgroundColor: C.primary,
-    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 6 }, shadowRadius: 12, elevation: 6,
-  },
-  secondaryAction: {
-    backgroundColor: C.surface,
-    borderWidth: 1.5, borderColor: C.border,
-  },
-  actionIcon:           { fontSize: 28 },
-  actionLabelPrimary:   { fontFamily: F.bold, fontSize: 15, color: C.primaryText, marginTop: 6 },
-  actionLabelSecondary: { fontFamily: F.bold, fontSize: 15, color: C.primary, marginTop: 6 },
+  // ── (global action buttons removed) ──────────────────────────────────────
 
   // ── Toast ───────────────────────────────────────────────────────────────────
   reminderToastWrap: { position: 'absolute', left: 0, right: 0, bottom: 96, alignItems: 'center' },

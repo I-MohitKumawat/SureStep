@@ -15,6 +15,8 @@ import { PatientActivitiesScreen } from '../screens/PatientActivitiesScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
+import { CaregiverPatientsScreen } from '../screens/CaregiverPatientsScreen';
+import { GeofenceMapScreen } from '../screens/GeofenceMapScreen';
 
 import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import ProfileSetup from '../screens/ProfileSetup';
@@ -31,6 +33,7 @@ export type HomeStackParamList = {
   Details: undefined;
   CaregiverDashboard: undefined;
   CaregiverManage: undefined;
+  CaregiverPatients: undefined;
   PatientDashboard: undefined;
   PatientFamily: undefined;
   PatientFamilyProfile: {
@@ -78,6 +81,10 @@ export type HomeStackParamList = {
           scheduleLabel: string;
         };
       };
+  GeofenceMap: {
+    patientId: string;
+    patientName: string;
+  };
 };
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -116,6 +123,11 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
       <HomeStack.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <HomeStack.Screen name="Details" component={DetailsScreen} options={{ title: 'Details' }} />
 
+      <HomeStack.Screen
+        name="CaregiverPatients"
+        component={CaregiverPatientsScreen}
+        options={{ headerShown: false }}
+      />
       <HomeStack.Screen
         name="CaregiverDashboard"
         component={CaregiverDashboardScreen}
@@ -170,6 +182,11 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
         name="RoutineEditor"
         component={RoutineEditorScreen}
         options={{ title: 'Routine' }}
+      />
+      <HomeStack.Screen
+        name="GeofenceMap"
+        component={GeofenceMapScreen}
+        options={{ headerShown: false }}
       />
     </HomeStack.Navigator>
   );

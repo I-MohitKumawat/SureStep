@@ -37,7 +37,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
 
     if (phoneNumber === '1111111111' && otp === '1111') {
       await seedHardcodedPatient();
-      navigation.navigate('CaregiverDashboard');
+      navigation.navigate('CaregiverPatients');
       return;
     }
     if (phoneNumber === '2222222222' && otp === '2222') {

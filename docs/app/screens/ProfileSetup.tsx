@@ -56,7 +56,7 @@ export default function ProfileSetup({ navigation, route }: Props) {
       await writeSharedProfile({ fullName: draft.fullName, role: 'caregiver' });
     }
 
-    if (role === 'caregiver') navigation.navigate('CaregiverDashboard');
+    if (role === 'caregiver') navigation.navigate('CaregiverPatients');
     else navigation.navigate('PatientDashboard');
   };
 

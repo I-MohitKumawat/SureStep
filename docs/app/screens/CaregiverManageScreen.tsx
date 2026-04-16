@@ -1,8 +1,29 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
+import type { HomeStackParamList } from '../navigation/RootNavigator';
+import { C } from '../theme/colors';
+import { F } from '../theme/fonts';
+import {
+  IconDashboard,
+  IconBell,
+  IconActivity,
+  IconProfile,
+} from '../assets/icons/NavIcons';
+
+type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverManage'>;
+type CaregiverTab = 'Home' | 'Alerts' | 'Manage' | 'Profile';
+
+type TabIconProps = { active: boolean };
+const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
+  Home:     ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Alerts:   ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Manage:   ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Profile:  ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+};
 
 const EditActionIcon = () => (
   <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
@@ -32,7 +53,8 @@ const DeleteActionIcon = () => (
   </Svg>
 );
 
-export const CaregiverManageScreen: React.FC = () => {
+export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
+  const [activeTab, setActiveTab] = useState<CaregiverTab>('Manage');
   type RoutineItem = {
     id: string;
     icon: string;
@@ -147,7 +169,7 @@ export const CaregiverManageScreen: React.FC = () => {
               value={titleInput}
               onChangeText={setTitleInput}
               placeholder="Title (e.g. Breakfast)"
-              placeholderTextColor="#6B7280"
+              placeholderTextColor="#0209187f"
               style={styles.input}
             />
             <TextInput
@@ -197,13 +219,41 @@ export const CaregiverManageScreen: React.FC = () => {
           </View>
         ))}
       </ScrollView>
+
+      {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
+      <View style={styles.bottomBarBand}>
+        <View style={styles.bottomBar}>
+          {(['Home', 'Alerts', 'Manage', 'Profile'] as CaregiverTab[]).map((tab) => {
+            const isActive = activeTab === tab;
+            const IconComponent = TAB_ICON_COMPONENTS[tab];
+            return (
+              <Pressable
+                key={tab}
+                onPress={() => {
+                  setActiveTab(tab);
+                  if (tab === 'Home') navigation.navigate('CaregiverPatients');
+                }}
+                style={styles.bottomTab}
+              >
+                <View style={styles.bottomTabIconWrap}>
+                  <IconComponent active={isActive} />
+                </View>
+                <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
+                  {tab === 'Manage' ? 'manage' : tab}
+                </Text>
+                {isActive && <View style={styles.activeIndicator} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: '#F1F4F4', paddingHorizontal: 0, paddingVertical: 0 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 20 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 96 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   title: { fontSize: 22, fontWeight: '700', color: '#111827' },
   addButton: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, backgroundColor: '#0E7364', paddingHorizontal: 18, paddingVertical: 9 },
@@ -212,7 +262,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
 
   formCard: {
-    backgroundColor: '#E7ECEC',
+    backgroundColor: '#e0e6e6ff',
     borderRadius: 18,
     padding: 12,
     marginBottom: 10,
@@ -236,15 +286,17 @@ const styles = StyleSheet.create({
   formBtnSecondaryText: { color: '#334155', fontSize: 12, fontWeight: '700' },
 
   card: {
-    backgroundColor: '#E7ECEC',
+    backgroundColor: '#E4F4EE',
     borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
     paddingHorizontal: 14,
     paddingVertical: 13,
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 10
   },
-  iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#F2F4F4', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  iconWrap: { width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: '#D1D5DB', backgroundColor: '#F2F4F4', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   icon: { fontSize: 23 },
   content: { flex: 1, marginLeft: 12, paddingTop: 0 },
   time: { fontSize: 14, color: '#0E7364', fontWeight: '700', lineHeight: 16 },
@@ -261,5 +313,23 @@ const styles = StyleSheet.create({
   editButton: { backgroundColor: '#D6F0EC' },
   deleteButton: { backgroundColor: '#FEE2E2' },
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pendingPill: { fontSize: 9, fontWeight: '700', color: '#111827', backgroundColor: '#A7F37C', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 }
+  pendingPill: { fontSize: 9, fontWeight: '700', color: '#111827', backgroundColor: '#A7F37C', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
+
+  // ── Bottom nav ──────────────────────────────────────────────────────────────
+  bottomBarBand: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, height: 76,
+    backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
+  },
+  bottomBar: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8,
+  },
+  bottomTab: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 4, position: 'relative',
+  },
+  bottomTabIconWrap: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  bottomLabel: { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3 },
+  bottomLabelActive: { fontFamily: F.bold, color: C.primary },
+  activeIndicator: { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
 });
