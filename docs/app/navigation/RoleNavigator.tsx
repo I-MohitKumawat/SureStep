@@ -39,7 +39,7 @@ export const RoleNavigator: React.FC = () => {
     ? 'ProfileSetup'
     : userRole === 'PATIENT'
       ? 'PatientDashboard'
-      : 'CaregiverDashboard';
+      : 'CaregiverPatients';
 
   return (
     <RootNavigator
