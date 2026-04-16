@@ -9,6 +9,7 @@ import { AuthProvider } from '../../packages/core/auth/AuthContext';
 import { RoleNavigator } from './navigation/RoleNavigator';
 import { UserProfileProvider } from './context/userProfileContext.js';
 import { TaskProvider } from './context/taskContext';
+import { CaregiverProvider } from './context/caregiverContext';
 import { useInterFonts } from './theme/fonts';
 import { C } from './theme/colors';
 
@@ -59,9 +60,11 @@ const App: React.FC = () => {
         <ThemeProvider initialMode="light">
           <UserProfileProvider>
             <TaskProvider>
-              <SafeAreaProvider>
-                <ThemedNavigation />
-              </SafeAreaProvider>
+              <CaregiverProvider>
+                <SafeAreaProvider>
+                  <ThemedNavigation />
+                </SafeAreaProvider>
+              </CaregiverProvider>
             </TaskProvider>
           </UserProfileProvider>
         </ThemeProvider>

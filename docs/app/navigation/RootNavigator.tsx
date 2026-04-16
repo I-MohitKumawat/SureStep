@@ -12,6 +12,7 @@ import { CaregiverManageScreen } from '../screens/CaregiverManageScreen';
 import { PatientFamilyScreen } from '../screens/PatientFamilyScreen';
 import { PatientFamilyProfileScreen } from '../screens/PatientFamilyProfileScreen';
 import { PatientActivitiesScreen } from '../screens/PatientActivitiesScreen';
+import { PatientGamesScreen } from '../screens/PatientGamesScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
@@ -39,6 +40,7 @@ export type HomeStackParamList = {
     photoUrl: string;
   };
   PatientActivities: undefined;
+  PatientGames: undefined;
 
   Settings: undefined;
 
@@ -144,6 +146,11 @@ function HomeStackNavigator({ initialRouteName }: { initialRouteName: keyof Home
       <HomeStack.Screen
         name="PatientActivities"
         component={PatientActivitiesScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="PatientGames"
+        component={PatientGamesScreen}
         options={{ headerShown: false }}
       />
 
