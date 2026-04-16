@@ -14,13 +14,19 @@ import {
   IconFamily,
   IconActivity,
   IconSearch,
+  IconProfile,
 } from '../assets/icons/NavIcons';
+import { CaregiverSearchView } from './CaregiverSearchView';
+import type { CaregiverListing } from './CaregiverSearchView';
+import { CaregiverDetailView } from './CaregiverDetailView';
+import { useCaregiver } from '../context/caregiverContext';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 type ActionState = 'done' | 'missed' | 'unsure' | null;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 
 type Task = { id: string; title: string; time: string; state: ActionState };
+
 
 // ─── Task meta: derive icon, hint, duration from task title ──────────────────
 type TaskMeta = { emoji: string; hint: string; duration: string; detail: string; tip: string };
@@ -93,19 +99,73 @@ function getTaskMeta(title: string): TaskMeta {
   };
 }
 
-const statusColors: Record<Exclude<ActionState, null>, string> = {
-  done:   C.primary,
-  missed: C.skipBg,
+const statusColors: Record<'done' | 'unsure' | 'missed', string> = {
+  done: C.primary,
   unsure: C.unsureBg,
+  missed: C.skipBg,
 };
 
 const actionSpecs: Array<{ key: Exclude<ActionState, null>; icon: string; label?: string }> = [
-  { key: 'done',   icon: '👍', label: 'Done' },
-  { key: 'missed', icon: '👎', label: 'Skip' },
+  { key: 'done', icon: '👍', label: 'Done' },
   { key: 'unsure', icon: '❔' },
 ];
 
-const SKIP_RED = '#EF4444';
+// ─── Caregiver Profile Modal ──────────────────────────────────────────────────
+const CaregiverProfileModal = ({
+  visible,
+  caregiver,
+  onClose,
+}: {
+  visible: boolean;
+  caregiver: CaregiverListing | null;
+  onClose: () => void;
+}) => {
+  if (!caregiver) return null;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.detailOverlay} onPress={onClose}>
+        <Pressable style={styles.profileSheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.detailHeader}>
+            <Pressable onPress={onClose} style={styles.detailCloseBtn}>
+              <Text style={styles.detailCloseText}>✕</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.profileAvatar}>
+            <Text style={styles.profileAvatarText}>{caregiver.emoji}</Text>
+          </View>
+
+          <Text style={styles.caregiverTagline}>Your confirmed caregiver</Text>
+
+          <Text style={styles.profileName}>{caregiver.name}</Text>
+          <Text style={styles.profileSubtitle}>{caregiver.specialty}</Text>
+
+          <View style={styles.detailDivider} />
+
+          <View style={styles.profileRow}>
+            <Text style={styles.profileLabel}>Availability</Text>
+            <Text style={styles.profileValue}>{caregiver.availability}</Text>
+          </View>
+          <View style={styles.profileRow}>
+            <Text style={styles.profileLabel}>Location</Text>
+            <Text style={styles.profileValue}>{caregiver.location}</Text>
+          </View>
+          <View style={styles.profileRow}>
+            <Text style={styles.profileLabel}>Fee</Text>
+            <Text style={styles.profileValue}>{caregiver.fee}</Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.detailDoneBtn, pressed && { opacity: 0.85 }]}
+            onPress={onClose}
+          >
+            <Text style={styles.detailDoneBtnText}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
 
 // ─── Task Detail Modal ────────────────────────────────────────────────────────
 const TaskDetailModal = ({
@@ -121,19 +181,16 @@ const TaskDetailModal = ({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.detailOverlay} onPress={onClose}>
         <Pressable style={styles.detailSheet} onPress={(e) => e.stopPropagation()}>
-          {/* Header */}
           <View style={styles.detailHeader}>
             <Pressable onPress={onClose} style={styles.detailCloseBtn}>
               <Text style={styles.detailCloseText}>✕</Text>
             </Pressable>
           </View>
 
-          {/* Illustration */}
           <View style={styles.detailIllustration}>
             <Text style={styles.detailEmoji}>{meta.emoji}</Text>
           </View>
 
-          {/* Content */}
           <Text style={styles.detailTitle}>{meta.detail}</Text>
           <View style={styles.detailMetaRow}>
             <View style={styles.detailPill}>
@@ -175,10 +232,7 @@ const ActionButton = ({
     style={({ pressed }) => [
       styles.actionButton,
       {
-        backgroundColor:
-          state === 'missed'
-            ? selected ? SKIP_RED : `${SKIP_RED}30`
-            : selected ? statusColors[state] : state === 'unsure' ? C.unsureBg : C.skipBg,
+        backgroundColor: selected ? statusColors[state] : state === 'unsure' ? C.unsureBg : C.skipBg,
       },
       pressed && { transform: [{ scale: 0.96 }] },
     ]}
@@ -186,10 +240,9 @@ const ActionButton = ({
     <Text style={styles.actionIcon}>{icon}</Text>
     {label
       ? <Text style={[
-          styles.actionText,
-          selected && state === 'done' ? styles.actionTextDone
-            : state === 'missed' ? styles.actionTextSkip : null,
-        ]}>{label}</Text>
+        styles.actionText,
+        selected && state === 'done' ? styles.actionTextDone : null,
+      ]}>{label}</Text>
       : null
     }
   </Pressable>
@@ -214,14 +267,6 @@ const RoutineCard = ({
           <Text style={styles.routineTaskTitle}>{task.title}</Text>
           <Text style={styles.routineTaskMeta}>{task.time} · {meta.hint}</Text>
         </View>
-        {/* Question mark help button */}
-        <Pressable
-          onPress={() => onHelp(task)}
-          style={({ pressed }) => [styles.helpCircle, pressed && { opacity: 0.7 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.helpCircleText}>?</Text>
-        </Pressable>
       </View>
       <View style={styles.actionsRow}>
         {actionSpecs.map((spec) => (
@@ -231,7 +276,11 @@ const RoutineCard = ({
             label={spec.label}
             state={spec.key}
             selected={task.state === spec.key}
-            onPress={() => onStateChange(task.id, spec.key)}
+            onPress={() =>
+              spec.key === 'unsure'
+                ? onHelp(task)
+                : onStateChange(task.id, spec.key)
+            }
           />
         ))}
       </View>
@@ -239,56 +288,23 @@ const RoutineCard = ({
   );
 };
 
-// ─── Up Next Card ─────────────────────────────────────────────────────────────
-const UpNextCard = ({
-  task, onHelp,
-}: {
-  task: Task;
-  onHelp: (task: Task) => void;
-}) => {
-  const meta = getTaskMeta(task.title);
-  return (
-    <View style={styles.upNextCard}>
-      <View style={styles.upNextTop}>
-        <View style={styles.upNextIconWrap}>
-          <Text style={styles.upNextIconText}>{meta.emoji}</Text>
-        </View>
-        <View style={styles.upNextTextWrap}>
-          <Text style={styles.upNextTaskTitle}>{task.title}</Text>
-          <Text style={styles.upNextMeta}>{task.time} · {meta.duration}</Text>
-        </View>
-        <Pressable
-          onPress={() => onHelp(task)}
-          style={({ pressed }) => [styles.helpCircle, pressed && { opacity: 0.7 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.helpCircleText}>?</Text>
-        </Pressable>
-      </View>
-      <View style={styles.upNextDivider} />
-      <Text style={styles.startsInText}>STARTS AT {task.time} · {meta.duration.toUpperCase()}</Text>
-    </View>
-  );
-};
-
 // ─── Bottom Tab Icon components ───────────────────────────────────────────────
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
-  Home:     ({ active }) => <IconHome     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Family:   ({ active }) => <IconFamily   size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Home: ({ active }) => <IconHome size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Family: ({ active }) => <IconFamily size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
   Activity: ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Search:   ({ active }) => <IconSearch   size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Search: ({ active }) => <IconSearch size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
 // ─── Completed Tasks Modal ────────────────────────────────────────────────────
 const CompletedTasksModal = ({
-  visible, tasks, onUndo, onClose, onHelp,
+  visible, tasks, onClose, onUndo,
 }: {
   visible: boolean;
   tasks: Task[];
-  onUndo: (id: string) => void;
   onClose: () => void;
-  onHelp: (task: Task) => void;
+  onUndo: (taskId: string) => void;
 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.modalOverlay}>
@@ -316,19 +332,13 @@ const CompletedTasksModal = ({
                       <Text style={styles.routineTaskMeta}>{task.time} · Completed ✓</Text>
                     </View>
                     <Pressable
-                      onPress={() => onHelp(task)}
-                      style={({ pressed }) => [styles.helpCircle, pressed && { opacity: 0.7 }]}
+                      onPress={() => onUndo(task.id)}
+                      style={({ pressed }) => [styles.undoBtn, pressed && { opacity: 0.7 }]}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <Text style={styles.helpCircleText}>?</Text>
+                      <Text style={styles.undoBtnText}>↩ Undo</Text>
                     </Pressable>
                   </View>
-                  <Pressable
-                    style={({ pressed }) => [styles.undoButton, pressed && { opacity: 0.78 }]}
-                    onPress={() => onUndo(task.id)}
-                  >
-                    <Text style={styles.undoButtonText}>↩ Undo Done</Text>
-                  </Pressable>
                 </View>
               );
             })
@@ -348,7 +358,13 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [helpTask, setHelpTask] = useState<Task | null>(null);
+
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Caregiver search sub-view state ─────────────────────────────────────
+  const [searchSubView, setSearchSubView] = useState<'list' | 'detail' | null>(null);
+  const [viewingCaregiver, setViewingCaregiver] = useState<CaregiverListing | null>(null);
+  const { confirmedCaregiver, setConfirmedCaregiver } = useCaregiver();
 
   const patientId = 'p1';
 
@@ -374,23 +390,29 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
 
   const displayName = profile?.fullName ?? 'You';
 
+  const nextActionableIndex = useMemo(() => {
+    const len = patientTasks.length;
+    if (len === 0) return 0;
 
+    const start = Math.max(0, Math.min(currentIndex, len - 1));
+    for (let step = 0; step < len; step++) {
+      const idx = (start + step) % len;
+      const t = patientTasks[idx];
+      if (t && t.state !== 'done' && t.state !== 'missed') return idx;
+    }
+    return start;
+  }, [patientTasks, currentIndex]);
 
-  const routineTask    = useMemo(() => patientTasks[currentIndex] ?? patientTasks[0], [patientTasks, currentIndex]);
+  const routineTask = useMemo(
+    () => patientTasks[nextActionableIndex] ?? patientTasks[0],
+    [patientTasks, nextActionableIndex],
+  );
   const completedTasks = useMemo(() => patientTasks.filter((t) => t.state === 'done'), [patientTasks]);
   const completedCount = completedTasks.length;
-  const allTasksDone   = useMemo(
+  const allTasksDone = useMemo(
     () => patientTasks.length > 0 && patientTasks.every((t) => t.state === 'done'),
     [patientTasks],
   );
-
-  // UpNext: only show when there are ≥2 undone tasks and the next differs from current
-  const upNextTask = useMemo(() => {
-    if (allTasksDone) return null;
-    const undoneTasks = patientTasks.filter((t) => t.state !== 'done' && t.state !== 'missed');
-    if (undoneTasks.length < 2) return null;
-    return undoneTasks.find((t) => t.id !== routineTask?.id) ?? null;
-  }, [patientTasks, allTasksDone, routineTask]);
 
   // ── Single-click advance ─────────────────────────────────────────────────
   // We track a local "pending index" rather than relying on stale patientTasks.
@@ -401,7 +423,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
 
     // Only advance if it's the current card AND it's a conclusive action
     if (taskId !== routineTask?.id) return;
-    if (state !== 'done' && state !== 'missed') return;
+    if (state !== 'done') return;
 
     // Build synthetic updated list to find the next undone index immediately
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
@@ -422,81 +444,104 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
   }, [routineTask, patientTasks, updateTaskStatus]);
 
   // ── Undo: restore task to pending and move currentIndex to its time position ─
-  const undoTask = useCallback((taskId: string) => {
-    void updateTaskStatus(taskId, 'pending' as TaskStatus);
-    // Find the time-ordered index of this task and jump back to it
-    const idx = patientTasks.findIndex((t) => t.id === taskId);
-    if (idx !== -1) setCurrentIndex(idx);
-    setShowCompletedModal(false);
-  }, [patientTasks, updateTaskStatus]);
-
   const openHelp = useCallback((task: Task) => setHelpTask(task), []);
   const closeHelp = useCallback(() => setHelpTask(null), []);
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ── Header ─────────────────────────────────────────────────── */}
-        <View style={styles.headerCard}>
-          <View>
-            <Text style={styles.greetingOverline}>{getGreeting()},</Text>
-            <Text style={styles.greetingName}>{displayName}</Text>
-            <Text style={styles.greetingDate}>{formattedDate}</Text>
-          </View>
-          <View style={styles.weatherTile}>
-            <Text style={styles.weatherSun}>☀️</Text>
-            <Text style={styles.weatherTemp}>72°F</Text>
-          </View>
-        </View>
-
-        {/* ── Your Routine ────────────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitleIcon}>🕐</Text>
-            <Text style={styles.sectionTitle}>Your Routine</Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.progressPillWrap, pressed && { opacity: 0.75 }]}
-            onPress={() => completedCount > 0 && setShowCompletedModal(true)}
-          >
-            <Text style={styles.progressPill}>
-              {allTasksDone ? 'All done! 🎉' : `${completedCount} of ${patientTasks.length} completed`}
-            </Text>
-          </Pressable>
-        </View>
-
-        {patientTasks.length > 0 ? (
-          <>
-            <RoutineCard task={routineTask} onStateChange={updateTask} onHelp={openHelp} />
-
-            {upNextTask && (
-              <>
-                <View style={styles.upNextHeader}>
-                  <Text style={styles.upNextIcon}>↻</Text>
-                  <Text style={styles.upNextTitle}>Up Next</Text>
-                </View>
-                <UpNextCard task={upNextTask} onHelp={openHelp} />
-              </>
+      {activeTab === 'Search' && searchSubView === 'detail' && viewingCaregiver ? (
+        <CaregiverDetailView
+          caregiver={viewingCaregiver}
+          isConfirmed={confirmedCaregiver?.id === viewingCaregiver.id}
+          onBack={() => {
+            if (confirmedCaregiver) {
+              // Already confirmed — back goes to Home, not the search list
+              setActiveTab('Home');
+              setSearchSubView(null);
+              setViewingCaregiver(null);
+            } else {
+              setSearchSubView('list');
+              setViewingCaregiver(null);
+            }
+          }}
+          onConfirm={(c) => {
+            setConfirmedCaregiver(c);
+            // Dismiss entire search flow — return to Home
+            setActiveTab('Home');
+            setSearchSubView(null);
+            setViewingCaregiver(null);
+          }}
+        />
+      ) : activeTab === 'Search' ? (
+        <CaregiverSearchView
+          onSelect={(c) => {
+            setViewingCaregiver(c);
+            setSearchSubView('detail');
+          }}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* ── Header ─────────────────────────────────────────────────── */}
+          <View style={styles.headerCard}>
+            <View>
+              <Text style={styles.greetingOverline}>{getGreeting()},</Text>
+              <Text style={styles.greetingName}>{displayName}</Text>
+              <Text style={styles.greetingDate}>{formattedDate}</Text>
+            </View>
+            {confirmedCaregiver && (
+              <Pressable
+                onPress={() => {
+                  setViewingCaregiver(confirmedCaregiver);
+                  setSearchSubView('detail');
+                  setActiveTab('Search');
+                }}
+                style={({ pressed }) => [styles.caregiverTile, pressed && { opacity: 0.82 }]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.caregiverIcon}>{confirmedCaregiver.emoji}</Text>
+                <Text style={styles.caregiverTileLabel} numberOfLines={2}>{confirmedCaregiver.name.split(' ')[0]}</Text>
+              </Pressable>
             )}
-          </>
-        ) : (
-          <Text style={styles.emptyText}>No tasks assigned yet.</Text>
-        )}
+          </View>
 
-        {/* Modals rendered inside ScrollView so they're always present */}
-        <CompletedTasksModal
-          visible={showCompletedModal}
-          tasks={completedTasks}
-          onUndo={undoTask}
-          onClose={() => setShowCompletedModal(false)}
-          onHelp={openHelp}
-        />
-        <TaskDetailModal
-          visible={helpTask !== null}
-          task={helpTask}
-          onClose={closeHelp}
-        />
-      </ScrollView>
+          {/* ── Your Routine ────────────────────────────────────────────── */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitleIcon}>🕐</Text>
+              <Text style={styles.sectionTitle}>Your Routine</Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.progressPillWrap, pressed && { opacity: 0.75 }]}
+              onPress={() => completedCount > 0 && setShowCompletedModal(true)}
+            >
+              <Text style={styles.progressPill}>
+                {allTasksDone ? 'All done! 🎉' : `${completedCount} of ${patientTasks.length} completed`}
+              </Text>
+            </Pressable>
+          </View>
+
+          {patientTasks.length > 0 ? (
+            <>
+              <RoutineCard task={routineTask} onStateChange={updateTask} onHelp={openHelp} />
+            </>
+          ) : (
+            <Text style={styles.emptyText}>No tasks assigned yet.</Text>
+          )}
+
+          {/* Modals rendered inside ScrollView so they're always present */}
+          <CompletedTasksModal
+            visible={showCompletedModal}
+            tasks={completedTasks}
+            onClose={() => setShowCompletedModal(false)}
+            onUndo={(id) => void updateTaskStatus(id, 'pending')}
+          />
+          <TaskDetailModal
+            visible={helpTask !== null}
+            task={helpTask}
+            onClose={closeHelp}
+          />
+        </ScrollView>
+      )}
 
       {/* ── Bottom Nav: Left 2 | FAB center | Right 2 ──────────────── */}
       <View style={styles.bottomBarBand}>
@@ -535,20 +580,41 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.bottomBar}>
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
-            const IconComponent = TAB_ICON_COMPONENTS[tab];
+            const IconComponent =
+              tab === 'Search' && confirmedCaregiver
+                ? IconProfile
+                : TAB_ICON_COMPONENTS[tab];
+            const label =
+              tab === 'Search'
+                ? confirmedCaregiver ? 'Caregiver Profile' : 'Search'
+                : tab;
             return (
               <Pressable
                 key={tab}
                 onPress={() => {
                   setActiveTab(tab);
                   if (tab === 'Activity') navigation.navigate('PatientActivities');
+                  if (tab === 'Search') {
+                    if (confirmedCaregiver) {
+                      setViewingCaregiver(confirmedCaregiver);
+                      setSearchSubView('detail');
+                    } else {
+                      setSearchSubView('list');
+                    }
+                  }
                 }}
                 style={styles.bottomTab}
               >
                 <View style={styles.bottomTabIconWrap}>
                   <IconComponent active={isActive} />
                 </View>
-                <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>{tab}</Text>
+                <Text
+                  style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {label}
+                </Text>
                 {isActive && <View style={styles.activeIndicator} />}
               </Pressable>
             );
@@ -576,23 +642,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greetingOverline: { fontFamily: F.bold, color: C.textLabel, fontSize: 12, letterSpacing: 1.2 },
-  greetingName:     { fontFamily: F.extraBold, color: C.textPrimary, fontSize: 40, marginTop: -2 },
-  greetingDate:     { fontFamily: F.medium, color: C.textSecondary, fontSize: 14, marginTop: 0 },
-  weatherTile: {
+  greetingName: { fontFamily: F.extraBold, color: C.textPrimary, fontSize: 40, marginTop: -2 },
+  greetingDate: { fontFamily: F.medium, color: C.textSecondary, fontSize: 14, marginTop: 0 },
+  caregiverTile: {
     width: 68, height: 80, borderRadius: 16, backgroundColor: C.surface,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
+    borderWidth: 1, borderColor: C.border,
   },
-  weatherSun:  { fontSize: 22 },
-  weatherTemp: { fontFamily: F.bold, fontSize: 16, color: C.textPrimary, marginTop: 4 },
+  caregiverIcon: { fontSize: 26 },
+  caregiverTileLabel: {
+    fontFamily: F.bold,
+    fontSize: 9,
+    color: C.textMuted,
+    marginTop: 6,
+    textAlign: 'center',
+  },
 
   // Section header
-  sectionHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  sectionTitleRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionTitleIcon: { fontSize: 18 },
-  sectionTitle:     { fontFamily: F.bold, fontSize: 17, color: C.textPrimary },
+  sectionTitle: { fontFamily: F.bold, fontSize: 17, color: C.textPrimary },
   progressPillWrap: { backgroundColor: C.primaryLight, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  progressPill:     { fontFamily: F.bold, fontSize: 13, color: C.primary },
+  progressPill: { fontFamily: F.bold, fontSize: 13, color: C.primary },
 
   // Routine card
   mainRoutineCard: {
@@ -601,54 +674,36 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 1,
   },
-  routineTop:       { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  routineIconWrap:  { width: 50, height: 50, borderRadius: 14, backgroundColor: C.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  routineIcon:      { fontSize: 22 },
-  routineTextWrap:  { marginLeft: 12, flex: 1 },
+  routineTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  routineIconWrap: { width: 50, height: 50, borderRadius: 14, backgroundColor: C.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  routineIcon: { fontSize: 22 },
+  routineTextWrap: { marginLeft: 12, flex: 1 },
   routineTaskTitle: { fontFamily: F.bold, fontSize: 20, color: C.textPrimary },
-  routineTaskMeta:  { fontFamily: F.medium, fontSize: 14, color: C.textSecondary, marginTop: 2 },
-  actionsRow:  { flexDirection: 'row', gap: 10 },
+  routineTaskMeta: { fontFamily: F.medium, fontSize: 14, color: C.textSecondary, marginTop: 2 },
+  actionsRow: { flexDirection: 'row', gap: 10 },
   actionButton: {
     minWidth: 90, height: 48, borderRadius: 14,
     paddingHorizontal: 14, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'center',
   },
-  actionIcon:     { fontSize: 20, marginRight: 6 },
-  actionText:     { fontFamily: F.bold, fontSize: 15, color: C.textBody },
+  actionIcon: { fontSize: 20, marginRight: 6 },
+  actionText: { fontFamily: F.bold, fontSize: 15, color: C.textBody },
   actionTextDone: { color: C.primaryText },
   actionTextSkip: { color: '#fff' },
 
-  // Help / question-mark button (shared by Routine, UpNext, Completed modal)
+  emptyText: { fontFamily: F.regular, fontSize: 15, color: C.textSecondary, textAlign: 'center', marginTop: 24, fontStyle: 'italic' },
+
+  // Help / question-mark button
   helpCircle: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border,
+    backgroundColor: '#FEF9C3',
+    borderWidth: 1.5, borderColor: '#F59E0B',
     alignItems: 'center', justifyContent: 'center',
     marginLeft: 6,
   },
-  helpCircleText: { fontFamily: F.bold, color: C.primary, fontSize: 16 },
+  helpCircleText: { fontFamily: F.bold, color: '#B45309', fontSize: 16 },
 
-  // Up Next
-  upNextHeader:  { flexDirection: 'row', alignItems: 'center', marginTop: 18, marginBottom: 10, gap: 6 },
-  upNextIcon:    { fontSize: 18, color: C.primary },
-  upNextTitle:   { fontFamily: F.bold, fontSize: 17, color: C.textPrimary },
-  upNextCard: {
-    borderRadius: 18, backgroundColor: C.surfaceAlt,
-    borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 14, paddingVertical: 14,
-    shadowColor: '#000', shadowOpacity: 0.03, shadowOffset: { width: 0, height: 1 }, shadowRadius: 4, elevation: 1,
-  },
-  upNextTop:      { flexDirection: 'row', alignItems: 'center' },
-  upNextIconWrap: { width: 46, height: 46, borderRadius: 13, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
-  upNextIconText: { fontSize: 22 },
-  upNextTextWrap: { flex: 1, marginLeft: 12 },
-  upNextTaskTitle: { fontFamily: F.bold, fontSize: 15, color: C.textPrimary },
-  upNextMeta:      { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 2 },
-  upNextDivider:   { height: 1, backgroundColor: C.border, marginVertical: 12 },
-  startsInText:    { fontFamily: F.bold, textAlign: 'center', fontSize: 11, letterSpacing: 2, color: C.textMuted },
-
-  emptyText: { fontFamily: F.regular, fontSize: 15, color: C.textSecondary, textAlign: 'center', marginTop: 24, fontStyle: 'italic' },
-
-  // ── Task Detail Modal ──────────────────────────────────────────────────────
+  // ── Overlay/sheet ─────────────────────────────────────────────────────────
   detailOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center', justifyContent: 'center',
@@ -674,17 +729,17 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     alignSelf: 'center', marginBottom: 16,
   },
-  detailEmoji:   { fontSize: 46 },
-  detailTitle:   { fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, textAlign: 'center', paddingHorizontal: 20, marginBottom: 12 },
+  detailEmoji: { fontSize: 46 },
+  detailTitle: { fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, textAlign: 'center', paddingHorizontal: 20, marginBottom: 12 },
   detailMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center', paddingHorizontal: 16, marginBottom: 16 },
   detailPill: {
     backgroundColor: C.primaryLight, borderRadius: 999,
     paddingHorizontal: 10, paddingVertical: 5,
   },
-  detailPillText:          { fontFamily: F.semiBold, fontSize: 12, color: C.primary },
-  detailDivider:           { height: 1, backgroundColor: C.border, marginHorizontal: 20, marginBottom: 14 },
-  detailInstructionLabel:  { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.2, color: C.textMuted, paddingHorizontal: 20, marginBottom: 8 },
-  detailInstruction:       { fontFamily: F.regular, fontSize: 14, color: C.textSecondary, lineHeight: 22, paddingHorizontal: 20, marginBottom: 24 },
+  detailPillText: { fontFamily: F.semiBold, fontSize: 12, color: C.primary },
+  detailDivider: { height: 1, backgroundColor: C.border, marginHorizontal: 20, marginBottom: 14 },
+  detailInstructionLabel: { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.2, color: C.textMuted, paddingHorizontal: 20, marginBottom: 8 },
+  detailInstruction: { fontFamily: F.regular, fontSize: 14, color: C.textSecondary, lineHeight: 22, paddingHorizontal: 20, marginBottom: 24 },
   detailDoneBtn: {
     marginHorizontal: 20, borderRadius: 14, backgroundColor: C.primary,
     paddingVertical: 14, alignItems: 'center',
@@ -692,22 +747,80 @@ const styles = StyleSheet.create({
   },
   detailDoneBtnText: { fontFamily: F.bold, fontSize: 16, color: C.primaryText },
 
+  // ── Caregiver profile modal ────────────────────────────────────────────────
+  profileSheet: {
+    width: '100%',
+    backgroundColor: C.bg,
+    borderRadius: 28,
+    paddingBottom: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 20,
+  },
+  profileAvatar: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  profileAvatarText: { fontSize: 44 },
+  caregiverTagline: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: C.textMuted,
+    textAlign: 'center',
+    marginTop: -2,
+    marginBottom: 10,
+    letterSpacing: 0.4,
+  },
+  profileName: {
+    fontFamily: F.extraBold,
+    fontSize: 22,
+    color: C.textPrimary,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  profileSubtitle: {
+    fontFamily: F.medium,
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  profileLabel: { fontFamily: F.bold, fontSize: 13, color: C.textMuted },
+  profileValue: { fontFamily: F.medium, fontSize: 13, color: C.textPrimary },
+
   // ── Completed Tasks Modal ──────────────────────────────────────────────────
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, maxHeight: '75%',
   },
-  modalHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  modalTitle:     { fontFamily: F.bold, fontSize: 18, color: C.textPrimary },
-  modalCloseBtn:  { width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  modalTitle: { fontFamily: F.bold, fontSize: 18, color: C.textPrimary },
+  modalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
   modalCloseText: { fontFamily: F.bold, fontSize: 15, color: C.textMuted },
-  undoButton: {
-    marginTop: 8, borderRadius: 10,
-    backgroundColor: C.primaryLight,
-    paddingVertical: 10, alignItems: 'center',
+
+  // ── Undo button ────────────────────────────────────────────────────────────
+  undoBtn: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    marginLeft: 8,
   },
-  undoButtonText: { fontFamily: F.bold, fontSize: 14, color: C.primary },
+  undoBtnText: { fontFamily: F.bold, fontSize: 12, color: C.textMuted },
 
   // ── Bottom nav ─────────────────────────────────────────────────────────────
   bottomBarBand: {
@@ -740,7 +853,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 3,
   },
-  bottomLabel:       { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3 },
+  bottomLabel: { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3 },
   bottomLabelActive: { fontFamily: F.bold, color: C.primary },
   activeIndicator: {
     position: 'absolute', bottom: 0,
@@ -764,5 +877,5 @@ const styles = StyleSheet.create({
     borderWidth: 3, borderColor: C.surface,
   },
   fabPressed: { transform: [{ scale: 0.95 }] },
-  fabSymbol:  { fontFamily: F.extraBold, color: C.primaryText, fontSize: 22 },
+  fabSymbol: { fontFamily: F.extraBold, color: C.primaryText, fontSize: 22 },
 });

@@ -6,7 +6,9 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
-import { IconHome, IconFamily, IconActivity, IconSearch } from '../assets/icons/NavIcons';
+import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
+import { useCaregiver } from '../context/caregiverContext';
+import { ActivitiesIllustration } from '../assets/icons/ActivitiesIllustration';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientActivities'>;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
@@ -21,16 +23,19 @@ type ActivityCard = {
 const activities: ActivityCard[] = [
   { id: 'games', icon: '🧩', title: 'Games' },
   { id: 'workout', icon: '🏋️', title: 'Workout' },
-  { id: 'relaxing', icon: '🌿', title: 'Relaxing', subtitle: 'Meditation and nature sounds.' },
+  { id: 'relaxing', icon: '🎵', title: 'Relaxing'},
 ];
 
 export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
   const [activeTab] = useState<BottomTab>('Activity');
 
+  const { confirmedCaregiver } = useCaregiver();
+
   const onTabPress = (tab: BottomTab) => {
     if (tab === 'Home') navigation.navigate('PatientDashboard');
     if (tab === 'Family') navigation.navigate('PatientFamily');
     if (tab === 'Activity') navigation.navigate('PatientActivities');
+    if (tab === 'Search') navigation.navigate('PatientDashboard');
   };
 
   return (
@@ -40,12 +45,20 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
 
         <View style={styles.cardsList}>
           {activities.map((item) => (
-            <Pressable key={item.id} style={({ pressed }) => [styles.activityCard, pressed && styles.pressed]}>
+            <Pressable
+              key={item.id}
+              onPress={() => {
+                if (item.id === 'games') navigation.navigate('PatientGames');
+              }}
+              style={({ pressed }) => [styles.activityCard, pressed && styles.pressed]}
+            >
               <View style={styles.iconBubble}>
                 <Text style={styles.cardIcon}>{item.icon}</Text>
               </View>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              {item.subtitle ? <Text style={styles.cardSubtitle}>{item.subtitle}</Text> : null}
+              <View style={styles.cardTextCol}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                {item.subtitle ? <Text style={styles.cardSubtitle}>{item.subtitle}</Text> : null}
+              </View>
             </Pressable>
           ))}
         </View>
@@ -77,7 +90,12 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.bottomBar}>
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
-            const IconComponent = tab === 'Activity' ? IconActivity : IconSearch;
+            const IconComponent =
+              tab === 'Search' && confirmedCaregiver ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
+            const label =
+              tab === 'Search' && confirmedCaregiver
+                ? confirmedCaregiver.name.split(' ')[0]
+                : tab;
             return (
               <Pressable key={tab} onPress={() => onTabPress(tab)} style={styles.bottomTab}>
                 <View style={[styles.activityActiveBg, isActive && tab === 'Activity' ? styles.activityActiveBgShown : null]} />
@@ -88,7 +106,10 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
                   styles.bottomLabel,
                   isActive && styles.bottomLabelActive,
                   isActive && tab === 'Activity' ? styles.bottomLabelActivityActive : null,
-                ]}>{tab}</Text>
+                ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >{label}</Text>
                 {isActive && tab !== 'Activity' ? <View style={styles.activeIndicator} /> : null}
               </Pressable>
             );
@@ -101,14 +122,20 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
-  content: { flex: 1, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 84 },
+  content: { flex: 1, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 84 },
+
+  illustrationWrap: {
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+
   title: {
     textAlign: 'center',
     fontFamily: F.extraBold,
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 20,
+    lineHeight: 28,
     color: C.primaryDark,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   cardsList: { gap: 12 },
   activityCard: {
@@ -116,15 +143,15 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     borderColor: C.border,
-    minHeight: 132,
+    minHeight: 100,
     paddingHorizontal: 22,
     paddingVertical: 18,
-    justifyContent: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
   },
   iconBubble: {
-    position: 'absolute',
-    top: 18,
-    left: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -132,9 +159,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardIcon: { fontSize: 24 },
-  cardTitle: { fontFamily: F.bold, fontSize: 36, color: C.textPrimary, lineHeight: 40 },
-  cardSubtitle: { fontFamily: F.regular, fontSize: 12, color: C.textBody, marginTop: 2 },
+  cardIcon: { fontSize: 26 },
+  cardTextCol: { flex: 1, justifyContent: 'center' },
+  cardTitle: { fontFamily: F.bold, fontSize: 32, color: C.textPrimary, lineHeight: 38 },
+  cardSubtitle: { fontFamily: F.regular, fontSize: 12, color: C.textBody, marginTop: 3 },
   pressed: { opacity: 0.85 },
   bottomBarBand: {
     position: 'absolute', left: 0, right: 0, bottom: 0, height: 76,

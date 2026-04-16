@@ -6,10 +6,11 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
-import { IconHome, IconFamily, IconActivity, IconSearch } from '../assets/icons/NavIcons';
+import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
+import { useCaregiver } from '../context/caregiverContext';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientFamily'>;
-type BottomTab = 'Home' | 'Family' | 'Activity' | 'More';
+type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 
 type Member = {
   id: string;
@@ -50,10 +51,13 @@ export const PatientFamilyScreen: React.FC<Props> = ({ navigation }) => {
     setShowAddForm(false);
   };
 
+  const { confirmedCaregiver } = useCaregiver();
+
   const onTabPress = (tab: BottomTab) => {
     setActiveTab(tab);
     if (tab === 'Home') navigation.navigate('PatientDashboard');
     if (tab === 'Activity') navigation.navigate('PatientActivities');
+    if (tab === 'Search') navigation.navigate('PatientDashboard');
   };
 
   return (
@@ -146,16 +150,25 @@ export const PatientFamilyScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.bottomBar}>
-          {(['Activity', 'More'] as BottomTab[]).map((tab) => {
+          {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
-            const IconComponent = tab === 'Activity' ? IconActivity : IconSearch;
+            const IconComponent =
+              tab === 'Search' && confirmedCaregiver ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
+            const label =
+              tab === 'Search' && confirmedCaregiver
+                ? confirmedCaregiver.name.split(' ')[0]
+                : tab;
             return (
               <Pressable key={tab} onPress={() => onTabPress(tab)} style={styles.bottomTab}>
                 <View style={styles.bottomTabIconWrap}>
                   <IconComponent size={22} color={isActive ? C.primary : C.textMuted} strokeWidth={isActive ? 2.2 : 1.8} />
                 </View>
-                <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab}
+                <Text
+                  style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {label}
                 </Text>
                 {isActive ? <View style={styles.activeIndicator} /> : null}
               </Pressable>
