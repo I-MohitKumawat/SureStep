@@ -31,7 +31,6 @@
   "include": [
     "App.tsx",
     "app/**/*",
-    "docs/**/*",
     "packages/ui/**/*",
     "packages/core/**/*"
   ],
