@@ -35,8 +35,12 @@ export type HomeStackParamList = {
   CaregiverDashboard: {
     patientPhone: string;
     patientName: string;
+    initialTab?: 'Home' | 'Alerts';
   } | undefined;
-  CaregiverManage: undefined;
+  CaregiverManage: {
+    patientPhone?: string;
+    patientName?: string;
+  } | undefined;
   CaregiverPatients: undefined;
   PatientDashboard: undefined;
   PatientFamily: undefined;

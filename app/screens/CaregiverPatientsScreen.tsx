@@ -1,30 +1,18 @@
-import React, { useState, useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { supabase } from '../utils/supabaseClient';
+import { useTasks } from '../context/taskContext';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
-import {
-  IconDashboard,
-  IconBell,
-  IconActivity,
-  IconProfile,
-} from '../assets/icons/NavIcons';
+import { IconDashboard, IconBell } from '../assets/icons/NavIcons';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverPatients'>;
-type CaregiverTab = 'Home' | 'Alerts' | 'Manage' | 'Profile';
-
-type TabIconProps = { active: boolean };
-const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
-  Home:    ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Alerts:  ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Manage:  ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Profile: ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-};
+type PatientsFooterTab = 'Home' | 'Alerts';
 
 // ─── Static patient data ──────────────────────────────────────────────────────
 type Patient = {
@@ -36,32 +24,14 @@ type Patient = {
   statusLabel: 'On track' | 'Needs attention' | 'All done';
 };
 
-const PATIENTS: Patient[] = [
-  {
-    id: 'p1',
-    name: 'Srinivas',
-    completedTasks: 2,
-    totalTasks: 3,
-    lastActivity: '18 mins ago',
-    statusLabel: 'On track',
-  },
-  {
-    id: 'p2',
-    name: 'Kamala',
-    completedTasks: 3,
-    totalTasks: 3,
-    lastActivity: '1 hr ago',
-    statusLabel: 'All done',
-  },
-  {
-    id: 'p3',
-    name: 'Rajan',
-    completedTasks: 0,
-    totalTasks: 3,
-    lastActivity: 'No activity yet',
-    statusLabel: 'Needs attention',
-  },
-];
+type AlertPriority = 'high' | 'medium' | 'low';
+type PatientAlert = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  message: string;
+  priority: AlertPriority;
+};
 
 const STATUS_COLORS: Record<Patient['statusLabel'], { bg: string; text: string; dot: string }> = {
   'On track':       { bg: C.primaryLight,  text: C.safeText,  dot: C.primary },
@@ -124,9 +94,15 @@ const PatientCard = ({
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState<CaregiverTab>('Home');
+  const { tasks } = useTasks();
+  const [activeTab, setActiveTab] = useState<PatientsFooterTab>('Home');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [caregiverPhone, setCaregiverPhone] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fallbackPatientIdsFromTasks = useMemo(() => {
+    return Array.from(new Set(tasks.map((t) => t.patientId).filter(Boolean)));
+  }, [tasks]);
 
   // Fetch caregiver phone once on mount
   React.useEffect(() => {
@@ -135,29 +111,50 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
 
   // Fetch patients for this caregiver
   const loadPatients = useCallback(async (phone: string) => {
-    const { data: links } = await supabase
-      .from('patient_caregiver_links')
-      .select('patient_phone')
-      .eq('caregiver_phone', phone);
+    try {
+      const { data: links } = await supabase
+        .from('patient_caregiver_links')
+        .select('patient_phone')
+        .eq('caregiver_phone', phone);
 
-    if (!links || links.length === 0) { setPatients([]); return; }
+      const linkedIds = (links ?? []).map((l: any) => l.patient_phone).filter(Boolean);
+      const mergedIds = Array.from(new Set([...linkedIds, ...fallbackPatientIdsFromTasks]));
 
-    const { data: users } = await supabase
-      .from('mock_users')
-      .select('phone_number, full_name')
-      .in('phone_number', links.map((l: any) => l.patient_phone));
+      if (mergedIds.length === 0) {
+        setPatients([]);
+        return;
+      }
 
-    if (users) {
-      setPatients(users.map((u: any) => ({
-        id: u.phone_number,
-        name: u.full_name || 'Patient',
+      const { data: users } = await supabase
+        .from('mock_users')
+        .select('phone_number, full_name')
+        .in('phone_number', mergedIds);
+
+      const userNameByPhone = new Map<string, string>(
+        (users ?? []).map((u: any) => [u.phone_number, u.full_name || 'Patient']),
+      );
+
+      setPatients(mergedIds.map((patientId) => ({
+        id: patientId,
+        name: userNameByPhone.get(patientId) || 'Patient',
         completedTasks: 0,
         totalTasks: 3,
-        lastActivity: 'Just now',
+        lastActivity: 'No activity yet',
+        statusLabel: 'On track' as const,
+      })));
+    } catch (error) {
+      console.warn('Failed to load caregiver patients, using local task fallback:', error);
+      const fallbackIds = fallbackPatientIdsFromTasks;
+      setPatients(fallbackIds.map((patientId) => ({
+        id: patientId,
+        name: 'Patient',
+        completedTasks: 0,
+        totalTasks: 3,
+        lastActivity: 'No activity yet',
         statusLabel: 'On track' as const,
       })));
     }
-  }, []);
+  }, [fallbackPatientIdsFromTasks]);
 
   // Initial load when phone is known
   React.useEffect(() => {
@@ -186,6 +183,91 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
     return () => { void supabase.removeChannel(channel); };
   }, [caregiverPhone, loadPatients]);
 
+  const patientsWithStats = useMemo(() => {
+    return patients.map((patient) => {
+      const patientTasks = tasks.filter((t) => t.patientId === patient.id);
+      const completed = patientTasks.filter((t) => t.status === 'done').length;
+      const missed = patientTasks.filter((t) => t.status === 'missed').length;
+      const unsure = patientTasks.filter((t) => t.status === 'unsure').length;
+      const total = patientTasks.length;
+
+      const statusLabel: Patient['statusLabel'] =
+        missed > 0 || unsure > 0
+          ? 'Needs attention'
+          : total > 0 && completed === total
+            ? 'All done'
+            : 'On track';
+
+      return {
+        ...patient,
+        completedTasks: completed,
+        totalTasks: total || patient.totalTasks,
+        lastActivity: (() => {
+          const completedTimes = patientTasks
+            .filter((t) => t.completedAt)
+            .map((t) => new Date(t.completedAt as string).getTime());
+          if (completedTimes.length === 0) return 'No activity yet';
+          const mins = Math.max(0, Math.round((Date.now() - Math.max(...completedTimes)) / 60000));
+          if (mins < 1) return 'Just now';
+          if (mins < 60) return `${mins} mins ago`;
+          return `${Math.floor(mins / 60)} hr ago`;
+        })(),
+        statusLabel,
+      };
+    });
+  }, [patients, tasks]);
+
+  const prioritizedAlerts = useMemo(() => {
+    const alerts: PatientAlert[] = [];
+    for (const patient of patientsWithStats) {
+      const patientTasks = tasks.filter((t) => t.patientId === patient.id);
+      const missedTasks = patientTasks.filter((t) => t.status === 'missed');
+      const unsureTasks = patientTasks.filter((t) => t.status === 'unsure');
+
+      for (const task of missedTasks) {
+        alerts.push({
+          id: `missed-${task.id}`,
+          patientId: patient.id,
+          patientName: patient.name,
+          message: `Missed routine: ${task.title}`,
+          priority: 'high',
+        });
+      }
+      for (const task of unsureTasks) {
+        alerts.push({
+          id: `unsure-${task.id}`,
+          patientId: patient.id,
+          patientName: patient.name,
+          message: `Needs caregiver check: ${task.title}`,
+          priority: 'medium',
+        });
+      }
+      if (patientTasks.length > 0 && patientTasks.every((t) => t.status === 'done')) {
+        alerts.push({
+          id: `done-${patient.id}`,
+          patientId: patient.id,
+          patientName: patient.name,
+          message: 'All routines completed',
+          priority: 'low',
+        });
+      }
+    }
+
+    const rank: Record<AlertPriority, number> = { high: 0, medium: 1, low: 2 };
+    return alerts.sort((a, b) => rank[a.priority] - rank[b.priority]);
+  }, [patientsWithStats, tasks]);
+
+  const filteredPatients = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return patientsWithStats;
+    return patientsWithStats.filter((patient) => {
+      return (
+        patient.name.toLowerCase().includes(needle) ||
+        patient.id.toLowerCase().includes(needle)
+      );
+    });
+  }, [patientsWithStats, searchQuery]);
+
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -197,50 +279,84 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* ── Patient cards ───────────────────────────────────────────── */}
-        <Text style={styles.sectionLabel}>TAP TO VIEW DASHBOARD</Text>
-        {patients.length === 0 ? (
-          <Text style={{ fontFamily: F.regular, color: C.textMuted, textAlign: 'center', marginTop: 32, fontSize: 14 }}>
-            No patients yet. Ask your patient to confirm you as their caregiver.
-          </Text>
-        ) : patients.map((patient) => (
-          <PatientCard
-            key={patient.id}
-            patient={patient}
-            onPress={() => navigation.navigate('CaregiverDashboard', {
-              patientPhone: patient.id,
-              patientName: patient.name,
-            })}
-          />
-        ))}
-
+        {activeTab === 'Home' ? (
+          <>
+            {/* ── Patient cards ───────────────────────────────────────────── */}
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search patient by name or phone"
+              placeholderTextColor={C.textMuted}
+              style={styles.searchInput}
+            />
+            <Text style={styles.sectionLabel}>TAP TO VIEW DASHBOARD</Text>
+            {filteredPatients.length === 0 ? (
+              <Text style={styles.emptyNote}>No patients yet. Ask patient to confirm caregiver.</Text>
+            ) : filteredPatients.map((patient) => (
+              <PatientCard
+                key={patient.id}
+                patient={patient}
+                onPress={() => navigation.navigate('CaregiverDashboard', {
+                  patientPhone: patient.id,
+                  patientName: patient.name,
+                })}
+              />
+            ))}
+          </>
+        ) : (
+          <>
+            {/* ── Prioritized alerts across patients ─────────────────────── */}
+            <Text style={styles.sectionLabel}>PRIORITY ALERTS</Text>
+            {prioritizedAlerts.length === 0 ? (
+              <Text style={styles.emptyNote}>No active alerts right now.</Text>
+            ) : prioritizedAlerts.map((alert) => (
+              <Pressable
+                key={alert.id}
+                onPress={() =>
+                  navigation.navigate('CaregiverDashboard', {
+                    patientPhone: alert.patientId,
+                    patientName: alert.patientName,
+                    initialTab: 'Alerts',
+                  })
+                }
+                style={[
+                  styles.alertRow,
+                  alert.priority === 'high' ? styles.alertHigh : alert.priority === 'medium' ? styles.alertMedium : styles.alertLow,
+                ]}
+              >
+                <View style={styles.alertTextWrap}>
+                  <Text style={styles.alertPatient}>{alert.patientName}</Text>
+                  <Text style={styles.alertMessage}>{alert.message}</Text>
+                </View>
+                <View style={styles.alertRight}>
+                  <Text style={styles.alertPriority}>{alert.priority.toUpperCase()}</Text>
+                  <Pressable
+                    onPress={() => void Linking.openURL('tel:')}
+                    style={({ pressed }) => [styles.alertSosBtn, pressed && { opacity: 0.72 }]}
+                  >
+                    <Text style={styles.alertSosText}>SOS</Text>
+                  </Pressable>
+                </View>
+              </Pressable>
+            ))}
+          </>
+        )}
       </ScrollView>
 
-      {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
-      <View style={styles.bottomBarBand}>
-        <View style={styles.bottomBar}>
-          {(['Home', 'Alerts', 'Manage', 'Profile'] as CaregiverTab[]).map((tab) => {
-            const isActive = activeTab === tab;
-            const IconComponent = TAB_ICON_COMPONENTS[tab];
-            return (
-              <Pressable
-                key={tab}
-                onPress={() => {
-                  setActiveTab(tab);
-                  if (tab === 'Manage') navigation.navigate('CaregiverManage');
-                }}
-                style={styles.bottomTab}
-              >
-                <View style={styles.bottomTabIconWrap}>
-                  <IconComponent active={isActive} />
-                </View>
-                <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab === 'Manage' ? 'manage' : tab}
-                </Text>
-                {isActive && <View style={styles.activeIndicator} />}
-              </Pressable>
-            );
-          })}
+      <View style={styles.footerBarBand}>
+        <View style={styles.footerBar}>
+          <Pressable style={styles.footerTab} onPress={() => setActiveTab('Home')}>
+            <IconDashboard size={24} color={activeTab === 'Home' ? C.primary : C.textMuted} strokeWidth={activeTab === 'Home' ? 2.2 : 1.8} />
+            <Text style={[styles.footerLabel, activeTab === 'Home' && styles.footerLabelActive]}>Home</Text>
+            {activeTab === 'Home' ? <View style={styles.footerIndicator} /> : null}
+          </Pressable>
+          <Pressable style={styles.footerTab} onPress={() => setActiveTab('Alerts')}>
+            <IconBell size={24} color={activeTab === 'Alerts' ? C.primary : C.textMuted} strokeWidth={activeTab === 'Alerts' ? 2.2 : 1.8} />
+            <Text style={[styles.footerLabel, activeTab === 'Alerts' && styles.footerLabelActive]}>
+              Alerts {prioritizedAlerts.length > 0 ? `(${prioritizedAlerts.length})` : ''}
+            </Text>
+            {activeTab === 'Alerts' ? <View style={styles.footerIndicator} /> : null}
+          </Pressable>
         </View>
       </View>
     </ScreenContainer>
@@ -250,7 +366,7 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   screen: { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 96 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 94 },
 
   // Header
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 },
@@ -278,6 +394,46 @@ const styles = StyleSheet.create({
 
   // Section label
   sectionLabel: { fontFamily: F.bold, fontSize: 10, letterSpacing: 1.4, color: C.textMuted, marginBottom: 10 },
+  emptyNote: { fontFamily: F.regular, color: C.textMuted, textAlign: 'center', marginTop: 4, marginBottom: 16, fontSize: 14 },
+  searchInput: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 14,
+    color: C.textPrimary,
+    fontFamily: F.medium,
+    fontSize: 14,
+    marginBottom: 12,
+  },
+
+  // Alerts list
+  alertRow: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  alertHigh: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+  alertMedium: { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+  alertLow: { backgroundColor: '#E5E7EB', borderColor: '#D1D5DB' },
+  alertTextWrap: { flex: 1, paddingRight: 10 },
+  alertPatient: { fontFamily: F.bold, color: C.textPrimary, fontSize: 14, marginBottom: 2 },
+  alertMessage: { fontFamily: F.regular, color: C.textSecondary, fontSize: 12 },
+  alertRight: { alignItems: 'flex-end', gap: 6 },
+  alertPriority: { fontFamily: F.bold, color: C.textPrimary, fontSize: 10, letterSpacing: 0.6 },
+  alertSosBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  alertSosText: { fontFamily: F.bold, color: '#FFFFFF', fontSize: 10, letterSpacing: 0.4 },
 
   // Patient card
   card: {
@@ -318,21 +474,40 @@ const styles = StyleSheet.create({
   statusText: { fontFamily: F.bold, fontSize: 10 },
   chevron:    { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 24 },
 
-  // Bottom nav
-  bottomBarBand: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, height: 76,
-    backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
+  // Footer alerts nav
+  footerBarBand: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 76,
+    backgroundColor: C.surface,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
   },
-  bottomBar: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8,
+  footerBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  bottomTab: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 4, position: 'relative',
+  footerTab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    gap: 2,
   },
-  bottomTabIconWrap: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
-  bottomLabel:       { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3 },
-  bottomLabelActive: { fontFamily: F.bold, color: C.primary },
-  activeIndicator:   { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
+  footerLabel: { fontFamily: F.medium, fontSize: 11, color: C.textMuted },
+  footerLabelActive: { fontFamily: F.bold, color: C.primary },
+  footerIndicator: {
+    position: 'absolute',
+    bottom: -6,
+    width: 18,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: C.primary,
+  },
 });
