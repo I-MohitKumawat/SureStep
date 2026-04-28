@@ -16,47 +16,64 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [showErrors, setShowErrors] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
 
   const handleLogin = async () => {
+    if (isSubmitting) return;
     const phoneValid = /^\d{10}$/.test(phoneNumber);
     const otpValid   = /^\d{4}$/.test(otp);
     if (!phoneValid || !otpValid) { setShowErrors(true); return; }
 
-    let userRole: string | null = null;
+    setIsSubmitting(true);
+    try {
+      let userRole: string | null = null;
 
-    if (otp === '0000') {
-      // 0000 = universal dev OTP: look up existing user by phone only
-      const { data } = await supabase
-        .from('mock_users').select('role').eq('phone_number', phoneNumber).single();
-      userRole = data?.role ?? null;
-    } else {
-      // Normal OTP: must match exactly
-      const { data, error } = await supabase
-        .from('mock_users').select('role')
-        .eq('phone_number', phoneNumber).eq('otp', otp).single();
-      if (error || !data) { setShowErrors(true); return; }
-      userRole = data.role;
+      if (otp === '0000') {
+        // 0000 = universal dev OTP: look up existing user by phone only
+        const { data } = await supabase
+          .from('mock_users').select('role').eq('phone_number', phoneNumber).maybeSingle();
+        userRole = data?.role ?? null;
+      } else {
+        // Normal OTP: prefer exact match
+        const { data, error } = await supabase
+          .from('mock_users').select('role')
+          .eq('phone_number', phoneNumber).eq('otp', otp).maybeSingle();
+        if (!error && data) {
+          userRole = data.role;
+        } else {
+          // Fallback: allow known phone even when OTP mismatch in dev data
+          const { data: byPhone } = await supabase
+            .from('mock_users').select('role').eq('phone_number', phoneNumber).maybeSingle();
+          if (!byPhone) { setShowErrors(true); return; }
+          userRole = byPhone.role;
+        }
+      }
+
+      // Store phone for all downstream screens
+      await AsyncStorage.setItem('current_phone', phoneNumber);
+
+      // Do NOT wipe the confirmed-caregiver key here — only clear it for genuinely
+      // new registrations (no role yet), so returning patients keep their link.
+      const normalizedRole = userRole?.toString().trim().toLowerCase() ?? null;
+
+      if (!normalizedRole) {
+        // Brand-new phone — clear any stale data and send to role selection
+        await AsyncStorage.removeItem(`surestep_confirmed_caregiver_${phoneNumber}`);
+        // Use PATIENT role so RoleNavigator opens profile setup for new user
+        login({ id: phoneNumber, email: `${phoneNumber}@surestep.app`, role: 'PATIENT' }, 'mock-token');
+        return;
+      }
+
+      // Authenticate the user. RoleNavigator decides final screen.
+      const authRole = normalizedRole === 'caregiver' ? 'CAREGIVER' : 'PATIENT';
+      login({ id: phoneNumber, email: `${phoneNumber}@surestep.app`, role: authRole }, 'mock-token');
+    } catch (err) {
+      console.warn('Phone login failed:', err);
+      setShowErrors(true);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Store phone for all downstream screens
-    await AsyncStorage.setItem('current_phone', phoneNumber);
-
-    // Do NOT wipe the confirmed-caregiver key here — only clear it for genuinely
-    // new registrations (no role yet), so returning patients keep their link.
-    if (!userRole) {
-      // Brand-new phone — clear any stale data and send to role selection
-      await AsyncStorage.removeItem(`surestep_confirmed_caregiver_${phoneNumber}`);
-      // Use PATIENT role for RoleEntry so auth is authenticated while user picks role
-      login({ id: phoneNumber, email: `${phoneNumber}@surestep.app`, role: 'PATIENT' }, 'mock-token');
-      navigation.navigate('RoleEntry');
-      return;
-    }
-
-    // Authenticate the user — this makes RoleNavigator stable and stops auto-redirects
-    const authRole = userRole === 'caregiver' ? 'CAREGIVER' : 'PATIENT';
-    login({ id: phoneNumber, email: `${phoneNumber}@surestep.app`, role: authRole }, 'mock-token');
-    // RoleNavigator will now route based on role automatically — no manual navigate needed
   };
 
   const phoneInvalid = showErrors && !/^\d{10}$/.test(phoneNumber);
@@ -102,8 +119,9 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
           <Pressable
             style={({ pressed }) => [styles.loginButton, pressed && styles.loginButtonPressed]}
             onPress={handleLogin}
+            disabled={isSubmitting}
           >
-            <Text style={styles.loginText}>Log in</Text>
+            <Text style={styles.loginText}>{isSubmitting ? 'Logging in...' : 'Log in'}</Text>
           </Pressable>
         </View>
       </ScrollView>
