@@ -76,6 +76,10 @@ export default function ProfileSetup({ navigation, route }: Props) {
           otp: '0000',
           role,
           full_name: draft.fullName,
+          dob: draft.dob || null,
+          gender: draft.gender || null,
+          city: draft.city || null,
+          language: draft.language || 'English',
         });
 
         // If patient, seed their default tasks

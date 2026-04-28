@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -7,6 +7,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useTasks } from '../context/taskContext';
 import { readPatientProfile } from '../utils/sharedProfile';
+import { supabase } from '../utils/supabaseClient';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import {
@@ -39,7 +40,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const CAPSULE_STEP = CAPSULE_HEIGHT + CAPSULE_GAP;
   const { tasks } = useTasks();
   const [reminderSentKeys, setReminderSentKeys] = React.useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = React.useState<CaregiverTab>('Home');
+  const [activeTab, setActiveTab] = React.useState<CaregiverTab>(route.params?.initialTab ?? 'Home');
 
   // Patient identity comes from route params — never from AsyncStorage
   const patientPhone = route.params?.patientPhone ?? '2222222222';
@@ -51,6 +52,17 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const reminderTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const geoSubRef = React.useRef<Location.LocationSubscription | null>(null);
   const capsuleScrollY = React.useRef(new Animated.Value(0)).current;
+
+  // ── Patient profile details (for Profile tab modal) ───────────────────
+  const [showPatientProfile, setShowPatientProfile] = React.useState(false);
+  type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string };
+  const [patientDetails, setPatientDetails] = React.useState<PatientDetails | null>(null);
+
+  useEffect(() => {
+    if (route.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route.params?.initialTab]);
 
   // Use the patient's phone as the scope ID for tasks
   const patientId = patientPhone;
@@ -82,6 +94,27 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     const interval = setInterval(loadProfile, 30_000);
     return () => clearInterval(interval);
   }, [loadProfile]);
+
+  // Load patient DB details for the Profile modal
+  useEffect(() => {
+    supabase
+      .from('mock_users')
+      .select('full_name, dob, gender, city, language')
+      .eq('phone_number', patientPhone)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setPatientDetails({
+            fullName: data.full_name ?? patientName,
+            dob: data.dob ?? '—',
+            gender: data.gender ?? '—',
+            city: data.city ?? '—',
+            language: data.language ?? 'English',
+          });
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientPhone]);
 
   // patientId is derived above from route.params.patientPhone
   const patientTasks = tasks.filter((t) => t.patientId === patientId);
@@ -163,9 +196,98 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     };
   };
 
+  const patientAlerts = useMemo(() => {
+    const alerts: Array<{ id: string; title: string; message: string; level: 'high' | 'medium' | 'low' }> = [];
+    const missed = patientTasks.filter((t) => t.status === 'missed');
+    const unsure = patientTasks.filter((t) => t.status === 'unsure');
+
+    for (const task of missed) {
+      alerts.push({
+        id: `missed-${task.id}`,
+        title: 'Missed routine',
+        message: task.title,
+        level: 'high',
+      });
+    }
+    for (const task of unsure) {
+      alerts.push({
+        id: `unsure-${task.id}`,
+        title: 'Needs follow-up',
+        message: task.title,
+        level: 'medium',
+      });
+    }
+    if (batteryLevel < 20) {
+      alerts.push({
+        id: 'battery-low',
+        title: 'Low battery',
+        message: `Patient device battery at ${batteryLevel}%`,
+        level: 'medium',
+      });
+    }
+    if (patientCoords) {
+      const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
+      const dist = haversineMeters(
+        fence.center.latitude,
+        fence.center.longitude,
+        patientCoords.latitude,
+        patientCoords.longitude,
+      );
+      if (dist > fence.radiusM) {
+        alerts.push({
+          id: 'geo-outside',
+          title: 'Outside safe zone',
+          message: `${Math.round(dist - fence.radiusM)}m beyond boundary`,
+          level: 'high',
+        });
+      }
+    }
+    const rank = { high: 0, medium: 1, low: 2 } as const;
+    return alerts.sort((a, b) => rank[a.level] - rank[b.level]);
+  }, [batteryLevel, patientCoords, patientId, patientTasks]);
+
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <Pressable
+          onPress={() => navigation.navigate('CaregiverPatients')}
+          style={({ pressed }) => [styles.backNavBtn, pressed && { opacity: 0.72 }]}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.backNavText}>← Back</Text>
+        </Pressable>
+
+        {activeTab === 'Alerts' ? (
+          <View style={styles.alertsContainer}>
+            <Text style={styles.alertsTitle}>Patient Alerts</Text>
+            {patientAlerts.length === 0 ? (
+              <Text style={styles.alertsEmpty}>No active alerts for this patient.</Text>
+            ) : patientAlerts.map((alert) => (
+              <View
+                key={alert.id}
+                style={[
+                  styles.alertCard,
+                  alert.level === 'high' ? styles.alertCardHigh : alert.level === 'medium' ? styles.alertCardMedium : styles.alertCardLow,
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.alertCardTitle}>{alert.title}</Text>
+                  <Text style={styles.alertCardMessage}>{alert.message}</Text>
+                </View>
+                <View style={styles.alertCardRight}>
+                  <Text style={styles.alertCardLevel}>{alert.level.toUpperCase()}</Text>
+                  <Pressable
+                    onPress={() => void openDialPad()}
+                    style={({ pressed }) => [styles.alertSosBtn, pressed && { opacity: 0.72 }]}
+                  >
+                    <Text style={styles.alertSosText}>SOS</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <>
 
         {/* ── Patient Header ─────────────────────────────────────────── */}
         <View style={styles.headerCard}>
@@ -268,6 +390,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
                 })}
             </Animated.ScrollView>
           </View>
+        </View>
 
           {/* ── Geofence Status Card ───────────────────────────────── */}
           {(() => {
@@ -311,7 +434,8 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
               </Pressable>
             );
           })()}
-        </View>
+          </>
+        )}
       </ScrollView>
 
       {/* ── Reminder Toast ─────────────────────────────────────────────── */}
@@ -333,9 +457,17 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
               <Pressable
                 key={tab}
                 onPress={() => {
+                  if (tab === 'Profile') {
+                    setShowPatientProfile(true);
+                    return;
+                  }
                   setActiveTab(tab);
-                  if (tab === 'Home') navigation.navigate('CaregiverPatients');
-                  if (tab === 'Manage') navigation.navigate('CaregiverManage');
+                  if (tab === 'Manage') {
+                    navigation.navigate('CaregiverManage', {
+                      patientPhone: patientId,
+                      patientName,
+                    });
+                  }
                 }}
                 style={styles.bottomTab}
               >
@@ -351,6 +483,57 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
           })}
         </View>
       </View>
+
+      {/* ── Patient Profile Modal ──────────────────────────────────────── */}
+      <Modal
+        visible={showPatientProfile}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPatientProfile(false)}
+      >
+        <Pressable style={styles.profileModalOverlay} onPress={() => setShowPatientProfile(false)}>
+          <Pressable style={styles.profileModalSheet} onPress={(e) => e.stopPropagation()}>
+            {/* Handle bar */}
+            <View style={styles.profileModalHandle} />
+
+            {/* Avatar */}
+            <View style={styles.profileModalAvatar}>
+              <Text style={styles.profileModalAvatarInitial}>
+                {(patientDetails?.fullName ?? patientName)[0]?.toUpperCase() ?? 'P'}
+              </Text>
+            </View>
+
+            <Text style={styles.profileModalTag}>PATIENT PROFILE</Text>
+            <Text style={styles.profileModalName}>{patientDetails?.fullName ?? patientName}</Text>
+
+            <View style={styles.profileModalDivider} />
+
+            {/* Detail rows */}
+            {([
+              { label: 'Date of Birth', value: patientDetails?.dob ?? '—', emoji: '🎂' },
+              { label: 'Gender',        value: patientDetails?.gender ?? '—', emoji: '👤' },
+              { label: 'City',          value: patientDetails?.city ?? '—', emoji: '📍' },
+              { label: 'Language',      value: patientDetails?.language ?? 'English', emoji: '🌐' },
+              { label: 'Phone',         value: patientPhone, emoji: '📞' },
+            ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
+              <View key={row.label} style={styles.profileModalRow}>
+                <Text style={styles.profileModalRowEmoji}>{row.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.profileModalRowLabel}>{row.label}</Text>
+                  <Text style={styles.profileModalRowValue}>{row.value}</Text>
+                </View>
+              </View>
+            ))}
+
+            <Pressable
+              style={({ pressed }) => [styles.profileModalCloseBtn, pressed && { opacity: 0.82 }]}
+              onPress={() => setShowPatientProfile(false)}
+            >
+              <Text style={styles.profileModalCloseBtnText}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -358,6 +541,8 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
 const styles = StyleSheet.create({
   screen: { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 96 },
+  backNavBtn: { alignSelf: 'flex-start', marginBottom: 8, paddingVertical: 4, paddingRight: 4 },
+  backNavText: { fontFamily: F.bold, fontSize: 14, color: C.textSecondary },
 
   // ── Header ──────────────────────────────────────────────────────────────────
   headerCard: { marginBottom: 14 },
@@ -379,9 +564,9 @@ const styles = StyleSheet.create({
   // inline header actions (call + battery)
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   headerActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  headerCallBtn: { backgroundColor: C.primary },
+  headerCallBtn: { backgroundColor: '#FCD9A5' },
   headerActionIcon: { fontSize: 14 },
-  headerCallLabel: { fontFamily: F.bold, fontSize: 13, color: C.primaryText },
+  headerCallLabel: { fontFamily: F.bold, fontSize: 13, color: C.textPrimary },
   headerBatteryChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.surface, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: C.border },
   headerBatteryLabel: { fontFamily: F.bold, fontSize: 13 },
 
@@ -390,7 +575,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderRadius: 16, borderWidth: 1.5,
     paddingHorizontal: 14, paddingVertical: 13,
-    marginTop: 10,
+    marginTop: 12, marginHorizontal: 16,
     shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
   },
   geoDot:     { width: 10, height: 10, borderRadius: 5 },
@@ -398,14 +583,46 @@ const styles = StyleSheet.create({
   geoMeta:    { fontFamily: F.regular, fontSize: 13, color: C.textSecondary },
   geoChevron: { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 26 },
 
+  // Alerts tab
+  alertsContainer: {
+    backgroundColor: C.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+    marginTop: 6,
+  },
+  alertsTitle: { fontFamily: F.bold, fontSize: 18, color: C.textPrimary, marginBottom: 10 },
+  alertsEmpty: { fontFamily: F.regular, fontSize: 14, color: C.textSecondary },
+  alertCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  alertCardHigh: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+  alertCardMedium: { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+  alertCardLow: { backgroundColor: '#E5E7EB', borderColor: '#D1D5DB' },
+  alertCardRight: { alignItems: 'flex-end', gap: 6 },
+  alertCardTitle: { fontFamily: F.bold, color: C.textPrimary, fontSize: 14, marginBottom: 2 },
+  alertCardMessage: { fontFamily: F.regular, color: C.textSecondary, fontSize: 12 },
+  alertCardLevel: { fontFamily: F.bold, color: C.textPrimary, fontSize: 10, letterSpacing: 0.6 },
+  alertSosBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  alertSosText: { fontFamily: F.bold, color: '#FFFFFF', fontSize: 10, letterSpacing: 0.4 },
+
   routineHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontFamily: F.bold, fontSize: 18, color: C.textPrimary },
   completedPill: { backgroundColor: C.primaryLight, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   completedText: { fontFamily: F.semiBold, fontSize: 14, color: C.primary },
   completedCount: { fontFamily: F.extraBold },
-
-  // ── Routine outer wrapper ──────────────────────────────────────────
-  routineOuterContainer: { marginBottom: 14 },
 
   // ── Routine capsules ────────────────────────────────────────────────────────
   routineListViewport: {
@@ -453,6 +670,74 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+
+  // ── Patient Profile Modal ────────────────────────────────────────────────
+  profileModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  profileModalSheet: {
+    backgroundColor: C.bg,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: -4 },
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  profileModalHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: C.borderMid,
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+  profileModalAvatar: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: C.primaryLight,
+    borderWidth: 2, borderColor: C.primary,
+    alignItems: 'center', justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  profileModalAvatarInitial: {
+    fontFamily: F.extraBold, fontSize: 30, color: C.primary,
+  },
+  profileModalTag: {
+    fontFamily: F.bold, fontSize: 11, letterSpacing: 1.4,
+    color: C.primary, textAlign: 'center', marginBottom: 4,
+  },
+  profileModalName: {
+    fontFamily: F.extraBold, fontSize: 24, color: C.textPrimary,
+    textAlign: 'center', marginBottom: 14,
+  },
+  profileModalDivider: {
+    height: 1, backgroundColor: C.border, marginBottom: 14,
+  },
+  profileModalRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  profileModalRowEmoji: { fontSize: 20, width: 28, textAlign: 'center' },
+  profileModalRowLabel: {
+    fontFamily: F.medium, fontSize: 11, color: C.textSecondary, letterSpacing: 0.4,
+  },
+  profileModalRowValue: {
+    fontFamily: F.bold, fontSize: 15, color: C.textPrimary, marginTop: 1,
+  },
+  profileModalCloseBtn: {
+    marginTop: 20, borderRadius: 14, backgroundColor: C.primary,
+    paddingVertical: 14, alignItems: 'center',
+    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 6,
+  },
+  profileModalCloseBtnText: {
+    fontFamily: F.bold, fontSize: 16, color: C.primaryText,
   },
   // ── Stats ───────────────────────────────────────────────────────────────────
   statsCard: {

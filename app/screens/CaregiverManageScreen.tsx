@@ -53,8 +53,10 @@ const DeleteActionIcon = () => (
   </Svg>
 );
 
-export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
+export const CaregiverManageScreen: React.FC<Props> = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState<CaregiverTab>('Manage');
+  const selectedPatientPhone = route.params?.patientPhone;
+  const selectedPatientName = route.params?.patientName;
   type RoutineItem = {
     id: string;
     icon: string;
@@ -231,6 +233,14 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
                 key={tab}
                 onPress={() => {
                   setActiveTab(tab);
+                  if ((tab === 'Home' || tab === 'Alerts') && selectedPatientPhone) {
+                    navigation.navigate('CaregiverDashboard', {
+                      patientPhone: selectedPatientPhone,
+                      patientName: selectedPatientName ?? 'Patient',
+                      initialTab: tab === 'Alerts' ? 'Alerts' : 'Home',
+                    });
+                    return;
+                  }
                   if (tab === 'Home') navigation.navigate('CaregiverPatients');
                 }}
                 style={styles.bottomTab}

@@ -84,8 +84,18 @@ CREATE TABLE public.mock_users (
     phone_number TEXT PRIMARY KEY,
     otp TEXT NOT NULL,
     role TEXT NOT NULL,
-    full_name TEXT
+    full_name TEXT,
+    dob TEXT,
+    gender TEXT,
+    city TEXT,
+    language TEXT DEFAULT 'English'
 );
+
+-- If the table already exists, add the new columns safely:
+ALTER TABLE public.mock_users ADD COLUMN IF NOT EXISTS dob TEXT;
+ALTER TABLE public.mock_users ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE public.mock_users ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.mock_users ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'English';
 
 ALTER TABLE public.mock_users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Enable read access for all users" ON public.mock_users FOR SELECT USING (true);
