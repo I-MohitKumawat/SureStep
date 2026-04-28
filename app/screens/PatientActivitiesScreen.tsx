@@ -49,6 +49,8 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
               key={item.id}
               onPress={() => {
                 if (item.id === 'games') navigation.navigate('PatientGames');
+                if (item.id === 'workout') navigation.navigate('PatientWorkout');
+                if (item.id === 'relaxing') navigation.navigate('PatientRelaxing');
               }}
               style={({ pressed }) => [styles.activityCard, pressed && styles.pressed]}
             >
