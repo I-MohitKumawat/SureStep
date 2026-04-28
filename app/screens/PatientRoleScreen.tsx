@@ -137,7 +137,7 @@ const CaregiverProfileModal = ({
             <Text style={styles.profileAvatarText}>{caregiver.emoji}</Text>
           </View>
 
-          <Text style={styles.caregiverTagline}>Your confirmed caregiver</Text>
+          <Text style={styles.caregiverTagline}>Your requested caregiver</Text>
 
           <Text style={styles.profileName}>{caregiver.name}</Text>
           <Text style={styles.profileSubtitle}>{caregiver.specialty}</Text>

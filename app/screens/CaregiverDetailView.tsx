@@ -53,7 +53,7 @@ export const CaregiverDetailView: React.FC<Props> = ({
         </View>
         {isConfirmed && (
           <View style={d.confirmedBadge}>
-            <Text style={d.confirmedBadgeText}>✓  Your Caregiver</Text>
+            <Text style={d.confirmedBadgeText}>✓  Requested Caregiver</Text>
           </View>
         )}
       </View>
@@ -113,7 +113,7 @@ export const CaregiverDetailView: React.FC<Props> = ({
           style={({ pressed }) => [d.confirmBtn, pressed && d.confirmBtnPressed]}
           onPress={() => onConfirm(caregiver)}
         >
-          <Text style={d.confirmBtnText}>Confirm Caregiver</Text>
+          <Text style={d.confirmBtnText}>Request Caregiver</Text>
         </Pressable>
       </View>
     )}

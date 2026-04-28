@@ -13,6 +13,8 @@ import { PatientFamilyScreen } from '../screens/PatientFamilyScreen';
 import { PatientFamilyProfileScreen } from '../screens/PatientFamilyProfileScreen';
 import { PatientActivitiesScreen } from '../screens/PatientActivitiesScreen';
 import { PatientGamesScreen } from '../screens/PatientGamesScreen';
+import { PatientWorkoutScreen } from '../screens/PatientWorkoutScreen';
+import { PatientRelaxingScreen } from '../screens/PatientRelaxingScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
@@ -48,6 +50,8 @@ export type HomeStackParamList = {
   };
   PatientActivities: undefined;
   PatientGames: undefined;
+  PatientWorkout: undefined;
+  PatientRelaxing: undefined;
 
   Settings: undefined;
 
@@ -173,6 +177,16 @@ function HomeStackNavigator({
       <HomeStack.Screen
         name="PatientGames"
         component={PatientGamesScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="PatientWorkout"
+        component={PatientWorkoutScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="PatientRelaxing"
+        component={PatientRelaxingScreen}
         options={{ headerShown: false }}
       />
 
