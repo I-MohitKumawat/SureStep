@@ -37,9 +37,15 @@ export default function ProfileSetup({ navigation, route }: Props) {
   };
 
   const handleSubmit = async () => {
-    const requiredOk =
-      formData.name.trim() && formData.dob.trim() && formData.gender.trim() &&
-      formData.city.trim() && language.trim();
+    const requiredOk = role === 'patient'
+      ? formData.name.trim()
+      : (
+          formData.name.trim() &&
+          formData.dob.trim() &&
+          formData.gender.trim() &&
+          formData.city.trim() &&
+          language.trim()
+        );
     if (!requiredOk) { setShowErrors(true); return; }
 
     const draft = {
@@ -59,33 +65,38 @@ export default function ProfileSetup({ navigation, route }: Props) {
       await writeSharedProfile({ fullName: draft.fullName, role: 'caregiver' });
     }
 
-    // Persist role + name to Supabase so returning logins skip onboarding
-    const phone = await AsyncStorage.getItem('current_phone');
-    if (phone) {
-      // Use otp='0000' as default for new users (they already logged in via 0000)
-      await supabase.from('mock_users').upsert({
-        phone_number: phone,
-        otp: '0000',
-        role,
-        full_name: draft.fullName,
-      });
-
-      // If patient, seed their default tasks
-      if (role === 'patient') {
-        await seedNewPatientTasks(phone);
-      }
-
-      // If caregiver, also register in the search directory
-      if (role === 'caregiver') {
-        await supabase.from('caregivers').upsert({
-          id: phone,
-          name: draft.fullName,
-          specialty: 'Family Caregiver',
-          bio: '',
-          availability: 'Flexible',
-          location: formData.city,
+    // Persist role + name to Supabase so returning logins skip onboarding.
+    // Fail-soft: onboarding should still continue even if backend write fails.
+    try {
+      const phone = await AsyncStorage.getItem('current_phone');
+      if (phone) {
+        // Use otp='0000' as default for new users (they already logged in via 0000)
+        await supabase.from('mock_users').upsert({
+          phone_number: phone,
+          otp: '0000',
+          role,
+          full_name: draft.fullName,
         });
+
+        // If patient, seed their default tasks
+        if (role === 'patient') {
+          await seedNewPatientTasks(phone);
+        }
+
+        // If caregiver, also register in the search directory
+        if (role === 'caregiver') {
+          await supabase.from('caregivers').upsert({
+            id: phone,
+            name: draft.fullName,
+            specialty: 'Family Caregiver',
+            bio: '',
+            availability: 'Flexible',
+            location: formData.city,
+          });
+        }
       }
+    } catch (err) {
+      console.warn('Profile backend sync failed, continuing local onboarding:', err);
     }
 
     if (role === 'caregiver') navigation.navigate('CaregiverPatients');
