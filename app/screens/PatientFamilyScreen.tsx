@@ -56,9 +56,9 @@ export const PatientFamilyScreen: React.FC<Props> = ({ navigation }) => {
 
   const onTabPress = (tab: BottomTab) => {
     setActiveTab(tab);
-    if (tab === 'Home') navigation.navigate('PatientDashboard');
-    if (tab === 'Activity') navigation.navigate('PatientActivities');
-    if (tab === 'Search') navigation.navigate('PatientDashboard');
+    if (tab === 'Home')     navigation.navigate('PatientDashboard');
+    if (tab === 'Activity') navigation.navigate('PatientDashboard', { initialTab: 'Activity' } as any);
+    if (tab === 'Search')   navigation.navigate('PatientDashboard', { initialTab: 'Search' } as any);
   };
 
   return (

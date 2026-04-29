@@ -1,11 +1,12 @@
 import React, { type ReactNode } from 'react';
 
-export type UserRole = 'PATIENT' | 'CAREGIVER' | 'DOCTOR';
+export type UserRole = 'PATIENT' | 'CAREGIVER' | 'DOCTOR' | 'NEW_USER';
 
 export type AuthUser = {
   id: string;
   email: string;
   role: UserRole;
+  fullName?: string;   // passed from PhoneAuthScreen to avoid a second mock_users fetch
 };
 
 export type AuthState =

@@ -32,10 +32,10 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
   const { confirmedCaregiver } = useCaregiver();
 
   const onTabPress = (tab: BottomTab) => {
-    if (tab === 'Home') navigation.navigate('PatientDashboard');
-    if (tab === 'Family') navigation.navigate('PatientFamily');
-    if (tab === 'Activity') navigation.navigate('PatientActivities');
-    if (tab === 'Search') navigation.navigate('PatientDashboard');
+    if (tab === 'Home')     navigation.navigate('PatientDashboard');
+    if (tab === 'Family')   navigation.navigate('PatientDashboard', { initialTab: 'Family' } as any);
+    if (tab === 'Activity') navigation.navigate('PatientDashboard', { initialTab: 'Activity' } as any);
+    if (tab === 'Search')   navigation.navigate('PatientDashboard', { initialTab: 'Search' } as any);
   };
 
   return (

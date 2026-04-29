@@ -1,20 +1,51 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+/**
+ * CaregiverPatientsScreen.tsx
+ *
+ * Patient list sourced exclusively from Supabase:
+ *  - patient_caregiver_links  → which patients belong to this caregiver
+ *  - mock_users / patients    → patient names
+ *  - tasks                    → real completion stats, last activity, alerts
+ *
+ * Realtime: re-fetches the full list whenever a new link INSERT fires.
+ */
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { supabase } from '../utils/supabaseClient';
-import { useTasks } from '../context/taskContext';
+import { subscribeToCaregiversLinks } from '../../backend/caregiverLinks';
+import { useAuth } from '../../packages/core/auth/AuthContext';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
-import { IconDashboard, IconBell } from '../assets/icons/NavIcons';
+import {
+  IconDashboard,
+  IconBell,
+  IconProfile,
+} from '../assets/icons/NavIcons';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverPatients'>;
-type PatientsFooterTab = 'Home' | 'Alerts';
+type CaregiverTab = 'Home' | 'Alerts' | 'Profile';
 
-// ─── Static patient data ──────────────────────────────────────────────────────
+type TabIconProps = { active: boolean };
+const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
+  Home:    ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Alerts:  ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Profile: ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Patient = {
   id: string;
   name: string;
@@ -33,58 +64,74 @@ type PatientAlert = {
   priority: AlertPriority;
 };
 
+type RawTask = {
+  id: string;
+  patient_id: string;
+  title: string;
+  status: string;
+  completed_at: string | null;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function computeLastActivity(tasks: RawTask[]): string {
+  const times = tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime());
+  if (times.length === 0) return 'No activity yet';
+  const diffMin = Math.round((Date.now() - Math.max(...times)) / 60_000);
+  if (diffMin < 1)  return 'Just now';
+  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? 's' : ''} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  return `${diffHr} hr${diffHr > 1 ? 's' : ''} ago`;
+}
+
+function deriveStatusLabel(
+  completed: number,
+  total: number,
+  hasMissed: boolean,
+): Patient['statusLabel'] {
+  if (hasMissed) return 'Needs attention';
+  if (total > 0 && completed === total) return 'All done';
+  return 'On track';
+}
+
+// ─── Status colours ───────────────────────────────────────────────────────────
+
 const STATUS_COLORS: Record<Patient['statusLabel'], { bg: string; text: string; dot: string }> = {
-  'On track':       { bg: C.primaryLight,  text: C.safeText,  dot: C.primary },
-  'All done':       { bg: '#D1FAE5',        text: '#065F46',   dot: '#10B981' },
-  'Needs attention':{ bg: '#FEE2E2',        text: '#991B1B',   dot: '#DC2626' },
+  'On track':        { bg: C.primaryLight, text: C.safeText,  dot: C.primary  },
+  'All done':        { bg: '#D1FAE5',       text: '#065F46',   dot: '#10B981'  },
+  'Needs attention': { bg: '#FEE2E2',       text: '#991B1B',   dot: '#DC2626'  },
 };
 
 // ─── Patient Card ─────────────────────────────────────────────────────────────
-const PatientCard = ({
-  patient,
-  onPress,
-}: {
-  patient: Patient;
-  onPress: () => void;
-}) => {
+
+const PatientCard = ({ patient, onPress }: { patient: Patient; onPress: () => void }) => {
   const statusStyle = STATUS_COLORS[patient.statusLabel];
-  const progressPct = patient.totalTasks > 0
-    ? (patient.completedTasks / patient.totalTasks) * 100
-    : 0;
+  const progressPct = patient.totalTasks > 0 ? (patient.completedTasks / patient.totalTasks) * 100 : 0;
 
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] }]}
       onPress={onPress}
     >
-      {/* Left: avatar */}
       <View style={styles.avatar}>
         <Text style={styles.avatarInitial}>{patient.name[0]?.toUpperCase()}</Text>
       </View>
 
-      {/* Center: info */}
       <View style={styles.cardCenter}>
         <View style={styles.nameRow}>
           <Text style={styles.patientName}>{patient.name}</Text>
         </View>
         <Text style={styles.lastActivity}>Last activity · {patient.lastActivity}</Text>
-
-        {/* Progress bar */}
         <View style={styles.progressBarTrack}>
           <View style={[styles.progressBarFill, { width: `${progressPct}%` as `${number}%` }]} />
         </View>
-        <Text style={styles.progressLabel}>
-          {patient.completedTasks}/{patient.totalTasks} tasks done
-        </Text>
+        <Text style={styles.progressLabel}>{patient.completedTasks}/{patient.totalTasks} tasks done</Text>
       </View>
 
-      {/* Right: status pill + chevron */}
       <View style={styles.cardRight}>
         <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
           <View style={[styles.statusDot, { backgroundColor: statusStyle.dot }]} />
-          <Text style={[styles.statusText, { color: statusStyle.text }]}>
-            {patient.statusLabel}
-          </Text>
+          <Text style={[styles.statusText, { color: statusStyle.text }]}>{patient.statusLabel}</Text>
         </View>
         <Text style={styles.chevron}>›</Text>
       </View>
@@ -93,270 +140,288 @@ const PatientCard = ({
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
 export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
-  const { tasks } = useTasks();
-  const [activeTab, setActiveTab] = useState<PatientsFooterTab>('Home');
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [caregiverPhone, setCaregiverPhone] = useState<string | null>(null);
+  const { auth } = useAuth();
+  const caregiverPhone = auth.status === 'authenticated' ? auth.user.id : null;
+
+  const [activeTab,   setActiveTab]   = useState<CaregiverTab>('Home');
+  const [patients,    setPatients]    = useState<Patient[]>([]);
+  const [rawTasks,    setRawTasks]    = useState<RawTask[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fallbackPatientIdsFromTasks = useMemo(() => {
-    return Array.from(new Set(tasks.map((t) => t.patientId).filter(Boolean)));
-  }, [tasks]);
-
-  // Fetch caregiver phone once on mount
-  React.useEffect(() => {
-    AsyncStorage.getItem('current_phone').then((p) => { if (p) setCaregiverPhone(p); });
-  }, []);
-
-  // Fetch patients for this caregiver
+  // ── Data fetcher ────────────────────────────────────────────────────────────
   const loadPatients = useCallback(async (phone: string) => {
+    // Only show spinner on first load — keep existing list visible during refreshes
+    setPatients((prev) => { if (prev.length === 0) setLoading(true); return prev; });
+    setError(null);
+
     try {
-      const { data: links } = await supabase
+      // 1. Fetch linked patient phones
+      const linksResult = await supabase
         .from('patient_caregiver_links')
         .select('patient_phone')
         .eq('caregiver_phone', phone);
 
-      const linkedIds = (links ?? []).map((l: any) => l.patient_phone).filter(Boolean);
-      const mergedIds = Array.from(new Set([...linkedIds, ...fallbackPatientIdsFromTasks]));
-
-      if (mergedIds.length === 0) {
+      if (linksResult.error) { setError('Failed to load patients.'); setLoading(false); return; }
+      if (!linksResult.data || linksResult.data.length === 0) {
         setPatients([]);
+        setRawTasks([]);
+        setLoading(false);
         return;
       }
 
-      const { data: users } = await supabase
-        .from('mock_users')
-        .select('phone_number, full_name')
-        .in('phone_number', mergedIds);
-
-      const userNameByPhone = new Map<string, string>(
-        (users ?? []).map((u: any) => [u.phone_number, u.full_name || 'Patient']),
+      const patientPhones: string[] = linksResult.data.map(
+        (l: { patient_phone: string }) => l.patient_phone,
       );
 
-      setPatients(mergedIds.map((patientId) => ({
-        id: patientId,
-        name: userNameByPhone.get(patientId) || 'Patient',
-        completedTasks: 0,
-        totalTasks: 3,
-        lastActivity: 'No activity yet',
-        statusLabel: 'On track' as const,
-      })));
-    } catch (error) {
-      console.warn('Failed to load caregiver patients, using local task fallback:', error);
-      const fallbackIds = fallbackPatientIdsFromTasks;
-      setPatients(fallbackIds.map((patientId) => ({
-        id: patientId,
-        name: 'Patient',
-        completedTasks: 0,
-        totalTasks: 3,
-        lastActivity: 'No activity yet',
-        statusLabel: 'On track' as const,
-      })));
-    }
-  }, [fallbackPatientIdsFromTasks]);
+      // 2. Fetch names and tasks in parallel
+      const nameMap = new Map<string, string>();
+      const [patientsRes, usersRes, tasksRes] = await Promise.all([
+        supabase.from('patients').select('id, name').in('id', patientPhones),
+        supabase.from('mock_users').select('phone_number, full_name').in('phone_number', patientPhones),
+        supabase
+          .from('tasks')
+          .select('id, patient_id, title, status, completed_at')
+          .in('patient_id', patientPhones),
+      ]);
 
-  // Initial load when phone is known
+      // patients table takes priority, then mock_users fills gaps
+      if (patientsRes.data) {
+        for (const p of patientsRes.data as { id: string; name: string }[]) {
+          if (p.name) nameMap.set(p.id, p.name);
+        }
+      }
+      if (usersRes.data) {
+        for (const u of usersRes.data as { phone_number: string; full_name: string }[]) {
+          if (!nameMap.has(u.phone_number) && u.full_name) nameMap.set(u.phone_number, u.full_name);
+        }
+      }
+
+      const allTasks: RawTask[] = tasksRes.data ?? [];
+      setRawTasks(allTasks);
+
+      // 3. Build patient rows
+      const built: Patient[] = patientPhones.map((p) => {
+        const pts       = allTasks.filter((t) => t.patient_id === p);
+        const completed = pts.filter((t) => t.status === 'done').length;
+        const total     = pts.length;
+        const hasMissed = pts.some((t) => t.status === 'missed');
+        return {
+          id:             p,
+          name:           nameMap.get(p) ?? `Patient (${p.slice(-4)})`,
+          completedTasks: completed,
+          totalTasks:     total,
+          lastActivity:   computeLastActivity(pts),
+          statusLabel:    deriveStatusLabel(completed, total, hasMissed),
+        };
+      });
+
+      setPatients(built);
+    } catch (e) {
+      console.error('[CaregiverPatients] loadPatients error:', e);
+      setError('Failed to load patients. Check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ── Initial load ────────────────────────────────────────────────────────────
   React.useEffect(() => {
     if (caregiverPhone) void loadPatients(caregiverPhone);
   }, [caregiverPhone, loadPatients]);
 
-  // Realtime: instant update when a patient confirms THIS caregiver (filter-scoped)
+  // ── Realtime subscription ───────────────────────────────────────────────────
   React.useEffect(() => {
     if (!caregiverPhone) return;
-
-    // Create channel fresh — subscribe once, clean up on unmount
-    const channel = supabase
-      .channel(`caregiver_links_${caregiverPhone}_${Date.now()}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'patient_caregiver_links',
-          filter: `caregiver_phone=eq.${caregiverPhone}`,
-        },
-        () => void loadPatients(caregiverPhone),
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
+    return subscribeToCaregiversLinks(caregiverPhone, () => void loadPatients(caregiverPhone));
   }, [caregiverPhone, loadPatients]);
 
-  const patientsWithStats = useMemo(() => {
-    return patients.map((patient) => {
-      const patientTasks = tasks.filter((t) => t.patientId === patient.id);
-      const completed = patientTasks.filter((t) => t.status === 'done').length;
-      const missed = patientTasks.filter((t) => t.status === 'missed').length;
-      const unsure = patientTasks.filter((t) => t.status === 'unsure').length;
-      const total = patientTasks.length;
-
-      const statusLabel: Patient['statusLabel'] =
-        missed > 0 || unsure > 0
-          ? 'Needs attention'
-          : total > 0 && completed === total
-            ? 'All done'
-            : 'On track';
-
-      return {
-        ...patient,
-        completedTasks: completed,
-        totalTasks: total || patient.totalTasks,
-        lastActivity: (() => {
-          const completedTimes = patientTasks
-            .filter((t) => t.completedAt)
-            .map((t) => new Date(t.completedAt as string).getTime());
-          if (completedTimes.length === 0) return 'No activity yet';
-          const mins = Math.max(0, Math.round((Date.now() - Math.max(...completedTimes)) / 60000));
-          if (mins < 1) return 'Just now';
-          if (mins < 60) return `${mins} mins ago`;
-          return `${Math.floor(mins / 60)} hr ago`;
-        })(),
-        statusLabel,
-      };
-    });
-  }, [patients, tasks]);
-
+  // ── Derived: prioritised alerts from rawTasks ───────────────────────────────
   const prioritizedAlerts = useMemo(() => {
     const alerts: PatientAlert[] = [];
-    for (const patient of patientsWithStats) {
-      const patientTasks = tasks.filter((t) => t.patientId === patient.id);
-      const missedTasks = patientTasks.filter((t) => t.status === 'missed');
-      const unsureTasks = patientTasks.filter((t) => t.status === 'unsure');
+    const patientNameById = new Map(patients.map((p) => [p.id, p.name]));
 
-      for (const task of missedTasks) {
+    const missed = rawTasks.filter((t) => t.status === 'missed');
+    const unsure = rawTasks.filter((t) => t.status === 'unsure');
+    const done   = rawTasks.filter((t) => t.status === 'done');
+
+    for (const t of missed) {
+      alerts.push({
+        id:          `missed-${t.id}`,
+        patientId:   t.patient_id,
+        patientName: patientNameById.get(t.patient_id) ?? 'Patient',
+        message:     `Missed routine: ${t.title}`,
+        priority:    'high',
+      });
+    }
+    for (const t of unsure) {
+      alerts.push({
+        id:          `unsure-${t.id}`,
+        patientId:   t.patient_id,
+        patientName: patientNameById.get(t.patient_id) ?? 'Patient',
+        message:     `Needs caregiver check: ${t.title}`,
+        priority:    'medium',
+      });
+    }
+    // One "all done" alert per patient if every task is complete
+    for (const p of patients) {
+      const pts = rawTasks.filter((t) => t.patient_id === p.id);
+      if (pts.length > 0 && pts.every((t) => t.status === 'done')) {
         alerts.push({
-          id: `missed-${task.id}`,
-          patientId: patient.id,
-          patientName: patient.name,
-          message: `Missed routine: ${task.title}`,
-          priority: 'high',
-        });
-      }
-      for (const task of unsureTasks) {
-        alerts.push({
-          id: `unsure-${task.id}`,
-          patientId: patient.id,
-          patientName: patient.name,
-          message: `Needs caregiver check: ${task.title}`,
-          priority: 'medium',
-        });
-      }
-      if (patientTasks.length > 0 && patientTasks.every((t) => t.status === 'done')) {
-        alerts.push({
-          id: `done-${patient.id}`,
-          patientId: patient.id,
-          patientName: patient.name,
-          message: 'All routines completed',
-          priority: 'low',
+          id:          `done-${p.id}`,
+          patientId:   p.id,
+          patientName: p.name,
+          message:     'All routines completed',
+          priority:    'low',
         });
       }
     }
 
     const rank: Record<AlertPriority, number> = { high: 0, medium: 1, low: 2 };
     return alerts.sort((a, b) => rank[a.priority] - rank[b.priority]);
-  }, [patientsWithStats, tasks]);
+  }, [rawTasks, patients]);
 
+  // ── Derived: filtered patient list ─────────────────────────────────────────
   const filteredPatients = useMemo(() => {
     const needle = searchQuery.trim().toLowerCase();
-    if (!needle) return patientsWithStats;
-    return patientsWithStats.filter((patient) => {
-      return (
-        patient.name.toLowerCase().includes(needle) ||
-        patient.id.toLowerCase().includes(needle)
-      );
-    });
-  }, [patientsWithStats, searchQuery]);
+    if (!needle) return patients;
+    return patients.filter(
+      (p) => p.name.toLowerCase().includes(needle) || p.id.toLowerCase().includes(needle),
+    );
+  }, [patients, searchQuery]);
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* ── Header ─────────────────────────────────────────────────── */}
-        <View style={styles.headerRow}>
-          <View>
+      {/* ── Home tab ──────────────────────────────────────────────────────── */}
+      {activeTab === 'Home' && (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerRow}>
             <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>YOUR PATIENTS</Text>
           </View>
-        </View>
 
-        {activeTab === 'Home' ? (
-          <>
-            {/* ── Patient cards ───────────────────────────────────────────── */}
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search patient by name or phone"
-              placeholderTextColor={C.textMuted}
-              style={styles.searchInput}
-            />
-            <Text style={styles.sectionLabel}>TAP TO VIEW DASHBOARD</Text>
-            {filteredPatients.length === 0 ? (
-              <Text style={styles.emptyNote}>No patients yet. Ask patient to confirm caregiver.</Text>
-            ) : filteredPatients.map((patient) => (
-              <PatientCard
-                key={patient.id}
-                patient={patient}
-                onPress={() => navigation.navigate('CaregiverDashboard', {
-                  patientPhone: patient.id,
-                  patientName: patient.name,
-                })}
-              />
-            ))}
-          </>
-        ) : (
-          <>
-            {/* ── Prioritized alerts across patients ─────────────────────── */}
-            <Text style={styles.sectionLabel}>PRIORITY ALERTS</Text>
-            {prioritizedAlerts.length === 0 ? (
-              <Text style={styles.emptyNote}>No active alerts right now.</Text>
-            ) : prioritizedAlerts.map((alert) => (
-              <Pressable
-                key={alert.id}
-                onPress={() =>
-                  navigation.navigate('CaregiverDashboard', {
-                    patientPhone: alert.patientId,
-                    patientName: alert.patientName,
-                    initialTab: 'Alerts',
-                  })
-                }
-                style={[
-                  styles.alertRow,
-                  alert.priority === 'high' ? styles.alertHigh : alert.priority === 'medium' ? styles.alertMedium : styles.alertLow,
-                ]}
-              >
-                <View style={styles.alertTextWrap}>
-                  <Text style={styles.alertPatient}>{alert.patientName}</Text>
-                  <Text style={styles.alertMessage}>{alert.message}</Text>
-                </View>
-                <View style={styles.alertRight}>
-                  <Text style={styles.alertPriority}>{alert.priority.toUpperCase()}</Text>
-                  <Pressable
-                    onPress={() => void Linking.openURL('tel:')}
-                    style={({ pressed }) => [styles.alertSosBtn, pressed && { opacity: 0.72 }]}
-                  >
-                    <Text style={styles.alertSosText}>SOS</Text>
-                  </Pressable>
-                </View>
-              </Pressable>
-            ))}
-          </>
-        )}
-      </ScrollView>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search patient by name or phone"
+            placeholderTextColor={C.textMuted}
+            style={styles.searchInput}
+          />
 
-      <View style={styles.footerBarBand}>
-        <View style={styles.footerBar}>
-          <Pressable style={styles.footerTab} onPress={() => setActiveTab('Home')}>
-            <IconDashboard size={24} color={activeTab === 'Home' ? C.primary : C.textMuted} strokeWidth={activeTab === 'Home' ? 2.2 : 1.8} />
-            <Text style={[styles.footerLabel, activeTab === 'Home' && styles.footerLabelActive]}>Home</Text>
-            {activeTab === 'Home' ? <View style={styles.footerIndicator} /> : null}
-          </Pressable>
-          <Pressable style={styles.footerTab} onPress={() => setActiveTab('Alerts')}>
-            <IconBell size={24} color={activeTab === 'Alerts' ? C.primary : C.textMuted} strokeWidth={activeTab === 'Alerts' ? 2.2 : 1.8} />
-            <Text style={[styles.footerLabel, activeTab === 'Alerts' && styles.footerLabelActive]}>
-              Alerts {prioritizedAlerts.length > 0 ? `(${prioritizedAlerts.length})` : ''}
+          <Text style={styles.sectionLabel}>TAP TO VIEW DASHBOARD</Text>
+
+          {loading && (
+            <View style={{ alignItems: 'center', paddingTop: 32 }}>
+              <ActivityIndicator color={C.primary} />
+            </View>
+          )}
+          {error && !loading && (
+            <Text style={styles.stateNote}>{error}</Text>
+          )}
+          {!loading && !error && patients.length === 0 && (
+            <Text style={styles.stateNote}>
+              No patients yet. Ask your patient to confirm you as their caregiver.
             </Text>
-            {activeTab === 'Alerts' ? <View style={styles.footerIndicator} /> : null}
-          </Pressable>
+          )}
+
+          {filteredPatients.map((patient) => (
+            <PatientCard
+              key={patient.id}
+              patient={patient}
+              onPress={() =>
+                navigation.navigate('CaregiverDashboard', {
+                  patientPhone: patient.id,
+                  patientName:  patient.name,
+                })
+              }
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {/* ── Alerts tab ────────────────────────────────────────────────────── */}
+      {activeTab === 'Alerts' && (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PRIORITY ALERTS</Text>
+          </View>
+
+          <Text style={styles.sectionLabel}>PRIORITY ALERTS</Text>
+
+          {prioritizedAlerts.length === 0 ? (
+            <Text style={styles.stateNote}>No active alerts right now.</Text>
+          ) : prioritizedAlerts.map((alert) => (
+            <Pressable
+              key={alert.id}
+              onPress={() =>
+                navigation.navigate('CaregiverDashboard', {
+                  patientPhone: alert.patientId,
+                  patientName:  alert.patientName,
+                })
+              }
+              style={[
+                styles.alertRow,
+                alert.priority === 'high'
+                  ? styles.alertHigh
+                  : alert.priority === 'medium'
+                    ? styles.alertMedium
+                    : styles.alertLow,
+              ]}
+            >
+              <View style={styles.alertTextWrap}>
+                <Text style={styles.alertPatient}>{alert.patientName}</Text>
+                <Text style={styles.alertMessage}>{alert.message}</Text>
+              </View>
+              <View style={styles.alertRight}>
+                <Text style={styles.alertPriority}>{alert.priority.toUpperCase()}</Text>
+                <Pressable
+                  onPress={() => void Linking.openURL('tel:')}
+                  style={({ pressed }) => [styles.alertSosBtn, pressed && { opacity: 0.72 }]}
+                >
+                  <Text style={styles.alertSosText}>SOS</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* ── Profile tab ───────────────────────────────────────────────────── */}
+      {activeTab === 'Profile' && (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PROFILE</Text>
+          </View>
+          <Text style={styles.stateNote}>Profile settings coming soon.</Text>
+        </ScrollView>
+      )}
+
+      {/* ── Bottom Nav ──────────────────────────────────────────────────────── */}
+      <View style={styles.bottomBarBand}>
+        <View style={styles.bottomBar}>
+          {(['Home', 'Alerts', 'Profile'] as CaregiverTab[]).map((tab) => {
+            const isActive = activeTab === tab;
+            const IconComponent = TAB_ICON_COMPONENTS[tab];
+            return (
+              <Pressable
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                style={styles.bottomTab}
+              >
+                <View style={styles.bottomTabIconWrap}>
+                  <IconComponent active={isActive} />
+                </View>
+                <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
+                  {tab}{tab === 'Alerts' && prioritizedAlerts.length > 0 ? ` (${prioritizedAlerts.length})` : ''}
+                </Text>
+                {isActive && <View style={styles.activeIndicator} />}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
     </ScreenContainer>
@@ -365,77 +430,22 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  screen: { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 94 },
+  screen:        { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 96 },
 
-  // Header
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 },
-  overline:  { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.4, color: C.primary, marginBottom: 2 },
-  heading:   { fontFamily: F.extraBold, fontSize: 28, color: C.textPrimary },
-  countBadge: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center',
-    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 5,
-  },
-  countBadgeText: { fontFamily: F.extraBold, fontSize: 18, color: C.primaryText },
-
-  // Summary strip
-  summaryStrip: {
-    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
-    backgroundColor: C.surface,
-    borderRadius: 18, borderWidth: 1, borderColor: C.border,
-    paddingVertical: 14, marginBottom: 22,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 1,
-  },
-  summaryItem:   { alignItems: 'center', flex: 1 },
-  summaryValue:  { fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary },
-  summaryLabel:  { fontFamily: F.medium, fontSize: 11, color: C.textSecondary, marginTop: 2 },
-  summaryDivider:{ width: 1, height: 36, backgroundColor: C.borderMid },
-
-  // Section label
+  headerRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 },
+  overline:     { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.4, color: C.primary, marginBottom: 2 },
   sectionLabel: { fontFamily: F.bold, fontSize: 10, letterSpacing: 1.4, color: C.textMuted, marginBottom: 10 },
-  emptyNote: { fontFamily: F.regular, color: C.textMuted, textAlign: 'center', marginTop: 4, marginBottom: 16, fontSize: 14 },
+  stateNote:    { fontFamily: F.regular, color: C.textMuted, textAlign: 'center', marginTop: 32, fontSize: 14 },
+
   searchInput: {
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingHorizontal: 14,
-    color: C.textPrimary,
-    fontFamily: F.medium,
-    fontSize: 14,
-    marginBottom: 12,
+    height: 46, borderRadius: 12,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, color: C.textPrimary,
+    fontFamily: F.medium, fontSize: 14, marginBottom: 12,
   },
 
-  // Alerts list
-  alertRow: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  alertHigh: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
-  alertMedium: { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
-  alertLow: { backgroundColor: '#E5E7EB', borderColor: '#D1D5DB' },
-  alertTextWrap: { flex: 1, paddingRight: 10 },
-  alertPatient: { fontFamily: F.bold, color: C.textPrimary, fontSize: 14, marginBottom: 2 },
-  alertMessage: { fontFamily: F.regular, color: C.textSecondary, fontSize: 12 },
-  alertRight: { alignItems: 'flex-end', gap: 6 },
-  alertPriority: { fontFamily: F.bold, color: C.textPrimary, fontSize: 10, letterSpacing: 0.6 },
-  alertSosBtn: {
-    backgroundColor: '#DC2626',
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  alertSosText: { fontFamily: F.bold, color: '#FFFFFF', fontSize: 10, letterSpacing: 0.4 },
-
-  // Patient card
+  // ── Patient card ────────────────────────────────────────────────────────────
   card: {
     backgroundColor: C.surface,
     borderRadius: 20, borderWidth: 1, borderColor: C.border,
@@ -447,67 +457,46 @@ const styles = StyleSheet.create({
   avatar: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: C.primaryLight, borderWidth: 2, borderColor: C.primary,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 12,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
   },
-  avatarInitial: { fontFamily: F.extraBold, fontSize: 20, color: C.primary },
+  avatarInitial:    { fontFamily: F.extraBold, fontSize: 20, color: C.primary },
+  cardCenter:       { flex: 1 },
+  nameRow:          { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 2 },
+  patientName:      { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary },
+  lastActivity:     { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginBottom: 8 },
+  progressBarTrack: { height: 5, borderRadius: 999, backgroundColor: C.border, overflow: 'hidden', marginBottom: 4 },
+  progressBarFill:  { height: '100%', borderRadius: 999, backgroundColor: C.primary },
+  progressLabel:    { fontFamily: F.semiBold, fontSize: 11, color: C.textSecondary },
+  cardRight:        { alignItems: 'flex-end', gap: 10, marginLeft: 8 },
+  statusPill:       { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  statusDot:        { width: 6, height: 6, borderRadius: 3 },
+  statusText:       { fontFamily: F.bold, fontSize: 10 },
+  chevron:          { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 24 },
 
-  cardCenter: { flex: 1 },
-  nameRow:    { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 2 },
-  patientName:  { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary },
-  relationship: { fontFamily: F.medium, fontSize: 12, color: C.textSecondary },
-  lastActivity: { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginBottom: 8 },
+  // ── Alerts ──────────────────────────────────────────────────────────────────
+  alertRow: {
+    borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 10, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'space-between',
+  },
+  alertHigh:    { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+  alertMedium:  { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+  alertLow:     { backgroundColor: '#E5E7EB', borderColor: '#D1D5DB' },
+  alertTextWrap:{ flex: 1, paddingRight: 10 },
+  alertPatient: { fontFamily: F.bold, color: C.textPrimary, fontSize: 14, marginBottom: 2 },
+  alertMessage: { fontFamily: F.regular, color: C.textSecondary, fontSize: 12 },
+  alertRight:   { alignItems: 'flex-end', gap: 6 },
+  alertPriority:{ fontFamily: F.bold, color: C.textPrimary, fontSize: 10, letterSpacing: 0.6 },
+  alertSosBtn:  { backgroundColor: '#DC2626', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  alertSosText: { fontFamily: F.bold, color: '#FFFFFF', fontSize: 10, letterSpacing: 0.4 },
 
-  progressBarTrack: {
-    height: 5, borderRadius: 999,
-    backgroundColor: C.border, overflow: 'hidden', marginBottom: 4,
-  },
-  progressBarFill: { height: '100%', borderRadius: 999, backgroundColor: C.primary },
-  progressLabel: { fontFamily: F.semiBold, fontSize: 11, color: C.textSecondary },
-
-  cardRight: { alignItems: 'flex-end', gap: 10, marginLeft: 8 },
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4,
-  },
-  statusDot:  { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontFamily: F.bold, fontSize: 10 },
-  chevron:    { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 24 },
-
-  // Footer alerts nav
-  footerBarBand: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 76,
-    backgroundColor: C.surface,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-  },
-  footerBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  footerTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    gap: 2,
-  },
-  footerLabel: { fontFamily: F.medium, fontSize: 11, color: C.textMuted },
-  footerLabelActive: { fontFamily: F.bold, color: C.primary },
-  footerIndicator: {
-    position: 'absolute',
-    bottom: -6,
-    width: 18,
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: C.primary,
-  },
+  // ── Bottom nav ──────────────────────────────────────────────────────────────
+  bottomBarBand:     { position: 'absolute', left: 0, right: 0, bottom: 0, height: 76, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border },
+  bottomBar:         { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 },
+  bottomTab:         { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, position: 'relative' },
+  bottomTabIconWrap: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  bottomLabel:       { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3 },
+  bottomLabelActive: { fontFamily: F.bold, color: C.primary },
+  activeIndicator:   { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
 });

@@ -13,7 +13,6 @@ import { F } from '../theme/fonts';
 import {
   IconDashboard,
   IconBell,
-  IconActivity,
   IconProfile,
 } from '../assets/icons/NavIcons';
 import {
@@ -24,13 +23,12 @@ import {
 } from '../utils/geofence';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverDashboard'>;
-type CaregiverTab = 'Home' | 'Alerts' | 'Manage' | 'Profile';
+type CaregiverTab = 'Home' | 'Alerts' | 'Profile';
 
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
   Home: ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
   Alerts: ({ active }) => <IconBell size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Manage: ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
   Profile: ({ active }) => <IconProfile size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
@@ -40,10 +38,10 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const CAPSULE_STEP = CAPSULE_HEIGHT + CAPSULE_GAP;
   const { tasks } = useTasks();
   const [reminderSentKeys, setReminderSentKeys] = React.useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = React.useState<CaregiverTab>(route.params?.initialTab ?? 'Home');
+  const [activeTab, setActiveTab] = React.useState<CaregiverTab>('Home');
 
   // Patient identity comes from route params — never from AsyncStorage
-  const patientPhone = route.params?.patientPhone ?? '2222222222';
+  const patientPhone = route.params?.patientPhone ?? '';
   const [patientName, setPatientName] = React.useState(
     route.params?.patientName ?? 'Patient'
   );
@@ -58,11 +56,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string };
   const [patientDetails, setPatientDetails] = React.useState<PatientDetails | null>(null);
 
-  useEffect(() => {
-    if (route.params?.initialTab) {
-      setActiveTab(route.params.initialTab);
-    }
-  }, [route.params?.initialTab]);
+
 
   // Use the patient's phone as the scope ID for tasks
   const patientId = patientPhone;
@@ -450,7 +444,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
       {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
       <View style={styles.bottomBarBand}>
         <View style={styles.bottomBar}>
-          {(['Home', 'Alerts', 'Manage', 'Profile'] as CaregiverTab[]).map((tab) => {
+          {(['Home', 'Alerts', 'Profile'] as CaregiverTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
@@ -462,12 +456,6 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
                     return;
                   }
                   setActiveTab(tab);
-                  if (tab === 'Manage') {
-                    navigation.navigate('CaregiverManage', {
-                      patientPhone: patientId,
-                      patientName,
-                    });
-                  }
                 }}
                 style={styles.bottomTab}
               >
@@ -475,7 +463,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
                   <IconComponent active={isActive} />
                 </View>
                 <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab === 'Manage' ? 'manage' : tab}
+                  {tab}
                 </Text>
                 {isActive && <View style={styles.activeIndicator} />}
               </Pressable>
@@ -624,6 +612,22 @@ const styles = StyleSheet.create({
   completedText: { fontFamily: F.semiBold, fontSize: 14, color: C.primary },
   completedCount: { fontFamily: F.extraBold },
 
+  // ── Routine outer wrapper ──────────────────────────────────────────
+  routineOuterContainer: {
+    backgroundColor: '#f0fff8',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+
   // ── Routine capsules ────────────────────────────────────────────────────────
   routineListViewport: {
     height: 276,
@@ -656,21 +660,7 @@ const styles = StyleSheet.create({
   capsuleReminderBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   capsuleReminderIcon: { fontSize: 16 },
 
-   routineOuterContainer: {
-    backgroundColor: '#f0fff8ff', // creamish white
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    marginHorizontal: 16,
-    marginTop: 10,
 
-    // optional depth (makes it look like a card)
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
 
   // ── Patient Profile Modal ────────────────────────────────────────────────
   profileModalOverlay: {

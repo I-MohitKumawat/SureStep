@@ -31,11 +31,16 @@ export const RoleNavigator: React.FC = () => {
     return <DoctorNavigator />;
   }
 
+  // Brand-new user — needs to pick a role first, then set up profile
+  if (userRole === 'NEW_USER') {
+    return <RootNavigator key="new-user" initialRouteName="RoleEntry" />;
+  }
+
   if (profileLoading) {
     return <ProfileLoadingNavigator />;
   }
 
-  // New user: hasn't completed profile setup yet
+  // Existing user who skipped profile setup
   if (!hasProfileForRouting) {
     const newUserRole = userRole === 'CAREGIVER' ? 'caregiver' : 'patient';
     return (
