@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Modal,
@@ -11,6 +11,8 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
@@ -18,6 +20,63 @@ import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
 import { useCaregiver } from '../context/caregiverContext';
+import { AiFab } from '../components/AiFab';
+
+// ─── WAV writer ──────────────────────────────────────────────────────────────
+// Generates a multi-note sine-wave WAV and writes it to the device cache.
+// Returns a file:// URI that expo-av can actually play (data: URIs are NOT
+// supported by expo-av on Android/iOS).
+async function writeWavFile(
+  notes: { hz: number; dur: number }[],
+  fileId: string,
+): Promise<string> {
+  const SR = 11025; // sample rate (Hz)
+  const totalSamples = notes.reduce((s, n) => s + Math.floor(SR * n.dur), 0);
+  const dataSize = totalSamples * 2;          // 16-bit mono
+  const buf  = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buf);
+
+  // WAV header
+  const ws = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); ws(8, 'WAVE');
+  ws(12, 'fmt '); view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);  // PCM
+  view.setUint16(22, 1, true);  // mono
+  view.setUint32(24, SR, true); view.setUint32(28, SR * 2, true);
+  view.setUint16(32, 2, true);  view.setUint16(34, 16, true);
+  ws(36, 'data'); view.setUint32(40, dataSize, true);
+
+  // PCM samples — sine wave + gentle 2nd harmonic for warmth
+  let off = 44;
+  for (const { hz, dur } of notes) {
+    const n = Math.floor(SR * dur);
+    for (let i = 0; i < n; i++) {
+      const t   = i / SR;
+      const env = Math.min(1, Math.min(t / 0.03, (dur - t) / 0.1));
+      const s   = Math.round(
+        (Math.sin(2 * Math.PI * hz * t) * 0.72 +
+         Math.sin(4 * Math.PI * hz * t) * 0.14) * env * 26000,
+      );
+      view.setInt16(off, s, true);
+      off += 2;
+    }
+  }
+
+  // Convert to base64 in 3072-byte chunks (3072 % 3 === 0 → no mid-stream padding)
+  const bytes = new Uint8Array(buf);
+  const CHUNK = 3072;
+  let b64 = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    b64 += btoa(String.fromCharCode(...Array.from(bytes.subarray(i, i + CHUNK))));
+  }
+
+  // Write to device cache and return a real file:// path
+  const path = `${FileSystem.cacheDirectory}surestep_${fileId}.wav`;
+  await FileSystem.writeAsStringAsync(path, b64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return path;
+}
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientRelaxing'>;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
@@ -76,44 +135,166 @@ const Dot = ({ active }: { active: boolean }) => (
   <View style={[styles.dot, active && styles.dotActive]} />
 );
 
-// ─── Mini relaxing activities ──────────────────────────────────────────────────
+// ─── Song definitions ─────────────────────────────────────────────────────────
+type Song = { id: string; title: string; description: string; icon: string; colour: string; notes: { hz: number; dur: number }[] };
 
-// 1. Mood Check — pick how you feel, get a calming suggestion
+const SONGS: Song[] = [
+  {
+    id: 'morning-peace',
+    title: 'Morning Peace',
+    description: 'Soft C-major lullaby',
+    icon: '🌅',
+    colour: '#C4B5FD',
+    notes: [
+      { hz: 261, dur: 0.6 }, { hz: 329, dur: 0.6 }, { hz: 392, dur: 0.6 },
+      { hz: 440, dur: 0.8 }, { hz: 392, dur: 0.5 }, { hz: 329, dur: 0.5 },
+      { hz: 261, dur: 0.6 }, { hz: 294, dur: 0.6 }, { hz: 261, dur: 1.0 },
+    ],
+  },
+  {
+    id: 'ocean-breeze',
+    title: 'Ocean Breeze',
+    description: 'Gentle A-minor waves',
+    icon: '🌊',
+    colour: '#67E8F9',
+    notes: [
+      { hz: 220, dur: 0.7 }, { hz: 261, dur: 0.5 }, { hz: 329, dur: 0.7 },
+      { hz: 440, dur: 0.9 }, { hz: 392, dur: 0.5 }, { hz: 329, dur: 0.5 },
+      { hz: 261, dur: 0.7 }, { hz: 220, dur: 1.0 },
+    ],
+  },
+  {
+    id: 'lullaby',
+    title: 'Gentle Lullaby',
+    description: 'Warm G-major melody',
+    icon: '🌙',
+    colour: '#FCD34D',
+    notes: [
+      { hz: 392, dur: 0.5 }, { hz: 440, dur: 0.5 }, { hz: 493, dur: 0.6 },
+      { hz: 587, dur: 0.8 }, { hz: 493, dur: 0.5 }, { hz: 440, dur: 0.5 },
+      { hz: 392, dur: 0.6 }, { hz: 392, dur: 1.0 },
+    ],
+  },
+];
+
+// ─── 1. Listen & Feel — Music Player ─────────────────────────────────────────
 function MusicListenActivity({ onDone }: { onDone: () => void }) {
-  const moods = [
-    { id: 'happy', icon: '😊', label: 'Happy', tip: 'Wonderful! Hum your favourite tune softly.' },
-    { id: 'calm', icon: '😌', label: 'Calm', tip: 'Stay in this moment. Take a slow, deep breath.' },
-    { id: 'tired', icon: '😴', label: 'Tired', tip: 'Rest your eyes for a moment. You deserve it.' },
-    { id: 'anxious', icon: '😟', label: 'Anxious', tip: 'Breathe in for 4 counts, out for 6. You are safe.' },
-  ];
-  const [picked, setPicked] = useState<string | null>(null);
-  const chosen = moods.find((m) => m.id === picked);
-  const reset = () => setPicked(null);
-  const pick = (id: string) => {
-    setPicked(id);
-    setTimeout(onDone, 2000);
+  const [selected, setSelected] = useState<Song | null>(null);
+  const [playing,  setPlaying]  = useState(false);
+  const [loading, setLoading] = useState(false);
+  const soundRef = useRef<import('expo-av').Audio.Sound | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stop & cleanup current sound
+  const stop = useCallback(async () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (soundRef.current) {
+      try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {}
+      soundRef.current = null;
+    }
+    setPlaying(false);
+  }, []);
+
+  // Play a song — write WAV to cache then load & loop
+  const play = useCallback(async (song: Song) => {
+    await stop();
+    setLoading(true);
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+      // Write WAV to device cache (file:// path — data: URIs not supported by expo-av)
+      const uri = await writeWavFile(song.notes, song.id);
+      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+      soundRef.current = sound;
+      setPlaying(true);
+      // Loop: replay when finished
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          void sound.replayAsync();
+        }
+      });
+    } catch (e) {
+      console.warn('[MusicPlayer] play error:', e);
+      setPlaying(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [stop]);
+
+  // Cleanup on unmount
+  useEffect(() => () => { void stop(); }, [stop]);
+
+  const togglePlay = async () => {
+    if (!selected) return;
+    if (playing) { await stop(); } else { await play(selected); }
   };
+
+  const selectSong = async (song: Song) => {
+    setSelected(song);
+    await play(song);
+  };
+
+  // Animated bars (fake waveform)
+  const bars = [0.4, 0.7, 1.0, 0.8, 0.6, 0.9, 0.5, 0.7, 1.0, 0.6];
+
   return (
     <View style={styles.exContainer}>
-      <Text style={styles.gameHint}>How are you feeling right now?</Text>
-      <View style={styles.moodGrid}>
-        {moods.map((m) => (
+      <Text style={styles.gameHint}>Choose a song and relax 🎧</Text>
+
+      {/* Song selection */}
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+        {SONGS.map((s) => (
           <Pressable
-            key={m.id}
-            onPress={() => pick(m.id)}
-            style={[styles.moodBtn, picked === m.id && styles.moodBtnActive]}
+            key={s.id}
+            onPress={() => void selectSong(s)}
+            style={[
+              styles.songCard,
+              { backgroundColor: s.colour },
+              selected?.id === s.id && styles.songCardActive,
+            ]}
           >
-            <Text style={styles.moodIcon}>{m.icon}</Text>
-            <Text style={styles.moodLabel}>{m.label}</Text>
+            <Text style={{ fontSize: 22 }}>{s.icon}</Text>
+            <Text style={styles.songCardTitle}>{s.title}</Text>
+            <Text style={styles.songCardDesc}>{s.description}</Text>
           </Pressable>
         ))}
       </View>
-      {chosen && (
-        <View style={styles.tipBox}>
-          <Text style={styles.tipText}>{chosen.tip}</Text>
-        </View>
+
+      {/* Play/Pause orb */}
+      {selected && (
+        <>
+          <Pressable
+            onPress={() => void togglePlay()}
+            style={[styles.playOrb, { backgroundColor: selected.colour }]}
+          >
+            <Text style={styles.playOrbIcon}>{playing ? '⏸' : '▶'}</Text>
+          </Pressable>
+
+          {/* Waveform visualizer */}
+          <View style={styles.waveRow}>
+            {bars.map((h, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.waveBar,
+                  {
+                    height: playing ? 6 + h * 28 : 6,
+                    backgroundColor: selected.colour,
+                    opacity: playing ? (0.5 + h * 0.5) : 0.3,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          <Text style={[styles.gameHint, { marginTop: 4 }]}>
+            {playing ? `♪ Now playing: ${selected.title}` : 'Tap ▶ to play'}
+          </Text>
+        </>
       )}
-      {!picked && <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}><Text style={styles.secondaryBtnText}>Restart</Text></Pressable>}
+
+      <Pressable onPress={() => { void stop(); onDone(); }} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
+        <Text style={styles.secondaryBtnText}>Done listening ✓</Text>
+      </Pressable>
     </View>
   );
 }
@@ -421,9 +602,7 @@ export const PatientRelaxingScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.fabSlot}>
-          <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
-            <Text style={styles.fabSymbol}>!</Text>
-          </Pressable>
+          <AiFab />
         </View>
 
         <View style={styles.bottomBar}>
@@ -541,6 +720,33 @@ const styles = StyleSheet.create({
   moodLabel: { fontFamily: F.bold, color: C.textPrimary, fontSize: 11, marginTop: 4 },
   tipBox: { backgroundColor: '#EDE7F6', borderRadius: 16, padding: 12, marginTop: 8, marginHorizontal: 4 },
   tipText: { fontFamily: F.medium, fontSize: 13, color: '#5B21B6', textAlign: 'center', lineHeight: 20 },
+  // Music note bubble (Listen & Feel)
+  noteBubble: {
+    width: 130, height: 130, borderRadius: 65,
+    alignItems: 'center', justifyContent: 'center',
+    marginVertical: 10,
+    shadowColor: '#7C3AED', shadowOpacity: 0.35, shadowOffset: { width: 0, height: 6 }, shadowRadius: 16, elevation: 10,
+  },
+  noteBubbleEmoji: { fontSize: 34 },
+  noteBubbleNote:  { fontFamily: F.extraBold, fontSize: 22, color: '#fff', marginTop: 4 },
+  noteBubbleHz:    { fontFamily: F.medium, fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  // Music player (song cards + waveform)
+  songCard: {
+    flex: 1, borderRadius: 16, padding: 10, alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 4,
+  },
+  songCardActive: { borderWidth: 2.5, borderColor: '#5B21B6' },
+  songCardTitle:  { fontFamily: F.bold,    fontSize: 10, color: '#1E1B4B', marginTop: 4, textAlign: 'center' },
+  songCardDesc:   { fontFamily: F.regular, fontSize: 8,  color: '#3730A3', textAlign: 'center', marginTop: 2 },
+  playOrb: {
+    width: 72, height: 72, borderRadius: 36,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.2, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8,
+    marginBottom: 10,
+  },
+  playOrbIcon: { fontSize: 28, color: '#fff' },
+  waveRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 36, marginVertical: 6 },
+  waveBar: { width: 5, borderRadius: 3 },
   // Breathing bubble
   bubble: { alignItems: 'center', justifyContent: 'center', marginVertical: 8 },
   bubbleEmoji: { fontSize: 30 },
@@ -572,7 +778,7 @@ const styles = StyleSheet.create({
   bottomLabelActive: { fontFamily: F.bold, color: C.primary },
   bottomLabelActivityActive: { color: C.primaryText },
   activeIndicator: { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
-  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -34 },
+  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -40 },
   fab: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',

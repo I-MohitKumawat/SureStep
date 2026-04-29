@@ -18,6 +18,7 @@ import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
 import { useCaregiver } from '../context/caregiverContext';
+import { AiFab } from '../components/AiFab';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientWorkout'>;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
@@ -359,9 +360,7 @@ export const PatientWorkoutScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.fabSlot}>
-          <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
-            <Text style={styles.fabSymbol}>!</Text>
-          </Pressable>
+          <AiFab />
         </View>
 
         <View style={styles.bottomBar}>
@@ -469,7 +468,7 @@ const styles = StyleSheet.create({
   bottomLabelActive: { fontFamily: F.bold, color: C.primary },
   bottomLabelActivityActive: { color: C.primaryText },
   activeIndicator: { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
-  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -34 },
+  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -40 },
   fab: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',

@@ -18,6 +18,39 @@ import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
 import { useCaregiver } from '../context/caregiverContext';
+import { AiFab } from '../components/AiFab';
+import { Audio } from 'expo-av';
+
+// ─── Play a tone pattern (for Sound Recall) ───────────────────────────────────
+async function playPattern(pattern: { hz: number; dur: number }[]) {
+  try {
+    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+    let delay = 0;
+    for (const { hz, dur } of pattern) {
+      setTimeout(async () => {
+        try {
+          // Build single-note WAV inline
+          const SR = 22050; const n = Math.floor(SR * dur); const ds = n * 2;
+          const b = new ArrayBuffer(44 + ds); const v = new DataView(b);
+          const ws = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+          ws(0,'RIFF'); v.setUint32(4,36+ds,true); ws(8,'WAVE'); ws(12,'fmt ');
+          v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+          v.setUint32(24,SR,true); v.setUint32(28,SR*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+          ws(36,'data'); v.setUint32(40,ds,true);
+          for (let i = 0; i < n; i++) {
+            const t = i/SR; const env = Math.min(1, Math.min(t/0.02,(dur-t)/0.1));
+            v.setInt16(44+i*2, Math.round(Math.sin(2*Math.PI*hz*t)*env*28000), true);
+          }
+          const bytes = new Uint8Array(b); let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+          const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/wav;base64,${btoa(bin)}` });
+          await sound.playAsync();
+          sound.setOnPlaybackStatusUpdate((st) => { if(st.isLoaded && st.didJustFinish) sound.unloadAsync(); });
+        } catch(_) {}
+      }, delay);
+      delay += dur * 1000 + 80;
+    }
+  } catch(_) {}
+}
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientGames'>;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
@@ -89,14 +122,19 @@ function shuffle<T>(arr: T[]) {
 type MemoryTile = { id: string; value: string; revealed: boolean; matched: boolean };
 function MemoryMatchGame({ onDone }: { onDone: () => void }) {
   const [tiles, setTiles] = useState<MemoryTile[]>(() => {
-    const values = ['🍎', '🍌', '🍇', '🍎', '🍌', '🍇'];
+    const values = ['🍎', '🍌', '🍇', '🍊', '🍎', '🍌', '🍇', '🍊'];
     return shuffle(values).map((v, i) => ({ id: `t_${i}_${v}`, value: v, revealed: false, matched: false }));
   });
   const [lock, setLock] = useState(false);
+  const [moves, setMoves] = useState(0);
+
+  const matched = tiles.filter((t) => t.matched).length / 2;
+  const total   = tiles.length / 2;
 
   const reset = () => {
-    const values = ['🍎', '🍌', '🍇', '🍎', '🍌', '🍇'];
+    const values = ['🍎', '🍌', '🍇', '🍊', '🍎', '🍌', '🍇', '🍊'];
     setTiles(shuffle(values).map((v, i) => ({ id: `t_${i}_${v}`, value: v, revealed: false, matched: false })));
+    setMoves(0);
   };
 
   const onTap = (id: string) => {
@@ -107,6 +145,7 @@ function MemoryMatchGame({ onDone }: { onDone: () => void }) {
       const next = prev.map((x) => x.id === id ? { ...x, revealed: true } : x);
       const open = next.filter((x) => x.revealed && !x.matched);
       if (open.length === 2) {
+        setMoves((m) => m + 1);
         const [a, b] = open;
         if (a.value === b.value) {
           const matched = next.map((x) => (x.id === a.id || x.id === b.id) ? { ...x, matched: true } : x);
@@ -125,7 +164,11 @@ function MemoryMatchGame({ onDone }: { onDone: () => void }) {
 
   return (
     <View>
-      <Text style={styles.gameHint}>Find the matching pairs.</Text>
+      <View style={styles.scoreBadgeRow}>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>🃏 Pairs: {matched}/{total}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>👆 Moves: {moves}</Text></View>
+      </View>
+      <Text style={styles.gameHint}>Find all matching pairs!</Text>
       <View style={styles.grid}>
         {tiles.map((t) => (
           <Pressable
@@ -151,15 +194,14 @@ function MemoryMatchGame({ onDone }: { onDone: () => void }) {
 function PicturePuzzleGame({ onDone }: { onDone: () => void }) {
   const [order, setOrder] = useState<number[]>(() => shuffle([1, 2, 3, 4]));
   const [picked, setPicked] = useState<number | null>(null);
+  const [moves, setMoves]   = useState(0);
 
-  const reset = () => {
-    setOrder(shuffle([1, 2, 3, 4]));
-    setPicked(null);
-  };
+  const reset = () => { setOrder(shuffle([1, 2, 3, 4])); setPicked(null); setMoves(0); };
 
   const tap = (idx: number) => {
     if (picked === null) { setPicked(idx); return; }
-    if (picked === idx) { setPicked(null); return; }
+    if (picked === idx)  { setPicked(null); return; }
+    setMoves((m) => m + 1);
     setOrder((prev) => {
       const next = [...prev];
       [next[picked], next[idx]] = [next[idx], next[picked]];
@@ -169,9 +211,14 @@ function PicturePuzzleGame({ onDone }: { onDone: () => void }) {
     setPicked(null);
   };
 
+  const isSolved = order.join(',') === '1,2,3,4';
   return (
     <View>
-      <Text style={styles.gameHint}>Tap two tiles to swap. Make 1 → 4.</Text>
+      <View style={styles.scoreBadgeRow}>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{isSolved ? '✅ Solved!' : '🔢 Arrange 1→4'}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>🔄 Swaps: {moves}</Text></View>
+      </View>
+      <Text style={styles.gameHint}>Tap two tiles to swap. Arrange in order.</Text>
       <View style={styles.puzzleGrid}>
         {order.map((n, idx) => (
           <Pressable
@@ -214,7 +261,11 @@ function WordFinderGame({ onDone }: { onDone: () => void }) {
 
   return (
     <View>
-      <Text style={styles.gameHint}>Tap letters to spell: <Text style={{ color: C.primary }}>{target}</Text></Text>
+      <View style={styles.scoreBadgeRow}>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>📝 {progress.length}/{target.length} letters</Text></View>
+        {progress === target && <View style={[styles.scoreBadge, { backgroundColor: '#D1FAE5' }]}><Text style={[styles.scoreBadgeText, { color: '#065F46' }]}>🎉 Correct!</Text></View>}
+      </View>
+      <Text style={styles.gameHint}>Tap letters in order to spell: <Text style={{ color: C.primary }}>{target}</Text></Text>
       <View style={styles.lettersRow}>
         {letters.map((ch) => (
           <Pressable key={ch} onPress={() => tap(ch)} style={({ pressed }) => [styles.letterBtn, pressed && { opacity: 0.85 }]}>
@@ -256,21 +307,24 @@ function ColorSortGame({ onDone }: { onDone: () => void }) {
   };
 
   const current = items[idx];
+  const done = idx >= items.length;
   return (
     <View>
-      <Text style={styles.gameHint}>Sort the color: choose the matching box.</Text>
+      <View style={styles.scoreBadgeRow}>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>⭐ Score: {score}/{items.length}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{done ? 'Done! 🎉' : `Q ${idx + 1}/${items.length}`}</Text></View>
+      </View>
+      <Text style={styles.gameHint}>What colour is the dot?</Text>
       <View style={styles.sortItem}>
-        <View style={[styles.colorDot, { backgroundColor: current?.color ?? C.borderMid }]} />
-        <Text style={styles.sortLabel}>What color is this?</Text>
+        <View style={[styles.colorDot, { backgroundColor: current?.color ?? C.borderMid, width: 44, height: 44, borderRadius: 22 }]} />
       </View>
       <View style={styles.sortRow}>
         {['Red', 'Green', 'Blue'].map((l) => (
-          <Pressable key={l} onPress={() => pick(l)} style={({ pressed }) => [styles.sortBtn, pressed && { opacity: 0.85 }]}>
+          <Pressable key={l} onPress={() => pick(l)} disabled={done} style={({ pressed }) => [styles.sortBtn, pressed && { opacity: 0.85 }]}>
             <Text style={styles.sortBtnText}>{l}</Text>
           </Pressable>
         ))}
       </View>
-      <Text style={styles.sortMeta}>Score: {score}</Text>
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
       </Pressable>
@@ -278,33 +332,67 @@ function ColorSortGame({ onDone }: { onDone: () => void }) {
   );
 }
 
-function SoundRecallGame({ onDone }: { onDone: () => void }) {
-  const [done, setDone] = useState(false);
-  const reset = () => setDone(false);
+// ─── Sound patterns for each clue ────────────────────────────────────────────
+const SOUND_PATTERNS: Record<string, { hz: number; dur: number }[]> = {
+  doorbell: [{ hz: 587, dur: 0.25 }, { hz: 392, dur: 0.35 }],          // ding-dong
+  phone:    [{ hz: 659, dur: 0.1 }, { hz: 659, dur: 0.1 }, { hz: 659, dur: 0.1 }, { hz: 659, dur: 0.1 }], // ring ring
+  alarm:    [{ hz: 880, dur: 0.15 }, { hz: 440, dur: 0.15 }, { hz: 880, dur: 0.15 }, { hz: 440, dur: 0.15 }], // wee-woo
+};
 
-  const choose = (id: string) => {
-    if (id === 'doorbell') {
-      setDone(true);
-      setTimeout(onDone, 250);
-    } else {
-      setDone(false);
-    }
+const RECALL_ROUNDS = [
+  { clue: 'Doorbell', answer: 'doorbell', sound: 'doorbell', choices: [{ id: 'doorbell', icon: '🔔', label: 'Doorbell' }, { id: 'phone', icon: '📞', label: 'Phone' }, { id: 'alarm', icon: '⏰', label: 'Alarm' }] },
+  { clue: 'Phone ringing', answer: 'phone', sound: 'phone', choices: [{ id: 'doorbell', icon: '🔔', label: 'Doorbell' }, { id: 'phone', icon: '📞', label: 'Phone' }, { id: 'alarm', icon: '⏰', label: 'Alarm' }] },
+  { clue: 'Alarm clock',  answer: 'alarm', sound: 'alarm', choices: [{ id: 'doorbell', icon: '🔔', label: 'Doorbell' }, { id: 'phone', icon: '📞', label: 'Phone' }, { id: 'alarm', icon: '⏰', label: 'Alarm' }] },
+];
+
+function SoundRecallGame({ onDone }: { onDone: () => void }) {
+  const [round, setRound]       = useState(0);
+  const [score, setScore]       = useState(0);
+  const [feedback, setFeedback] = useState<null | 'correct' | 'wrong'>(null);
+
+  const reset = () => { setRound(0); setScore(0); setFeedback(null); };
+
+  const playClue = () => {
+    const r = RECALL_ROUNDS[round];
+    if (r) void playPattern(SOUND_PATTERNS[r.sound] ?? []);
   };
 
+  const choose = (id: string) => {
+    if (feedback) return;
+    const correct = RECALL_ROUNDS[round]?.answer === id;
+    setScore((s) => s + (correct ? 1 : 0));
+    setFeedback(correct ? 'correct' : 'wrong');
+    setTimeout(() => {
+      const nextRound = round + 1;
+      setFeedback(null);
+      if (nextRound >= RECALL_ROUNDS.length) { setTimeout(onDone, 200); return; }
+      setRound(nextRound);
+    }, 700);
+  };
+
+  const current = RECALL_ROUNDS[round];
   return (
     <View>
-      <Text style={styles.gameHint}>Which picture matches: <Text style={{ color: C.primary }}>Doorbell</Text>?</Text>
-      <View style={styles.choiceRow}>
-        <Pressable onPress={() => choose('doorbell')} style={({ pressed }) => [styles.choiceBtn, pressed && { opacity: 0.85 }]}>
-          <Text style={styles.choiceIcon}>🔔</Text>
-          <Text style={styles.choiceText}>Doorbell</Text>
-        </Pressable>
-        <Pressable onPress={() => choose('phone')} style={({ pressed }) => [styles.choiceBtn, pressed && { opacity: 0.85 }]}>
-          <Text style={styles.choiceIcon}>📞</Text>
-          <Text style={styles.choiceText}>Phone</Text>
-        </Pressable>
+      <View style={styles.scoreBadgeRow}>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>⭐ Score: {score}/{RECALL_ROUNDS.length}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>Round {round + 1}/{RECALL_ROUNDS.length}</Text></View>
       </View>
-      {done ? <Text style={styles.successText}>Nice job!</Text> : null}
+      <Text style={styles.gameHint}>Listen, then pick the matching picture.</Text>
+      {/* Play sound button */}
+      <Pressable onPress={playClue} style={({ pressed }) => [styles.listenBtn, pressed && { opacity: 0.85 }]}>
+        <Text style={styles.listenBtnIcon}>🔊</Text>
+        <Text style={styles.listenBtnText}>Play: {current?.clue}</Text>
+      </Pressable>
+      <View style={styles.choiceRow}>
+        {current?.choices.map((c) => (
+          <Pressable key={c.id} onPress={() => choose(c.id)} style={({ pressed }) => [styles.choiceBtn, pressed && { opacity: 0.85 }]}>
+            <Text style={styles.choiceIcon}>{c.icon}</Text>
+            <Text style={styles.choiceText}>{c.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {feedback === 'correct' && <Text style={styles.successText}>✅ Correct!</Text>}
+      {feedback === 'wrong'   && <Text style={[styles.successText, { color: '#EF4444' }]}>❌ Try again!</Text>}
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
       </Pressable>
@@ -454,9 +542,7 @@ export const PatientGamesScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.fabSlot}>
-          <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
-            <Text style={styles.fabSymbol}>!</Text>
-          </Pressable>
+          <AiFab />
         </View>
 
         <View style={styles.bottomBar}>
@@ -592,6 +678,11 @@ const styles = StyleSheet.create({
   modalTitle: { fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, textAlign: 'center', paddingHorizontal: 18 },
   gameArea: { paddingHorizontal: 18, paddingBottom: 18 },
 
+  // Score badges
+  scoreBadgeRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 10 },
+  scoreBadge: { backgroundColor: C.primaryLight, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  scoreBadgeText: { fontFamily: F.bold, fontSize: 12, color: C.primaryDark },
+
   // Game shared UI
   gameHint: { fontFamily: F.medium, color: C.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 12 },
   secondaryBtn: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 14, marginTop: 12 },
@@ -638,17 +729,25 @@ const styles = StyleSheet.create({
   // Color sort
   sortItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12 },
   colorDot: { width: 22, height: 22, borderRadius: 11 },
-  sortLabel: { fontFamily: F.bold, color: C.textPrimary, fontSize: 14 },
   sortRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   sortBtn: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
   sortBtnText: { fontFamily: F.bold, color: C.primaryDark, fontSize: 13 },
-  sortMeta: { textAlign: 'center', fontFamily: F.medium, color: C.textMuted, marginTop: 10 },
 
   // Sound recall
-  choiceRow: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
-  choiceBtn: { width: 140, borderRadius: 18, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, paddingVertical: 12, alignItems: 'center' },
+  choiceRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
+  choiceBtn: { width: 88, borderRadius: 18, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, paddingVertical: 12, alignItems: 'center' },
   choiceIcon: { fontSize: 26 },
   choiceText: { marginTop: 6, fontFamily: F.bold, color: C.textPrimary, fontSize: 13 },
+
+  // Sound Recall listen button
+  listenBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: C.primaryLight, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 18,
+    marginBottom: 12, alignSelf: 'center',
+    borderWidth: 1.5, borderColor: C.primary,
+  },
+  listenBtnIcon: { fontSize: 20 },
+  listenBtnText: { fontFamily: F.bold, fontSize: 14, color: C.primaryDark },
 
   // Footer (copied from PatientActivitiesScreen)
   bottomBarBand: {
@@ -703,7 +802,7 @@ const styles = StyleSheet.create({
     width: 72,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    marginTop: -34,
+    marginTop: -40,
   },
   fab: {
     width: 52, height: 52, borderRadius: 26,
