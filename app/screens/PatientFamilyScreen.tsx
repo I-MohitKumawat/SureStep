@@ -8,6 +8,7 @@ import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
 import { useCaregiver } from '../context/caregiverContext';
+import { AiFab } from '../components/AiFab';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientFamily'>;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
@@ -146,9 +147,7 @@ export const PatientFamilyScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.fabSlot}>
-          <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
-            <Text style={styles.fabSymbol}>!</Text>
-          </Pressable>
+          <AiFab />
         </View>
 
         <View style={styles.bottomBar}>
@@ -250,28 +249,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: C.primary,
   },
-  fabSlot: {
-    width: 72,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginTop: -34,
-  },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: C.surface,
-    shadowColor: C.primary,
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  fabPressed: { transform: [{ scale: 0.95 }] },
-  fabSymbol: { fontFamily: F.extraBold, color: C.primaryText, fontSize: 22 },
+  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -40 },
   pressed: { opacity: 0.8 },
 });
