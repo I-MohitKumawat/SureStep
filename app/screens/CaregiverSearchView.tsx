@@ -20,7 +20,6 @@ import { F } from '../theme/fonts';
 import { supabase } from '../utils/supabaseClient';
 
 // ─── Data shape ───────────────────────────────────────────────────────────────
-
 export type CaregiverListing = {
   id: string;
   name: string;
@@ -50,7 +49,6 @@ function Stars({ rating }: { rating: number }) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-
 type Props = {
   onSelect: (c: CaregiverListing) => void;
 };

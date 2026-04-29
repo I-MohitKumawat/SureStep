@@ -21,6 +21,7 @@ import type { CaregiverListing } from './CaregiverSearchView';
 import { CaregiverDetailView } from './CaregiverDetailView';
 import { useCaregiver } from '../context/caregiverContext';
 import { useAuth } from '../../packages/core/auth/AuthContext';
+import { AiFab } from '../components/AiFab';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 type ActionState = 'done' | 'missed' | 'unsure' | null;
@@ -136,7 +137,7 @@ const CaregiverProfileModal = ({
             <Text style={styles.profileAvatarText}>{caregiver.emoji}</Text>
           </View>
 
-          <Text style={styles.caregiverTagline}>Your confirmed caregiver</Text>
+          <Text style={styles.caregiverTagline}>Your requested caregiver</Text>
 
           <Text style={styles.profileName}>{caregiver.name}</Text>
           <Text style={styles.profileSubtitle}>{caregiver.specialty}</Text>
@@ -500,33 +501,34 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
             <View>
-              <Text style={styles.greetingOverline}>ACTIVITY</Text>
-              <Text style={[styles.greetingName, { fontSize: 26 }]}>Your Progress</Text>
+              <Text style={styles.greetingOverline}>ACTIVITIES</Text>
+              <Text style={[styles.greetingName, { fontSize: 26 }]}>What to do today?</Text>
             </View>
           </View>
-          <View style={styles.mainRoutineCard}>
-            <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>TODAY'S SUMMARY</Text>
-            <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.textSecondary, lineHeight: 22 }}>
-              {patientTasks.length === 0
-                ? 'No tasks assigned yet. Your caregiver will set up your routine.'
-                : `${patientTasks.filter(t => t.state === 'done').length} of ${patientTasks.length} tasks completed today.`
-              }
-            </Text>
-          </View>
-          {patientTasks.length > 0 && (
-            <View style={styles.mainRoutineCard}>
-              <Text style={[styles.sectionTitle, { marginBottom: 12, fontSize: 14, letterSpacing: 0.6 }]}>TASKS</Text>
-              {patientTasks.map((t) => (
-                <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 }}>
-                  <Text style={{ fontSize: 18 }}>{t.state === 'done' ? '✅' : t.state === 'missed' ? '❌' : '⏳'}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.textPrimary }}>{t.title}</Text>
-                    <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.textSecondary }}>{t.time}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
+          {([
+            { id: 'games',    icon: '🧩', title: 'Games',    subtitle: 'Fun puzzles & memory games', color: '#FFF3E0', screen: 'PatientGames' },
+            { id: 'workout',  icon: '🏋️', title: 'Workout',  subtitle: 'Gentle exercises for you',   color: '#E8F5E9', screen: 'PatientWorkout' },
+            { id: 'relaxing', icon: '🎵', title: 'Relaxing', subtitle: 'Calm your mind & body',      color: '#EDE7F6', screen: 'PatientRelaxing' },
+          ] as const).map((item) => (
+            <Pressable
+              key={item.id}
+              onPress={() => navigation.navigate(item.screen as any)}
+              style={({ pressed }) => [
+                styles.mainRoutineCard,
+                { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: item.color, borderColor: 'transparent', marginBottom: 12 },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 28 }}>{item.icon}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.extraBold, fontSize: 20, color: C.textPrimary }}>{item.title}</Text>
+                <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 2 }}>{item.subtitle}</Text>
+              </View>
+              <Text style={{ fontSize: 20, color: C.textMuted }}>›</Text>
+            </Pressable>
+          ))}
         </ScrollView>
 
       ) : activeTab === 'Search' && confirmedCaregiver ? (
@@ -688,9 +690,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* Center FAB slot */}
         <View style={styles.fabSlot}>
-          <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
-            <Text style={styles.fabSymbol}>!</Text>
-          </Pressable>
+          <AiFab />
         </View>
 
         {/* Right tabs */}
@@ -984,7 +984,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: 0,
-    marginTop: -34,
+    marginTop: -40,
   },
   fab: {
     width: 52, height: 52, borderRadius: 26,

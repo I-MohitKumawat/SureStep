@@ -12,19 +12,17 @@ import { F } from '../theme/fonts';
 import {
   IconDashboard,
   IconBell,
-  IconActivity,
   IconProfile,
 } from '../assets/icons/NavIcons';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverManage'>;
-type CaregiverTab = 'Home' | 'Alerts' | 'Manage' | 'Profile';
+type CaregiverTab = 'Home' | 'Alerts' | 'Profile';
 
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
-  Home:     ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Alerts:   ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Manage:   ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Profile:  ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Home:    ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Alerts:  ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Profile: ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
 const EditActionIcon = () => (
@@ -55,8 +53,11 @@ const DeleteActionIcon = () => (
   </Svg>
 );
 
-export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState<CaregiverTab>('Manage');
+export const CaregiverManageScreen: React.FC<Props> = ({ navigation, route }) => {
+  const [activeTab, setActiveTab] = useState<CaregiverTab>('Home');
+  const selectedPatientPhone = route.params?.patientPhone;
+  const selectedPatientName  = route.params?.patientName;
+
   // Unique channel ID per mount — prevents re-subscription errors on navigation
   const channelId = React.useRef(`manage_tasks_${Date.now()}`).current;
 
@@ -276,7 +277,7 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
       {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
       <View style={styles.bottomBarBand}>
         <View style={styles.bottomBar}>
-          {(['Home', 'Alerts', 'Manage', 'Profile'] as CaregiverTab[]).map((tab) => {
+          {(['Home', 'Alerts', 'Profile'] as CaregiverTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
@@ -284,6 +285,13 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
                 key={tab}
                 onPress={() => {
                   setActiveTab(tab);
+                  if (tab === 'Alerts' && selectedPatientPhone) {
+                    navigation.navigate('CaregiverDashboard', {
+                      patientPhone: selectedPatientPhone,
+                      patientName: selectedPatientName ?? 'Patient',
+                    });
+                    return;
+                  }
                   if (tab === 'Home') navigation.navigate('CaregiverPatients');
                 }}
                 style={styles.bottomTab}
@@ -292,7 +300,7 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
                   <IconComponent active={isActive} />
                 </View>
                 <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab === 'Manage' ? 'manage' : tab}
+                  {tab}
                 </Text>
                 {isActive && <View style={styles.activeIndicator} />}
               </Pressable>

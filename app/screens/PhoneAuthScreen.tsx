@@ -81,7 +81,6 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-
         <View style={styles.logoBox}>
           <Text style={styles.logoIcon}>👣</Text>
         </View>
@@ -135,10 +134,6 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
             }
           </Pressable>
 
-          <Text style={styles.hint}>
-            New number? You'll be prompted to choose a role.{'\n'}
-            Existing number? You'll be logged in directly.
-          </Text>
         </View>
       </ScrollView>
     </ScreenContainer>

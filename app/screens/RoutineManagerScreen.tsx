@@ -44,6 +44,7 @@ export const RoutineManagerScreen: React.FC<Props> = ({ route, navigation }) => 
   }, [patientId]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <ScreenContainer>
       <View style={styles.headerRow}>

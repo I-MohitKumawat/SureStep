@@ -9,6 +9,7 @@ import { F } from '../theme/fonts';
 import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../assets/icons/NavIcons';
 import { useCaregiver } from '../context/caregiverContext';
 import { ActivitiesIllustration } from '../assets/icons/ActivitiesIllustration';
+import { AiFab } from '../components/AiFab';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientActivities'>;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
@@ -49,6 +50,8 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
               key={item.id}
               onPress={() => {
                 if (item.id === 'games') navigation.navigate('PatientGames');
+                if (item.id === 'workout') navigation.navigate('PatientWorkout');
+                if (item.id === 'relaxing') navigation.navigate('PatientRelaxing');
               }}
               style={({ pressed }) => [styles.activityCard, pressed && styles.pressed]}
             >
@@ -82,9 +85,7 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.fabSlot}>
-          <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
-            <Text style={styles.fabSymbol}>!</Text>
-          </Pressable>
+          <AiFab />
         </View>
 
         <View style={styles.bottomBar}>
@@ -216,15 +217,7 @@ const styles = StyleSheet.create({
     width: 72,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    marginTop: -34,
+    marginTop: -40,
   },
-  fab: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: C.primary,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: C.primary, shadowOpacity: 0.38, shadowOffset: { width: 0, height: 6 }, shadowRadius: 12, elevation: 10,
-    borderWidth: 3, borderColor: C.surface,
-  },
-  fabPressed: { transform: [{ scale: 0.95 }] },
-  fabSymbol: { fontFamily: F.extraBold, color: C.primaryText, fontSize: 22 },
+  fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: C.primary },
 });

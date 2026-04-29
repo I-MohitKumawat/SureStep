@@ -85,6 +85,7 @@ export default function ProfileSetup({ route }: Props) {
     }
   };
 
+
   const nameInvalid     = showErrors && !formData.name.trim();
   const dobInvalid      = showErrors && !formData.dob.trim();
   const genderInvalid   = showErrors && !formData.gender.trim();

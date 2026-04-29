@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   bottomLabelActive: { fontFamily: F.bold, color: C.primary },
   bottomLabelFamilyActive: { color: C.primaryText },
   activeIndicator: { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
-  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -34 },
+  fabSlot: { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -40 },
   fab: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center',
