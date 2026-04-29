@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
+import { supabase } from '../utils/supabaseClient';
+import { useAuth } from '../../packages/core/auth/AuthContext';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import {
@@ -55,25 +57,67 @@ const DeleteActionIcon = () => (
 
 export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<CaregiverTab>('Manage');
+  // Unique channel ID per mount — prevents re-subscription errors on navigation
+  const channelId = React.useRef(`manage_tasks_${Date.now()}`).current;
+
+  // ── DB-backed task type ────────────────────────────────────────────────
   type RoutineItem = {
     id: string;
     icon: string;
     title: string;
     time: string;
     meta: string;
-    status?: 'pending';
+    status?: 'pending' | 'done' | 'missed' | 'unsure';
+    patientId: string;
   };
 
-  const [items, setItems] = useState<RoutineItem[]>([
-    { id: 'breakfast', icon: '🍞', title: 'Breakfast', time: '07:00', meta: 'Oatmeal with fresh berries' },
-    { id: 'walk', icon: '🚶', title: 'Walk', time: '07:00', meta: '15 mins around the garden' },
-    { id: 'meds', icon: '💊', title: 'Meds', time: '08:00', meta: 'Blood pressure & Vitamins', status: 'pending' },
-  ]);
+  const { auth } = useAuth();
+  // Caregiver sees their own tasks OR their patient's — here we show the
+  // caregiver's own patient's tasks. For a simple first-pass, load all tasks
+  // belonging to the currently-logged-in phone (works for patient role too).
+  const caregiverPhone = auth.status === 'authenticated' ? auth.user.id : null;
+
+  const [items,         setItems]         = useState<RoutineItem[]>([]);
+  const [loading,       setLoading]       = useState(true);
   const [isFormVisible, setIsFormVisible] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [titleInput, setTitleInput] = useState('');
-  const [timeInput, setTimeInput] = useState('');
-  const [metaInput, setMetaInput] = useState('');
+  const [editingId,     setEditingId]     = useState<string | null>(null);
+  const [titleInput,    setTitleInput]    = useState('');
+  const [timeInput,     setTimeInput]     = useState('');
+  const [metaInput,     setMetaInput]     = useState('');
+
+  // ── Load tasks from Supabase ───────────────────────────────────────────
+  const loadItems = useCallback(async () => {
+    if (!caregiverPhone) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('time', { ascending: true });
+
+    if (!error && data) {
+      setItems(data.map((t: any) => ({
+        id:       t.id,
+        title:    t.title,
+        time:     t.time,
+        meta:     t.description || '',
+        status:   t.status,
+        icon:     pickIconForTitle(t.title),
+        patientId: t.patient_id,
+      })));
+    }
+    setLoading(false);
+  }, [caregiverPhone]);
+
+  useEffect(() => { void loadItems(); }, [loadItems]);
+
+  // ── Realtime subscription ──────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel(channelId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void loadItems())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [loadItems, channelId]);
 
   const clearForm = () => {
     setTitleInput('');
@@ -99,56 +143,61 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
   const pickIconForTitle = (title: string) => {
     const key = title.toLowerCase();
     if (key.includes('walk')) return '🚶';
-    if (key.includes('med')) return '💊';
+    if (key.includes('med'))  return '💊';
     if (key.includes('break')) return '🍞';
-    return '📝';
+    return '📋';
   };
 
-  const saveRoutine = () => {
+  const saveRoutine = async () => {
     const cleanTitle = titleInput.trim();
-    const cleanTime = timeInput.trim();
-    const cleanMeta = metaInput.trim();
-    if (!cleanTitle || !cleanTime || !cleanMeta) return;
+    const cleanTime  = timeInput.trim();
+    const cleanMeta  = metaInput.trim();
+    if (!cleanTitle || !cleanTime) return;
 
     if (editingId) {
-      setItems((prev) =>
-        prev.map((item) =>
+      // Update in Supabase
+      const { error } = await supabase
+        .from('tasks')
+        .update({ title: cleanTitle, time: cleanTime, description: cleanMeta, updated_at: new Date().toISOString() })
+        .eq('id', editingId);
+      if (!error) {
+        // Optimistic update
+        setItems((prev) => prev.map((item) =>
           item.id === editingId
-            ? {
-                ...item,
-                title: cleanTitle,
-                time: cleanTime,
-                meta: cleanMeta,
-                icon: pickIconForTitle(cleanTitle),
-              }
-            : item
-        )
-      );
+            ? { ...item, title: cleanTitle, time: cleanTime, meta: cleanMeta, icon: pickIconForTitle(cleanTitle) }
+            : item,
+        ));
+      }
     } else {
-      const id = `${Date.now()}`;
-      setItems((prev) => [
-        ...prev,
-        {
-          id,
-          title: cleanTitle,
-          time: cleanTime,
-          meta: cleanMeta,
-          icon: pickIconForTitle(cleanTitle),
-          status: 'pending',
-        },
-      ]);
+      // Insert new task — use first patient linked to this caregiver, or caregiver's own phone
+      const newTask = {
+        id:          `task_${Date.now()}`,
+        patient_id:  caregiverPhone ?? 'unknown',
+        routine_id:  null,
+        title:       cleanTitle,
+        time:        cleanTime,
+        description: cleanMeta,
+        status:      'pending',
+      };
+      const { data, error } = await supabase.from('tasks').insert(newTask).select().single();
+      if (!error && data) {
+        setItems((prev) => [...prev, {
+          id: data.id, title: data.title, time: data.time,
+          meta: data.description || '', status: data.status,
+          icon: pickIconForTitle(data.title), patientId: data.patient_id,
+        }]);
+      }
     }
 
     setIsFormVisible(false);
     clearForm();
   };
 
-  const deleteRoutine = (id: string) => {
+  const deleteRoutine = async (id: string) => {
+    // Optimistic remove
     setItems((prev) => prev.filter((item) => item.id !== id));
-    if (editingId === id) {
-      setIsFormVisible(false);
-      clearForm();
-    }
+    await supabase.from('tasks').delete().eq('id', id);
+    if (editingId === id) { setIsFormVisible(false); clearForm(); }
   };
 
   return (
@@ -161,6 +210,10 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.addText}>Add Routine</Text>
           </Pressable>
         </View>
+
+        {loading && (
+          <ActivityIndicator color={C.primary} style={{ marginVertical: 16 }} />
+        )}
 
         {isFormVisible ? (
           <View style={styles.formCard}>

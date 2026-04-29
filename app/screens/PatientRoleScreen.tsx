@@ -20,8 +20,7 @@ import { CaregiverSearchView } from './CaregiverSearchView';
 import type { CaregiverListing } from './CaregiverSearchView';
 import { CaregiverDetailView } from './CaregiverDetailView';
 import { useCaregiver } from '../context/caregiverContext';
-import { supabase } from '../utils/supabaseClient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../packages/core/auth/AuthContext';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 type ActionState = 'done' | 'missed' | 'unsure' | null;
@@ -352,11 +351,12 @@ const CompletedTasksModal = ({
 );
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
+export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
   const { profile } = useUserProfile();
   const { tasks, updateTaskStatus } = useTasks();
-  const [activeTab, setActiveTab] = useState<BottomTab>('Home');
-  const [dbName, setDbName] = useState<string | null>(null);
+  // Accept initialTab from route params (from Games/Activities/Family screens)
+  const initialTab = (route.params as any)?.initialTab as BottomTab | undefined;
+  const [activeTab, setActiveTab] = useState<BottomTab>(initialTab ?? 'Home');
   const [currentDateTime] = useState(new Date());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
@@ -367,25 +367,21 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
   // ── Caregiver search sub-view state ─────────────────────────────────────
   const [searchSubView, setSearchSubView] = useState<'list' | 'detail' | null>(null);
   const [viewingCaregiver, setViewingCaregiver] = useState<CaregiverListing | null>(null);
-  const { confirmedCaregiver, setConfirmedCaregiver } = useCaregiver();
+  const { confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver } = useCaregiver();
 
-  // Each patient's tasks are scoped by their phone number (the real unique ID)
-  const [patientId, setPatientId] = useState<string>('2222222222'); // sensible default while loading
+  // Patient phone comes from auth — no AsyncStorage needed
+  const { auth } = useAuth();
+  const patientId = auth.status === 'authenticated' ? auth.user.id : null;
 
-  // Load logged-in patient's phone on mount
-  React.useEffect(() => {
-    AsyncStorage.getItem('current_phone').then((p) => {
-      if (p) setPatientId(p);
-    });
-  }, []);
-
-  // Raw tasks from context, in their stored order (which is time-ordered)
+  // Raw tasks from context, filtered strictly to this patient
   const patientTasks = useMemo(
-    () => tasks.filter((t) => t.patientId === patientId).map((t) => ({
-      id: t.id, title: t.title, time: t.time,
-      state: t.status === 'pending' ? null : (t.status as ActionState),
-    })),
-    [tasks],
+    () => patientId
+      ? tasks.filter((t) => t.patientId === patientId).map((t) => ({
+          id: t.id, title: t.title, time: t.time,
+          state: t.status === 'pending' ? null : (t.status as ActionState),
+        }))
+      : [],
+    [tasks, patientId],
   );
 
   const formattedDate = currentDateTime.toLocaleDateString('en-US', {
@@ -399,45 +395,14 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
     return 'GOOD EVENING';
   };
 
-  // Supabase name always wins over stale local profile
-  const displayName = dbName ?? profile?.fullName ?? 'You';
+  // Name comes from Supabase via userProfileContext
+  const displayName = profile?.fullName ?? 'You';
 
-  // Load real patient name from Supabase + restore/validate confirmed caregiver
+  // Load confirmed caregiver from Supabase on mount (via caregiverContext)
   React.useEffect(() => {
-    async function fetchAndValidate() {
-      const phone = await AsyncStorage.getItem('current_phone');
-      if (!phone) return;
-
-      // 1. Always prefer Supabase name
-      const { data: user } = await supabase
-        .from('mock_users').select('full_name').eq('phone_number', phone).single();
-      if (user?.full_name) setDbName(user.full_name.split(' ')[0]);
-
-      // 2. Restore + validate confirmed caregiver from AsyncStorage against DB
-      const stored = await AsyncStorage.getItem(`surestep_confirmed_caregiver_${phone}`);
-      if (stored) {
-        try {
-          const cg = JSON.parse(stored);
-          const { data: link } = await supabase
-            .from('patient_caregiver_links')
-            .select('caregiver_phone')
-            .eq('patient_phone', phone)
-            .eq('caregiver_phone', cg.id)
-            .single();
-          if (link) {
-            // Valid link exists — restore to context (in-memory auth resets on every login)
-            setConfirmedCaregiver(cg);
-          } else {
-            // Link was removed (e.g. by start:clear) — wipe stale local state
-            await AsyncStorage.removeItem(`surestep_confirmed_caregiver_${phone}`);
-            setConfirmedCaregiver(null);
-          }
-        } catch { /* ignore parse errors */ }
-      }
-    }
-    fetchAndValidate();
+    if (patientId) void reloadCaregiver(patientId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [patientId]);
 
   const nextActionableIndex = useMemo(() => {
     const len = patientTasks.length;
@@ -498,7 +463,73 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      {activeTab === 'Search' && confirmedCaregiver ? (
+
+      {/* ── Family tab ──────────────────────────────────────────────────── */}
+      {activeTab === 'Family' ? (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerCard}>
+            <View>
+              <Text style={styles.greetingOverline}>FAMILY</Text>
+              <Text style={[styles.greetingName, { fontSize: 26 }]}>My Care Team</Text>
+            </View>
+          </View>
+          {confirmedCaregiver ? (
+            <View style={styles.mainRoutineCard}>
+              <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>YOUR CAREGIVER</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <Text style={{ fontSize: 36 }}>{confirmedCaregiver.emoji || '🧑‍⚕️'}</Text>
+                <View>
+                  <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
+                  <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={[styles.mainRoutineCard, { alignItems: 'center', paddingVertical: 32 }]}>
+              <Text style={{ fontSize: 40, marginBottom: 12 }}>👨‍👩‍👧</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textPrimary, textAlign: 'center', marginBottom: 6 }}>No caregiver linked yet</Text>
+              <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, textAlign: 'center' }}>
+                Go to the Search tab to find and link a caregiver.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+      /* ── Activity tab ────────────────────────────────────────────────── */
+      ) : activeTab === 'Activity' ? (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerCard}>
+            <View>
+              <Text style={styles.greetingOverline}>ACTIVITY</Text>
+              <Text style={[styles.greetingName, { fontSize: 26 }]}>Your Progress</Text>
+            </View>
+          </View>
+          <View style={styles.mainRoutineCard}>
+            <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>TODAY'S SUMMARY</Text>
+            <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.textSecondary, lineHeight: 22 }}>
+              {patientTasks.length === 0
+                ? 'No tasks assigned yet. Your caregiver will set up your routine.'
+                : `${patientTasks.filter(t => t.state === 'done').length} of ${patientTasks.length} tasks completed today.`
+              }
+            </Text>
+          </View>
+          {patientTasks.length > 0 && (
+            <View style={styles.mainRoutineCard}>
+              <Text style={[styles.sectionTitle, { marginBottom: 12, fontSize: 14, letterSpacing: 0.6 }]}>TASKS</Text>
+              {patientTasks.map((t) => (
+                <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 }}>
+                  <Text style={{ fontSize: 18 }}>{t.state === 'done' ? '✅' : t.state === 'missed' ? '❌' : '⏳'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.textPrimary }}>{t.title}</Text>
+                    <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.textSecondary }}>{t.time}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+      ) : activeTab === 'Search' && confirmedCaregiver ? (
         // ── Confirmed Caregiver Profile Card ─────────────────────────────────
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
@@ -553,15 +584,8 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
             }
           }}
           onConfirm={async (c) => {
-            setConfirmedCaregiver(c);
-            // Write the link to Supabase so the caregiver sees this patient
-            const phone = await AsyncStorage.getItem('current_phone');
-            if (phone) {
-              await supabase.from('patient_caregiver_links').upsert({
-                patient_phone: phone,
-                caregiver_phone: c.id,
-              });
-            }
+            // Pass patient name so it's written to Supabase at confirm time
+            await setConfirmedCaregiver(c, patientId ?? '', displayName);
             // Dismiss entire search flow — return to Home
             setActiveTab('Home');
             setSearchSubView(null);
@@ -649,10 +673,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
             return (
               <Pressable
                 key={tab}
-                onPress={() => {
-                  setActiveTab(tab);
-                  if (tab === 'Family') navigation.navigate('PatientFamily');
-                }}
+                onPress={() => setActiveTab(tab)}  // inline — no navigation.navigate()
                 style={styles.bottomTab}
               >
                 <View style={styles.bottomTabIconWrap}>
@@ -688,8 +709,8 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation }) => {
               <Pressable
                 key={tab}
                 onPress={() => {
+                  // All tabs render inline — no navigation.navigate()
                   setActiveTab(tab);
-                  if (tab === 'Activity') navigation.navigate('PatientActivities');
                   if (tab === 'Search') {
                     if (confirmedCaregiver) {
                       setViewingCaregiver(confirmedCaregiver);

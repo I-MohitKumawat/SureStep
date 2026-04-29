@@ -1,30 +1,31 @@
 import React from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useUserProfile } from '../context/userProfileContext';
-import { writeSharedProfile } from '../utils/sharedProfile';
-import { supabase } from '../utils/supabaseClient';
-import { seedNewPatientTasks } from '../utils/seedPatientTasks';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../packages/core/auth/AuthContext';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'ProfileSetup'>;
 
-export default function ProfileSetup({ navigation, route }: Props) {
+export default function ProfileSetup({ route }: Props) {
   const { role } = route.params;
   const { saveProfile } = useUserProfile();
-  const [dobDate, setDobDate] = React.useState<Date | null>(null);
+  const { login, auth } = useAuth();
+
+  const [dobDate,      setDobDate]      = React.useState<Date | null>(null);
   const [showDobPicker, setShowDobPicker] = React.useState(false);
-  const [formData, setFormData] = React.useState({ name: '', dob: '', gender: '', city: '' });
-  const [language, setLanguage] = React.useState<'English' | 'Kannada' | 'Hindi' | 'Telugu' | 'Tamil'>('English');
+  const [formData,     setFormData]     = React.useState({ name: '', dob: '', gender: '', city: '' });
+  const [language,     setLanguage]     = React.useState<'English' | 'Kannada' | 'Hindi' | 'Telugu' | 'Tamil'>('English');
   const [languageOpen, setLanguageOpen] = React.useState(false);
-  const [genderOpen, setGenderOpen] = React.useState(false);
-  const [showErrors, setShowErrors] = React.useState(false);
+  const [genderOpen,   setGenderOpen]   = React.useState(false);
+  const [showErrors,   setShowErrors]   = React.useState(false);
+  const [submitting,   setSubmitting]   = React.useState(false);
+  const [submitError,  setSubmitError]  = React.useState<string | null>(null);
 
   const formatDob = (date: Date) =>
     date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -37,72 +38,62 @@ export default function ProfileSetup({ navigation, route }: Props) {
   };
 
   const handleSubmit = async () => {
+    setSubmitError(null);
     const requiredOk =
       formData.name.trim() && formData.dob.trim() && formData.gender.trim() &&
       formData.city.trim() && language.trim();
     if (!requiredOk) { setShowErrors(true); return; }
 
-    const draft = {
-      fullName: formData.name.trim(),
-      role,
-      dob: formData.dob,
-      gender: formData.gender,
-      city: formData.city,
-      language,
-    };
-    // Save into userProfileContext (AsyncStorage)
-    await saveProfile(draft);
-    // Also write to shared profile so caregiver can read patient name
-    if (role === 'patient') {
-      await writeSharedProfile({ fullName: draft.fullName, role: 'patient', batteryLevel: 85 });
-    } else {
-      await writeSharedProfile({ fullName: draft.fullName, role: 'caregiver' });
+    // Phone comes from auth state — no AsyncStorage needed
+    const phone = auth.user?.id;
+    if (!phone) {
+      setSubmitError('Session expired. Please go back and log in again.');
+      return;
     }
 
-    // Persist role + name to Supabase so returning logins skip onboarding
-    const phone = await AsyncStorage.getItem('current_phone');
-    if (phone) {
-      // Use otp='0000' as default for new users (they already logged in via 0000)
-      await supabase.from('mock_users').upsert({
-        phone_number: phone,
-        otp: '0000',
+    setSubmitting(true);
+    try {
+      const draft = {
+        fullName: formData.name.trim(),
         role,
-        full_name: draft.fullName,
-      });
+        dob:      formData.dob,
+        gender:   formData.gender,
+        city:     formData.city,
+        language,
+      };
 
-      // If patient, seed their default tasks
-      if (role === 'patient') {
-        await seedNewPatientTasks(phone);
+      // ── Save directly to Supabase (source of truth) ─────────────────────
+      const saved = await saveProfile(draft);
+      if (!saved) {
+        setSubmitError('Failed to save profile. Check your connection and try again.');
+        return;
       }
 
-      // If caregiver, also register in the search directory
-      if (role === 'caregiver') {
-        await supabase.from('caregivers').upsert({
-          id: phone,
-          name: draft.fullName,
-          specialty: 'Family Caregiver',
-          bio: '',
-          availability: 'Flexible',
-          location: formData.city,
-        });
-      }
+      // ── Login with real role + name — routing handled by RoleNavigator ─────
+      const authRole: 'CAREGIVER' | 'PATIENT' = role === 'caregiver' ? 'CAREGIVER' : 'PATIENT';
+      login(
+        { id: phone, email: `${phone}@surestep.app`, role: authRole, fullName: draft.fullName },
+        'mock-token',
+      );
+
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
+      console.error('[ProfileSetup] handleSubmit error:', msg);
+      setSubmitError(msg);
+    } finally {
+      setSubmitting(false);
     }
-
-    if (role === 'caregiver') navigation.navigate('CaregiverPatients');
-    else navigation.navigate('PatientDashboard');
   };
-
 
   const nameInvalid     = showErrors && !formData.name.trim();
   const dobInvalid      = showErrors && !formData.dob.trim();
   const genderInvalid   = showErrors && !formData.gender.trim();
   const cityInvalid     = showErrors && !formData.city.trim();
-  const languageInvalid = showErrors && !language.trim();
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Header */}
+
         <Text style={styles.heading}>Set up your profile</Text>
         <Text style={styles.subheading}>
           {role === 'caregiver' ? 'Caregiver account' : 'Patient account'}
@@ -182,7 +173,7 @@ export default function ProfileSetup({ navigation, route }: Props) {
         <Text style={styles.label}>Preferred Language <Text style={styles.star}>*</Text></Text>
         <Pressable
           onPress={() => setLanguageOpen((p) => !p)}
-          style={[styles.input, styles.selectorInput, languageInvalid && styles.inputError]}
+          style={[styles.input, styles.selectorInput]}
         >
           <Text style={styles.selectorText}>{language}</Text>
           <Text style={styles.chevron}>{languageOpen ? '▴' : '▾'}</Text>
@@ -214,83 +205,75 @@ export default function ProfileSetup({ navigation, route }: Props) {
         />
         {cityInvalid && <Text style={styles.errorText}>City is required.</Text>}
 
+        {submitError ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorBoxText}>⚠ {submitError}</Text>
+          </View>
+        ) : null}
+
         <Pressable
-          style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]}
-          onPress={handleSubmit}
+          style={({ pressed }) => [
+            styles.submitButton,
+            (pressed || submitting) && styles.submitButtonPressed,
+            submitting && { opacity: 0.7 },
+          ]}
+          onPress={() => void handleSubmit()}
+          disabled={submitting}
         >
-          <Text style={styles.submitText}>Continue</Text>
+          {submitting
+            ? <ActivityIndicator color={C.primaryText} />
+            : <Text style={styles.submitText}>Continue</Text>
+          }
         </Pressable>
+
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+  container:     { flex: 1, backgroundColor: C.bg },
   scrollContent: { paddingHorizontal: 22, paddingTop: 24, paddingBottom: 32 },
 
-  heading: { fontFamily: F.bold, fontSize: 26, color: C.textPrimary, marginBottom: 4 },
+  heading:    { fontFamily: F.bold, fontSize: 26, color: C.textPrimary, marginBottom: 4 },
   subheading: { fontFamily: F.regular, fontSize: 14, color: C.textSecondary, marginBottom: 24 },
 
   label: { fontFamily: F.semiBold, fontSize: 13, color: C.textBody, marginBottom: 8, marginLeft: 2 },
   star:  { color: C.error },
 
   input: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: C.surface,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    paddingHorizontal: 16,
-    fontFamily: F.regular,
-    fontSize: 16,
-    color: C.textPrimary,
-    marginBottom: 4,
+    height: 52, borderRadius: 14, backgroundColor: C.surface,
+    borderWidth: 1.5, borderColor: C.border, paddingHorizontal: 16,
+    fontFamily: F.regular, fontSize: 16, color: C.textPrimary, marginBottom: 4,
   },
-  inputError: { borderColor: C.error },
-  selectorInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  selectorText:  { fontFamily: F.regular, fontSize: 16, color: C.textPrimary },
+  inputError:          { borderColor: C.error },
+  selectorInput:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  selectorText:        { fontFamily: F.regular, fontSize: 16, color: C.textPrimary },
   selectorPlaceholder: { color: C.textMuted },
-  chevron: { fontFamily: F.regular, fontSize: 14, color: C.textSecondary },
+  chevron:             { fontFamily: F.regular, fontSize: 14, color: C.textSecondary },
 
   pickerWrap: {
-    borderRadius: 12,
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    marginTop: -2,
-    marginBottom: 8,
-    overflow: 'hidden',
+    borderRadius: 12, backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.border,
+    marginTop: -2, marginBottom: 8, overflow: 'hidden',
   },
-  dropdown: {
-    borderRadius: 12,
-    backgroundColor: C.surface,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    paddingVertical: 4,
-    marginTop: -2,
-    marginBottom: 8,
-  },
-  dropdownItem: { paddingVertical: 11, paddingHorizontal: 16 },
+  dropdown:             { borderRadius: 12, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border, paddingVertical: 4, marginTop: -2, marginBottom: 8 },
+  dropdownItem:         { paddingVertical: 11, paddingHorizontal: 16 },
   dropdownItemSelected: { backgroundColor: C.primaryLight },
-  dropdownText: { fontFamily: F.regular, fontSize: 15, color: C.textPrimary },
+  dropdownText:         { fontFamily: F.regular, fontSize: 15, color: C.textPrimary },
   dropdownTextSelected: { fontFamily: F.bold, color: C.primary },
 
   errorText: { fontFamily: F.regular, color: C.error, fontSize: 12, marginBottom: 8, marginLeft: 4 },
 
   submitButton: {
-    marginTop: 20,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: C.primary,
-    shadowOpacity: 0.28,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 6,
+    marginTop: 20, height: 52, borderRadius: 14, backgroundColor: C.primary,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12, elevation: 6,
   },
   submitButtonPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
-  submitText: { fontFamily: F.bold, fontSize: 17, color: C.primaryText },
+  submitText:          { fontFamily: F.bold, fontSize: 17, color: C.primaryText },
+
+  errorBox:     { marginTop: 12, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', paddingHorizontal: 14, paddingVertical: 10 },
+  errorBoxText: { fontFamily: F.semiBold, fontSize: 13, color: '#DC2626', lineHeight: 18 },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -6,7 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useTasks } from '../context/taskContext';
-import { readPatientProfile } from '../utils/sharedProfile';
+
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import {
@@ -42,7 +42,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const [activeTab, setActiveTab] = React.useState<CaregiverTab>('Home');
 
   // Patient identity comes from route params — never from AsyncStorage
-  const patientPhone = route.params?.patientPhone ?? '2222222222';
+  const patientPhone = route.params?.patientPhone ?? '';
   const [patientName, setPatientName] = React.useState(
     route.params?.patientName ?? 'Patient'
   );
@@ -70,18 +70,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     return `${diffHr} HR${diffHr > 1 ? 'S' : ''} AGO`;
   })();
 
-  // Load patient battery from shared profile (only supplemental — name comes from params)
-  const loadProfile = useCallback(() => {
-    readPatientProfile().then((p) => {
-      if (p && typeof p.batteryLevel === 'number') setBatteryLevel(p.batteryLevel);
-    });
-  }, []);
-
-  useEffect(() => {
-    loadProfile();
-    const interval = setInterval(loadProfile, 30_000);
-    return () => clearInterval(interval);
-  }, [loadProfile]);
+  // Battery level is a UI placeholder — real device battery requires a native API
 
   // patientId is derived above from route.params.patientPhone
   const patientTasks = tasks.filter((t) => t.patientId === patientId);
@@ -335,7 +324,6 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
                 onPress={() => {
                   setActiveTab(tab);
                   if (tab === 'Home') navigation.navigate('CaregiverPatients');
-                  if (tab === 'Manage') navigation.navigate('CaregiverManage');
                 }}
                 style={styles.bottomTab}
               >
@@ -405,7 +393,20 @@ const styles = StyleSheet.create({
   completedCount: { fontFamily: F.extraBold },
 
   // ── Routine outer wrapper ──────────────────────────────────────────
-  routineOuterContainer: { marginBottom: 14 },
+  routineOuterContainer: {
+    backgroundColor: '#f0fff8',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
 
   // ── Routine capsules ────────────────────────────────────────────────────────
   routineListViewport: {
@@ -439,21 +440,6 @@ const styles = StyleSheet.create({
   capsuleReminderBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   capsuleReminderIcon: { fontSize: 16 },
 
-   routineOuterContainer: {
-    backgroundColor: '#f0fff8ff', // creamish white
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    marginHorizontal: 16,
-    marginTop: 10,
-
-    // optional depth (makes it look like a card)
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
   // ── Stats ───────────────────────────────────────────────────────────────────
   statsCard: {
     backgroundColor: C.surface,

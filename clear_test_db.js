@@ -19,37 +19,26 @@ if (!dbUrl || !dbKey) {
 const supabase = createClient(dbUrl, dbKey);
 
 async function run() {
-  console.log('Clearing extra test users (leaving 1111111111 and 2222222222 intact)...');
+  console.log('⏳ Clearing all test users and data...');
 
-  // Remove non-seed users
-  await supabase.from('mock_users').delete()
-    .neq('phone_number', '1111111111')
-    .neq('phone_number', '2222222222');
-
-  await supabase.from('caregivers').delete()
-    .neq('id', '1111111111')
-    .neq('id', '2222222222');
-
-  // Remove all confirmation links (fresh state — patient must re-confirm)
+  // Wipe all user data — order matters (FK constraints)
   await supabase.from('patient_caregiver_links').delete().neq('patient_phone', 'NEVER');
+  await supabase.from('tasks').delete().neq('id', 'NEVER');
+  await supabase.from('routines').delete().neq('id', 'NEVER');
+  await supabase.from('mock_users').delete().neq('phone_number', 'NEVER');
+  await supabase.from('caregivers').delete().neq('id', 'NEVER');
+  await supabase.from('patients').delete().neq('id', 'NEVER');
 
-  // Re-seed test users with correct canonical names
-  await supabase.from('mock_users').upsert([
-    { phone_number: '1111111111', otp: '1111', role: 'caregiver', full_name: 'Ramesh Kumar' },
-    { phone_number: '2222222222', otp: '2222', role: 'patient',   full_name: 'Srinivas Rao'  },
-  ]);
-
-  await supabase.from('caregivers').upsert({
-    id: '1111111111',
-    name: 'Ramesh Kumar',
-    specialty: 'Family Caregiver',
-    bio: 'Dedicated family caregiver with years of experience supporting elderly patients in daily routines.',
-    availability: 'Daily – 8 AM to 8 PM',
-    location: 'Bangalore, India',
+  // Bump force_logout_at to NOW → all devices will force-logout on next app open
+  await supabase.from('dev_config').upsert({
+    id: 1,
+    force_logout_at: new Date().toISOString(),
   });
 
-  console.log('✓ Test DB cleared and seed data restored.');
-  console.log('  Rescan Expo Go or shake → Reload to start from the login screen.');
+  console.log('✓ All test data cleared.');
+  console.log('✓ force_logout_at bumped — all devices will be logged out.');
+  console.log('  → Rescan Expo Go QR code or shake → Reload to start fresh.');
+  console.log('  → Register any 10-digit number with OTP 0000 to create a new account.');
 }
 
-run();
+run().catch(console.error);

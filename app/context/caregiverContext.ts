@@ -1,58 +1,94 @@
+/**
+ * app/context/caregiverContext.ts
+ *
+ * Pure Supabase — no AsyncStorage.
+ * Loads confirmed caregiver directly from patient_caregiver_links + caregivers tables.
+ */
 import * as React from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  fetchConfirmedCaregiver,
+  confirmCaregiver,
+  removeCaregiver,
+} from '../../backend/caregiverLinks';
+import { supabase } from '../utils/supabaseClient';
 import type { CaregiverListing } from '../screens/CaregiverSearchView';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type CaregiverContextValue = {
   confirmedCaregiver: CaregiverListing | null;
-  setConfirmedCaregiver: (c: CaregiverListing | null) => void;
-  reloadCaregiver: () => Promise<void>;
+  loading: boolean;
+  setConfirmedCaregiver: (c: CaregiverListing | null, patientPhone: string, patientName?: string) => Promise<void>;
+  reloadCaregiver: (patientPhone: string) => Promise<void>;
 };
+
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 const CaregiverContext = React.createContext<CaregiverContextValue | undefined>(undefined);
 
-function storageKey(phone: string) {
-  return `surestep_confirmed_caregiver_${phone}`;
-}
+// ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function CaregiverProvider({ children }: { children: React.ReactNode }) {
   const [confirmedCaregiver, _setConfirmedCaregiver] = React.useState<CaregiverListing | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
-  const reloadCaregiver = React.useCallback(async () => {
-    const phone = await AsyncStorage.getItem('current_phone');
-    if (!phone) {
+  /**
+   * Load caregiver directly from Supabase.
+   * No local cache — always reflects the true DB state.
+   */
+  const reloadCaregiver = React.useCallback(async (patientPhone: string) => {
+    if (!patientPhone) {
       _setConfirmedCaregiver(null);
       return;
     }
-    const raw = await AsyncStorage.getItem(storageKey(phone));
-    if (raw) {
-      try { _setConfirmedCaregiver(JSON.parse(raw)); }
-      catch { _setConfirmedCaregiver(null); }
-    } else {
+
+    setLoading(true);
+    try {
+      const result = await fetchConfirmedCaregiver(patientPhone);
+      _setConfirmedCaregiver(result);
+    } catch (e) {
+      console.warn('[CaregiverContext] reloadCaregiver failed:', e);
       _setConfirmedCaregiver(null);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Load on app mount
-  React.useEffect(() => { void reloadCaregiver(); }, [reloadCaregiver]);
+  /**
+   * Confirm or remove a caregiver.
+   * Writes directly to Supabase, updates in-memory state on success.
+   */
+  const setConfirmedCaregiver = React.useCallback(
+    async (c: CaregiverListing | null, patientPhone: string, patientName?: string) => {
+      if (!patientPhone) return;
 
-  const setConfirmedCaregiver = React.useCallback(async (c: CaregiverListing | null) => {
-    _setConfirmedCaregiver(c);
-    const phone = await AsyncStorage.getItem('current_phone');
-    if (!phone) return;
-    if (c) {
-      await AsyncStorage.setItem(storageKey(phone), JSON.stringify(c));
-    } else {
-      await AsyncStorage.removeItem(storageKey(phone));
-    }
-  }, []);
+      // Optimistic update so UI responds immediately
+      _setConfirmedCaregiver(c);
 
-  const value = React.useMemo(
-    () => ({ confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver }),
-    [confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver],
+      try {
+        if (c) {
+          await confirmCaregiver(patientPhone, c, patientName);
+        } else {
+          await removeCaregiver(patientPhone);
+        }
+      } catch (e) {
+        console.warn('[CaregiverContext] Supabase write failed:', e);
+        // Revert optimistic update on failure
+        _setConfirmedCaregiver(null);
+      }
+    },
+    [],
+  );
+
+  const value = React.useMemo<CaregiverContextValue>(
+    () => ({ confirmedCaregiver, loading, setConfirmedCaregiver, reloadCaregiver }),
+    [confirmedCaregiver, loading, setConfirmedCaregiver, reloadCaregiver],
   );
 
   return React.createElement(CaregiverContext.Provider, { value }, children);
 }
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useCaregiver(): CaregiverContextValue {
   const ctx = React.useContext(CaregiverContext);
