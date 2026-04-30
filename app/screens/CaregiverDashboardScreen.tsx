@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -13,7 +13,7 @@ import { F } from '../theme/fonts';
 import {
   IconDashboard,
   IconBell,
-  IconProfile,
+  IconActivity,
 } from '../assets/icons/NavIcons';
 import {
   haversineMeters,
@@ -23,13 +23,13 @@ import {
 } from '../utils/geofence';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverDashboard'>;
-type CaregiverTab = 'Home' | 'Alerts' | 'Profile';
+type CaregiverTab = 'Home' | 'Alerts' | 'Manage';
 
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
-  Home: ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Alerts: ({ active }) => <IconBell size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Profile: ({ active }) => <IconProfile size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Home:   ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Alerts: ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Manage: ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
 export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route }) => {
@@ -51,10 +51,104 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const geoSubRef = React.useRef<Location.LocationSubscription | null>(null);
   const capsuleScrollY = React.useRef(new Animated.Value(0)).current;
 
-  // ── Patient profile details (for Profile tab modal) ───────────────────
+  // ── Patient profile details (for avatar-tap modal) ───────────────────
   const [showPatientProfile, setShowPatientProfile] = React.useState(false);
   type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string };
   const [patientDetails, setPatientDetails] = React.useState<PatientDetails | null>(null);
+
+  // ── Manage-tab routine state ──────────────────────────────────────────
+  type RoutineTask = {
+    id: string;
+    title: string;
+    description: string;
+    time: string;
+    icon: string;
+    status: 'pending' | 'done' | 'missed' | 'unsure';
+  };
+  const ICON_OPTIONS = ['🍽️', '💊', '🚶', '🛁', '🛌', '🏋️', '🩺', '📖', '☕', '🧘', '🚗', '💧'];
+  const [routineTasks,     setRoutineTasks]     = React.useState<RoutineTask[]>([]);
+  const [manageLoading,    setManageLoading]    = React.useState(false);
+  const [showRoutineModal, setShowRoutineModal] = React.useState(false);
+  const [editingRoutine,   setEditingRoutine]   = React.useState<RoutineTask | null>(null);
+  const [form,             setForm]             = React.useState({ title: '', description: '', time: '08:00', icon: '🍽️' });
+  const [formError,        setFormError]        = React.useState<string | null>(null);
+  const [saving,           setSaving]           = React.useState(false);
+
+  const loadRoutineTasks = React.useCallback(async () => {
+    if (!patientPhone) return;
+    setManageLoading(true);
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, title, description, time, status')
+      .eq('patient_id', patientPhone)
+      .order('time', { ascending: true });
+    setRoutineTasks(
+      (data ?? []).map((r) => ({
+        id:          r.id,
+        title:       r.title       ?? '',
+        description: r.description ?? '',
+        time:        r.time        ?? '',
+        icon:        '🍽️',
+        status:      r.status as RoutineTask['status'],
+      }))
+    );
+    setManageLoading(false);
+  }, [patientPhone]);
+
+  // Realtime for manage tab
+  React.useEffect(() => {
+    if (!patientPhone) return;
+    const ch = supabase
+      .channel(`manage_${patientPhone}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `patient_id=eq.${patientPhone}` },
+        () => void loadRoutineTasks()
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [patientPhone, loadRoutineTasks]);
+
+  const openAddRoutine = () => {
+    setEditingRoutine(null);
+    setForm({ title: '', description: '', time: '08:00', icon: '🍽️' });
+    setFormError(null);
+    setShowRoutineModal(true);
+  };
+
+  const openEditRoutine = (task: RoutineTask) => {
+    setEditingRoutine(task);
+    setForm({ title: task.title, description: task.description, time: task.time, icon: task.icon });
+    setFormError(null);
+    setShowRoutineModal(true);
+  };
+
+  const saveRoutine = async () => {
+    if (!form.title.trim()) { setFormError('Title is required.'); return; }
+    if (!form.time.trim())  { setFormError('Time is required.'); return; }
+    setSaving(true); setFormError(null);
+    const payload = {
+      patient_id:  patientPhone,
+      title:       form.title.trim(),
+      description: form.description.trim(),
+      time:        form.time.trim(),
+      status:      'pending' as const,
+    };
+    if (editingRoutine) {
+      await supabase.from('tasks').update(payload).eq('id', editingRoutine.id);
+    } else {
+      const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      await supabase.from('tasks').insert({ ...payload, id });
+    }
+    setSaving(false);
+    setShowRoutineModal(false);
+    void loadRoutineTasks();
+  };
+
+  const deleteRoutine = async (id: string) => {
+    setRoutineTasks((prev) => prev.filter((t) => t.id !== id));
+    await supabase.from('tasks').delete().eq('id', id);
+  };
+
 
 
 
@@ -280,6 +374,84 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
               </View>
             ))}
           </View>
+        ) : activeTab === 'Manage' ? (
+          <View style={mStyles.container}>
+            {/* Header row */}
+            <View style={mStyles.headerRow}>
+              <View>
+                <Text style={mStyles.title}>Daily Flow</Text>
+                <Text style={mStyles.sub}>For {patientName}</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [mStyles.addBtn, pressed && { opacity: 0.85 }]}
+                onPress={openAddRoutine}
+              >
+                <Text style={mStyles.addBtnPlus}>＋</Text>
+                <Text style={mStyles.addBtnText}>Add Routine</Text>
+              </Pressable>
+            </View>
+
+            {manageLoading ? (
+              <Text style={mStyles.emptyText}>Loading…</Text>
+            ) : routineTasks.length === 0 ? (
+              <View style={mStyles.emptyWrap}>
+                <Text style={mStyles.emptyEmoji}>📋</Text>
+                <Text style={mStyles.emptyText}>No routines yet.</Text>
+                <Text style={mStyles.emptyHint}>Tap "Add Routine" to get started.</Text>
+              </View>
+            ) : (
+              routineTasks.map((task) => (
+                <View key={task.id} style={mStyles.card}>
+                  {/* Icon circle */}
+                  <View style={mStyles.iconCircle}>
+                    <Text style={mStyles.iconEmoji}>{task.icon}</Text>
+                  </View>
+
+                  {/* Main content */}
+                  <View style={mStyles.cardBody}>
+                    {/* Time + status badge + actions */}
+                    <View style={mStyles.cardTopRow}>
+                      <Text style={mStyles.cardTime}>{task.time}</Text>
+                      {task.status === 'pending' && (
+                        <View style={mStyles.pendingBadge}>
+                          <Text style={mStyles.pendingText}>PENDING</Text>
+                        </View>
+                      )}
+                      {task.status === 'done' && (
+                        <View style={[mStyles.pendingBadge, mStyles.doneBadge]}>
+                          <Text style={[mStyles.pendingText, { color: C.primary }]}>DONE</Text>
+                        </View>
+                      )}
+                      {task.status === 'missed' && (
+                        <View style={[mStyles.pendingBadge, mStyles.missedBadge]}>
+                          <Text style={[mStyles.pendingText, { color: '#DC2626' }]}>MISSED</Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }} />
+                      <Pressable
+                        onPress={() => openEditRoutine(task)}
+                        hitSlop={10}
+                        style={({ pressed }) => [mStyles.actionBtn, pressed && { opacity: 0.55 }]}
+                      >
+                        <Text style={mStyles.editIcon}>✏️</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void deleteRoutine(task.id)}
+                        hitSlop={10}
+                        style={({ pressed }) => [mStyles.actionBtn, mStyles.deleteBtn, pressed && { opacity: 0.55 }]}
+                      >
+                        <Text style={mStyles.deleteIcon}>🗑</Text>
+                      </Pressable>
+                    </View>
+                    <Text style={mStyles.cardTitle}>{task.title}</Text>
+                    {!!task.description && (
+                      <Text style={mStyles.cardDesc} numberOfLines={2}>{task.description}</Text>
+                    )}
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
         ) : (
           <>
 
@@ -287,12 +459,17 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
             {/* Avatar */}
-            <View style={styles.avatar}>
+            <Pressable
+              onPress={() => setShowPatientProfile(true)}
+              style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.75 }]}
+            >
               <Text style={styles.avatarInitial}>{patientName[0]?.toUpperCase() ?? 'S'}</Text>
-            </View>
+            </Pressable>
             <View style={styles.headerCenter}>
               <Text style={styles.overview}>PATIENT OVERVIEW</Text>
-              <Text style={styles.name}>{patientName}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.name}>{patientName}</Text>
+              </View>
               <Text style={styles.lastActivity}>LAST ACTIVITY · {lastActivityLabel}</Text>
               {/* Call + battery inline beneath name */}
               <View style={styles.headerActions}>
@@ -441,22 +618,93 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
         </View>
       )}
 
+      {/* ── Add / Edit Routine Modal ──────────────────────────────────────── */}
+      <Modal
+        visible={showRoutineModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRoutineModal(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <Pressable style={mStyles.modalOverlay} onPress={() => setShowRoutineModal(false)}>
+            <Pressable style={mStyles.modalSheet} onPress={(e) => e.stopPropagation()}>
+              <View style={mStyles.modalHandle} />
+              <Text style={mStyles.modalTitle}>{editingRoutine ? 'Edit Routine' : 'New Routine'}</Text>
+
+              {/* Icon picker */}
+              <Text style={mStyles.fieldLabel}>Icon</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={mStyles.iconPicker}>
+                {ICON_OPTIONS.map((emoji) => (
+                  <Pressable
+                    key={emoji}
+                    onPress={() => setForm((f) => ({ ...f, icon: emoji }))}
+                    style={[mStyles.iconOption, form.icon === emoji && mStyles.iconOptionActive]}
+                  >
+                    <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Title */}
+              <Text style={mStyles.fieldLabel}>Title *</Text>
+              <TextInput
+                style={mStyles.input}
+                placeholder="e.g. Morning Medication"
+                placeholderTextColor={C.textMuted}
+                value={form.title}
+                onChangeText={(v) => setForm((f) => ({ ...f, title: v }))}
+                returnKeyType="next"
+              />
+
+              {/* Description */}
+              <Text style={mStyles.fieldLabel}>Description</Text>
+              <TextInput
+                style={[mStyles.input, mStyles.inputMulti]}
+                placeholder="e.g. Blood pressure tablet + Vitamins"
+                placeholderTextColor={C.textMuted}
+                value={form.description}
+                onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
+                multiline
+                numberOfLines={3}
+              />
+
+              {/* Time */}
+              <Text style={mStyles.fieldLabel}>Time (HH:MM) *</Text>
+              <TextInput
+                style={mStyles.input}
+                placeholder="08:00"
+                placeholderTextColor={C.textMuted}
+                value={form.time}
+                onChangeText={(v) => setForm((f) => ({ ...f, time: v }))}
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+
+              {!!formError && <Text style={mStyles.formError}>{formError}</Text>}
+
+              <Pressable
+                style={({ pressed }) => [mStyles.saveBtn, pressed && { opacity: 0.85 }, saving && { opacity: 0.6 }]}
+                onPress={() => void saveRoutine()}
+                disabled={saving}
+              >
+                <Text style={mStyles.saveBtnText}>{saving ? 'Saving…' : editingRoutine ? 'Save Changes' : 'Add Routine'}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
       {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
       <View style={styles.bottomBarBand}>
         <View style={styles.bottomBar}>
-          {(['Home', 'Alerts', 'Profile'] as CaregiverTab[]).map((tab) => {
+          {(['Home', 'Alerts', 'Manage'] as CaregiverTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
               <Pressable
                 key={tab}
-                onPress={() => {
-                  if (tab === 'Profile') {
-                    setShowPatientProfile(true);
-                    return;
-                  }
-                  setActiveTab(tab);
-                }}
+                onPress={() => setActiveTab(tab)}
                 style={styles.bottomTab}
               >
                 <View style={styles.bottomTabIconWrap}>
@@ -546,7 +794,8 @@ const styles = StyleSheet.create({
 
   headerCenter: { flex: 1, marginLeft: 12 },
   overview: { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.2, color: C.primary },
-  name: { fontFamily: F.extraBold, fontSize: 26, color: C.textPrimary, marginTop: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 1 },
+  name: { fontFamily: F.extraBold, fontSize: 26, color: C.textPrimary },
   lastActivity: { fontFamily: F.medium, fontSize: 10, color: C.textSecondary, marginTop: 1, letterSpacing: 0.4 },
 
   // inline header actions (call + battery)
@@ -557,6 +806,27 @@ const styles = StyleSheet.create({
   headerCallLabel: { fontFamily: F.bold, fontSize: 13, color: C.textPrimary },
   headerBatteryChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.surface, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: C.border },
   headerBatteryLabel: { fontFamily: F.bold, fontSize: 13 },
+
+  // ── Manage tab ──────────────────────────────────────────────────────────────
+  manageContainer:  { paddingTop: 4 },
+  manageHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  manageTitle:      { fontFamily: F.bold, fontSize: 20, color: C.textPrimary },
+  manageSub:        { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 1 },
+  manageNote:       { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginBottom: 14, lineHeight: 18 },
+  manageEmpty:      { fontFamily: F.regular, fontSize: 14, color: C.textMuted, textAlign: 'center', marginTop: 24 },
+  manageCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 13, marginBottom: 10,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 1,
+  },
+  manageCardLeft:  { flex: 1 },
+  manageCardTime:  { fontFamily: F.bold, fontSize: 10, color: C.primary, letterSpacing: 1, marginBottom: 2 },
+  manageCardTitle: { fontFamily: F.bold, fontSize: 16, color: C.textPrimary },
+  manageCardMeta:  { fontFamily: F.regular, fontSize: 12, color: C.textSecondary, marginTop: 2 },
+  manageStatusDot: { width: 10, height: 10, borderRadius: 5, marginLeft: 8 },
+
+
 
   // Geofence card
   geoCard: {
@@ -802,3 +1072,117 @@ const styles = StyleSheet.create({
     backgroundColor: C.primary,
   },
 });
+
+// ─── Rich Manage-tab styles ───────────────────────────────────────────────────
+const mStyles = StyleSheet.create({
+  // List container
+  container:  { paddingTop: 6 },
+  headerRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  title:      { fontFamily: F.extraBold, fontSize: 24, color: C.textPrimary },
+  sub:        { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 2 },
+
+  // Add button
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: C.primary, borderRadius: 999,
+    paddingHorizontal: 16, paddingVertical: 10,
+    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 5,
+  },
+  addBtnPlus: { fontFamily: F.bold, fontSize: 18, color: C.primaryText, lineHeight: 22 },
+  addBtnText: { fontFamily: F.bold, fontSize: 14, color: C.primaryText },
+
+  // Empty state
+  emptyWrap:  { alignItems: 'center', marginTop: 48 },
+  emptyEmoji: { fontSize: 40, marginBottom: 12 },
+  emptyText:  { fontFamily: F.semiBold, fontSize: 15, color: C.textSecondary, textAlign: 'center' },
+  emptyHint:  { fontFamily: F.regular, fontSize: 13, color: C.textMuted, marginTop: 4 },
+
+  // Routine card
+  card: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.border,
+    padding: 14, marginBottom: 14,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 2,
+  },
+  iconCircle: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 12, marginTop: 2,
+    borderWidth: 1, borderColor: C.border,
+  },
+  iconEmoji: { fontSize: 26 },
+
+  cardBody:   { flex: 1 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  cardTime:   { fontFamily: F.bold, fontSize: 13, color: C.primary },
+  cardTitle:  { fontFamily: F.bold, fontSize: 17, color: C.textPrimary, marginBottom: 2 },
+  cardDesc:   { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, lineHeight: 18 },
+
+  // Status badges
+  pendingBadge: {
+    backgroundColor: '#D1FAE5', borderRadius: 999,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  pendingText:  { fontFamily: F.bold, fontSize: 10, color: '#065F46', letterSpacing: 0.5 },
+  doneBadge:    { backgroundColor: C.primaryLight },
+  missedBadge:  { backgroundColor: '#FEE2E2' },
+
+  // Edit / delete action buttons
+  actionBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  deleteBtn:   { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+  editIcon:    { fontSize: 14 },
+  deleteIcon:  { fontSize: 14 },
+
+  // ── Add / Edit Modal ──────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: C.bg,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 22, paddingTop: 12, paddingBottom: 40,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowOffset: { width: 0, height: -4 }, shadowRadius: 20, elevation: 24,
+  },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: C.borderMid,
+    alignSelf: 'center', marginBottom: 16,
+  },
+  modalTitle: { fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, marginBottom: 18 },
+
+  // Icon picker strip
+  iconPicker:       { marginBottom: 14 },
+  iconOption: {
+    width: 48, height: 48, borderRadius: 14, marginRight: 8,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  iconOptionActive: {
+    borderColor: C.primary, backgroundColor: C.primaryLight,
+    shadowColor: C.primary, shadowOpacity: 0.22, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 3,
+  },
+
+  // Form fields
+  fieldLabel: { fontFamily: F.semiBold, fontSize: 12, color: C.textSecondary, letterSpacing: 0.4, marginBottom: 6, marginTop: 4 },
+  input: {
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontFamily: F.regular, fontSize: 15, color: C.textPrimary,
+    marginBottom: 12,
+  },
+  inputMulti: { height: 80, textAlignVertical: 'top' },
+  formError:  { fontFamily: F.regular, fontSize: 13, color: C.error, marginBottom: 8 },
+
+  // Save button
+  saveBtn: {
+    backgroundColor: C.primary, borderRadius: 16, paddingVertical: 15,
+    alignItems: 'center', marginTop: 6,
+    shadowColor: C.primary, shadowOpacity: 0.3, shadowOffset: { width: 0, height: 5 }, shadowRadius: 10, elevation: 7,
+  },
+  saveBtnText: { fontFamily: F.bold, fontSize: 16, color: C.primaryText },
+});
+

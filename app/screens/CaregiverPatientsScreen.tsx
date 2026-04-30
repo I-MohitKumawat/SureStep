@@ -31,17 +31,17 @@ import { F } from '../theme/fonts';
 import {
   IconDashboard,
   IconBell,
-  IconProfile,
+  IconSettings,
 } from '../assets/icons/NavIcons';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverPatients'>;
-type CaregiverTab = 'Home' | 'Alerts' | 'Profile';
+type CaregiverTab = 'Home' | 'Alerts' | 'Settings';
 
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<TabIconProps>> = {
-  Home:    ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Alerts:  ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Profile: ({ active }) => <IconProfile  size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Home:     ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Alerts:   ({ active }) => <IconBell     size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
+  Settings: ({ active }) => <IconSettings size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -390,20 +390,71 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
         </ScrollView>
       )}
 
-      {/* ── Profile tab ───────────────────────────────────────────────────── */}
-      {activeTab === 'Profile' && (
+      {/* ── Settings tab ──────────────────────────────────────────────────── */}
+      {activeTab === 'Settings' && (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PROFILE</Text>
+            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>SETTINGS</Text>
           </View>
-          <Text style={styles.stateNote}>Profile settings coming soon.</Text>
+
+          {/* Profile card */}
+          <View style={settingsStyles.profileCard}>
+            <View style={settingsStyles.avatarWrap}>
+              <Text style={settingsStyles.avatarInitial}>
+                {caregiverPhone ? caregiverPhone.charAt(0) : 'C'}
+              </Text>
+            </View>
+            <Text style={settingsStyles.profileTag}>CAREGIVER PROFILE</Text>
+            <Text style={settingsStyles.profilePhone}>{caregiverPhone ?? '—'}</Text>
+          </View>
+
+          <View style={settingsStyles.divider} />
+
+          {/* Read-only identity fields */}
+          <Text style={settingsStyles.sectionHeading}>Account</Text>
+          {([
+            { label: 'Phone Number', value: caregiverPhone ?? '—', emoji: '📞' },
+            { label: 'Role',         value: 'Caregiver',           emoji: '🧑‍⚕️' },
+            { label: 'Account Type', value: 'Standard',            emoji: '📊' },
+          ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
+            <View key={row.label} style={settingsStyles.fieldRow}>
+              <View style={settingsStyles.fieldEmojiWrap}>
+                <Text style={settingsStyles.fieldEmoji}>{row.emoji}</Text>
+              </View>
+              <View style={settingsStyles.fieldTextWrap}>
+                <Text style={settingsStyles.fieldLabel}>{row.label}</Text>
+                <Text style={settingsStyles.fieldValue}>{row.value}</Text>
+              </View>
+            </View>
+          ))}
+
+          <View style={settingsStyles.divider} />
+
+          {/* Preferences */}
+          <Text style={settingsStyles.sectionHeading}>Preferences</Text>
+          {([
+            { label: 'Notifications', value: 'Enabled', emoji: '🔔' },
+            { label: 'Language',      value: 'English', emoji: '🌐' },
+            { label: 'App Version',   value: '1.0.0',   emoji: 'ℹ️'  },
+          ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
+            <View key={row.label} style={settingsStyles.fieldRow}>
+              <View style={settingsStyles.fieldEmojiWrap}>
+                <Text style={settingsStyles.fieldEmoji}>{row.emoji}</Text>
+              </View>
+              <View style={settingsStyles.fieldTextWrap}>
+                <Text style={settingsStyles.fieldLabel}>{row.label}</Text>
+                <Text style={settingsStyles.fieldValue}>{row.value}</Text>
+              </View>
+            </View>
+          ))}
         </ScrollView>
       )}
+
 
       {/* ── Bottom Nav ──────────────────────────────────────────────────────── */}
       <View style={styles.bottomBarBand}>
         <View style={styles.bottomBar}>
-          {(['Home', 'Alerts', 'Profile'] as CaregiverTab[]).map((tab) => {
+          {(['Home', 'Alerts', 'Settings'] as CaregiverTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent = TAB_ICON_COMPONENTS[tab];
             return (
@@ -500,3 +551,45 @@ const styles = StyleSheet.create({
   bottomLabelActive: { fontFamily: F.bold, color: C.primary },
   activeIndicator:   { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
 });
+
+const settingsStyles = StyleSheet.create({
+  profileCard: {
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: 20, borderWidth: 1, borderColor: C.border,
+    paddingVertical: 24, paddingHorizontal: 16,
+    marginBottom: 20,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 2,
+  },
+  avatarWrap: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: C.primaryLight, borderWidth: 2, borderColor: C.primary,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  avatarInitial:  { fontFamily: F.extraBold, fontSize: 30, color: C.primary },
+  profileTag:     { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.4, color: C.primary, marginBottom: 4 },
+  profilePhone:   { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary },
+
+  divider:        { height: 1, backgroundColor: C.border, marginVertical: 14 },
+  sectionHeading: { fontFamily: F.bold, fontSize: 12, letterSpacing: 1.2, color: C.textMuted, marginBottom: 8 },
+
+  fieldRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: 14, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    marginBottom: 8,
+    shadowColor: '#000', shadowOpacity: 0.03, shadowOffset: { width: 0, height: 1 }, shadowRadius: 4, elevation: 1,
+  },
+  fieldEmojiWrap: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
+  },
+  fieldEmoji:    { fontSize: 18 },
+  fieldTextWrap: { flex: 1 },
+  fieldLabel:    { fontFamily: F.medium, fontSize: 11, color: C.textSecondary, letterSpacing: 0.4 },
+  fieldValue:    { fontFamily: F.bold, fontSize: 15, color: C.textPrimary, marginTop: 1 },
+});
+
