@@ -607,7 +607,6 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
           })()}
           </>
         )}
-
       </ScrollView>
 
       {/* ── Reminder Toast ─────────────────────────────────────────────── */}
