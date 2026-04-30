@@ -36,7 +36,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const CAPSULE_HEIGHT = 84;
   const CAPSULE_GAP = 12;
   const CAPSULE_STEP = CAPSULE_HEIGHT + CAPSULE_GAP;
-  const { tasks } = useTasks();
+  const { tasks, loading: tasksLoading, createTask, updateTask, deleteTask } = useTasks();
   const [reminderSentKeys, setReminderSentKeys] = React.useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = React.useState<CaregiverTab>('Home');
 
@@ -56,57 +56,20 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string };
   const [patientDetails, setPatientDetails] = React.useState<PatientDetails | null>(null);
 
-  // ── Manage-tab routine state ──────────────────────────────────────────
-  type RoutineTask = {
-    id: string;
-    title: string;
-    description: string;
-    time: string;
-    icon: string;
-    status: 'pending' | 'done' | 'missed' | 'unsure';
-  };
+  // ── Manage-tab modal form state (pure UI — data lives in context) ────────
   const ICON_OPTIONS = ['🍽️', '💊', '🚶', '🛁', '🛌', '🏋️', '🩺', '📖', '☕', '🧘', '🚗', '💧'];
-  const [routineTasks,     setRoutineTasks]     = React.useState<RoutineTask[]>([]);
-  const [manageLoading,    setManageLoading]    = React.useState(false);
+  type EditingTask = { id: string; title: string; description: string; time: string; icon: string; status: string };
   const [showRoutineModal, setShowRoutineModal] = React.useState(false);
-  const [editingRoutine,   setEditingRoutine]   = React.useState<RoutineTask | null>(null);
+  const [editingRoutine,   setEditingRoutine]   = React.useState<EditingTask | null>(null);
   const [form,             setForm]             = React.useState({ title: '', description: '', time: '08:00', icon: '🍽️' });
   const [formError,        setFormError]        = React.useState<string | null>(null);
   const [saving,           setSaving]           = React.useState(false);
 
-  const loadRoutineTasks = React.useCallback(async () => {
-    if (!patientPhone) return;
-    setManageLoading(true);
-    const { data } = await supabase
-      .from('tasks')
-      .select('id, title, description, time, status')
-      .eq('patient_id', patientPhone)
-      .order('time', { ascending: true });
-    setRoutineTasks(
-      (data ?? []).map((r) => ({
-        id:          r.id,
-        title:       r.title       ?? '',
-        description: r.description ?? '',
-        time:        r.time        ?? '',
-        icon:        '🍽️',
-        status:      r.status as RoutineTask['status'],
-      }))
-    );
-    setManageLoading(false);
-  }, [patientPhone]);
-
-  // Realtime for manage tab
-  React.useEffect(() => {
-    if (!patientPhone) return;
-    const ch = supabase
-      .channel(`manage_${patientPhone}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `patient_id=eq.${patientPhone}` },
-        () => void loadRoutineTasks()
-      )
-      .subscribe();
-    return () => { void supabase.removeChannel(ch); };
-  }, [patientPhone, loadRoutineTasks]);
+  // patientTasks — strictly this patient's tasks from the shared context
+  const patientId = patientPhone;
+  const patientTasks  = React.useMemo(() => tasks.filter(t => t.patientId === patientId), [tasks, patientId]);
+  // manageLoading is just the global context loading flag on first mount
+  const manageLoading = tasksLoading && patientTasks.length === 0;
 
   const openAddRoutine = () => {
     setEditingRoutine(null);
@@ -115,7 +78,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     setShowRoutineModal(true);
   };
 
-  const openEditRoutine = (task: RoutineTask) => {
+  const openEditRoutine = (task: EditingTask) => {
     setEditingRoutine(task);
     setForm({ title: task.title, description: task.description, time: task.time, icon: task.icon });
     setFormError(null);
@@ -126,38 +89,32 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     if (!form.title.trim()) { setFormError('Title is required.'); return; }
     if (!form.time.trim())  { setFormError('Time is required.'); return; }
     setSaving(true); setFormError(null);
-    const payload = {
-      patient_id:  patientPhone,
-      title:       form.title.trim(),
-      description: form.description.trim(),
-      time:        form.time.trim(),
-      status:      'pending' as const,
-    };
-    if (editingRoutine) {
-      await supabase.from('tasks').update(payload).eq('id', editingRoutine.id);
-    } else {
-      const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      await supabase.from('tasks').insert({ ...payload, id });
+    try {
+      if (editingRoutine) {
+        await updateTask(editingRoutine.id, {
+          title: form.title, description: form.description, time: form.time, icon: form.icon,
+        });
+      } else {
+        await createTask({
+          patientId, title: form.title, description: form.description, time: form.time, icon: form.icon,
+        });
+      }
+      setShowRoutineModal(false);
+    } catch (e) {
+      setFormError('Save failed. Please try again.');
+      console.error(e);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setShowRoutineModal(false);
-    void loadRoutineTasks();
   };
 
-  const deleteRoutine = async (id: string) => {
-    setRoutineTasks((prev) => prev.filter((t) => t.id !== id));
-    await supabase.from('tasks').delete().eq('id', id);
+  const handleDeleteRoutine = async (id: string) => {
+    await deleteTask(id);
   };
-
-
-
-
-  // Use the patient's phone as the scope ID for tasks
-  const patientId = patientPhone;
 
   // ── Last activity: derive from most recent completedAt across tasks ──────
   const lastActivityLabel = (() => {
-    const completedTimes = tasks
+    const completedTimes = patientTasks
       .filter((t) => t.completedAt)
       .map((t) => new Date(t.completedAt!).getTime());
     if (completedTimes.length === 0) return 'No activity yet';
@@ -204,16 +161,10 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientPhone]);
 
-  // patientId is derived above from route.params.patientPhone
-  const patientTasks = tasks.filter((t) => t.patientId === patientId);
+  // patientId already defined above
   const completedTasks = patientTasks.filter((t) => t.status === 'done').length;
   const totalTasks = patientTasks.length;
 
-  const routineStatus = {
-    medication: patientTasks.find((t) => t.title.toLowerCase().includes('med'))?.status === 'done',
-    breakfast: patientTasks.find((t) => t.title.toLowerCase().includes('breakfast'))?.status === 'done',
-    walk: patientTasks.find((t) => t.title.toLowerCase().includes('walk'))?.status === 'done',
-  };
 
   useEffect(() => () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); }, []);
 
@@ -255,14 +206,24 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
 
   const batteryColor = batteryLevel >= 50 ? C.safeText : batteryLevel >= 20 ? '#D97706' : C.error;
 
-  const routineItems = [
-    { key: 'medication', emoji: '💊', title: 'Morning Medication', meta: 'Taken at 08:30 AM', done: routineStatus.medication },
-    { key: 'breakfast', emoji: '🍽️', title: 'Healthy Breakfast', meta: 'Completed at 09:15 AM', done: routineStatus.breakfast },
-    { key: 'walk', emoji: '🚶', title: 'Daily Walk', meta: 'Scheduled for 11:00 AM', done: routineStatus.walk },
-  ];
+  // ── Live capsule items from context ─────────────────────────────────────
+  // Each task is a capsule — sorted by time asc, using real Supabase status.
+  const routineItems = React.useMemo(() =>
+    patientTasks
+      .slice()
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map(t => ({
+        key:   t.id,
+        emoji: t.icon ?? '📋',
+        title: t.title,
+        meta:  t.description ? `${t.time} · ${t.description}` : t.time,
+        done:  t.status === 'done',
+        status: t.status,
+      }))
+  , [patientTasks]);
 
   const activeRoutineIndex = useMemo(() => {
-    const firstPendingIndex = routineItems.findIndex((item) => !item.done);
+    const firstPendingIndex = routineItems.findIndex(item => item.status === 'pending' || item.status === 'unsure');
     return firstPendingIndex === -1 ? Math.max(routineItems.length - 1, 0) : firstPendingIndex;
   }, [routineItems]);
 
@@ -393,18 +354,21 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
 
             {manageLoading ? (
               <Text style={mStyles.emptyText}>Loading…</Text>
-            ) : routineTasks.length === 0 ? (
+            ) : patientTasks.length === 0 ? (
               <View style={mStyles.emptyWrap}>
                 <Text style={mStyles.emptyEmoji}>📋</Text>
                 <Text style={mStyles.emptyText}>No routines yet.</Text>
                 <Text style={mStyles.emptyHint}>Tap "Add Routine" to get started.</Text>
               </View>
             ) : (
-              routineTasks.map((task) => (
+              patientTasks
+                .slice()
+                .sort((a, b) => a.time.localeCompare(b.time))
+                .map((task) => (
                 <View key={task.id} style={mStyles.card}>
                   {/* Icon circle */}
                   <View style={mStyles.iconCircle}>
-                    <Text style={mStyles.iconEmoji}>{task.icon}</Text>
+                    <Text style={mStyles.iconEmoji}>{task.icon ?? '📋'}</Text>
                   </View>
 
                   {/* Main content */}
@@ -429,14 +393,21 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
                       )}
                       <View style={{ flex: 1 }} />
                       <Pressable
-                        onPress={() => openEditRoutine(task)}
+                        onPress={() => openEditRoutine({
+                          id: task.id,
+                          title: task.title,
+                          description: task.description ?? '',
+                          time: task.time,
+                          icon: task.icon ?? '📋',
+                          status: task.status,
+                        })}
                         hitSlop={10}
                         style={({ pressed }) => [mStyles.actionBtn, pressed && { opacity: 0.55 }]}
                       >
                         <Text style={mStyles.editIcon}>✏️</Text>
                       </Pressable>
                       <Pressable
-                        onPress={() => void deleteRoutine(task.id)}
+                        onPress={() => void handleDeleteRoutine(task.id)}
                         hitSlop={10}
                         style={({ pressed }) => [mStyles.actionBtn, mStyles.deleteBtn, pressed && { opacity: 0.55 }]}
                       >
@@ -491,6 +462,22 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
           {/* Routine section + geofence card sibling block */}
         </View>
         {/* ── Daily Routine ──────────────────────────────────── */}
+        {routineItems.length === 0 ? (
+          <View style={styles.routineOuterContainer}>
+            <Pressable
+              style={{ alignItems: 'center', paddingVertical: 28 }}
+              onPress={() => setActiveTab('Manage')}
+            >
+              <Text style={{ fontSize: 36, marginBottom: 10 }}>📋</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textPrimary, textAlign: 'center' }}>
+                No routines yet
+              </Text>
+              <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                Tap here or go to Manage to add routines for {patientName}.
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
         <View style={styles.routineOuterContainer}>
           <View style={styles.routineListViewport}>
             <Animated.ScrollView
@@ -530,7 +517,7 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
                     >
                       <View style={styles.routineCapsuleTextCol}>
                         <Text style={[styles.routineCapsuleTitle, { color: capsuleColors.titleColor }]}>
-                          {item.title}
+                          {item.emoji}  {item.title}
                         </Text>
                         <Text style={[styles.routineCapsuleMeta, { color: capsuleColors.metaColor }]}>
                           {item.meta}
@@ -562,6 +549,8 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
             </Animated.ScrollView>
           </View>
         </View>
+        )}
+
 
           {/* ── Geofence Status Card ───────────────────────────────── */}
           {(() => {
