@@ -10,6 +10,7 @@ export type Task = {
   title: string;
   time: string;
   description?: string;
+  icon?: string;
   status: TaskStatus;
   completedAt?: string;
   createdAt: string;
@@ -27,67 +28,104 @@ export type Routine = {
   updatedAt: string;
 };
 
+export type TaskDraft = {
+  patientId: string;
+  title: string;
+  description?: string;
+  time: string;
+  icon?: string;
+  status?: TaskStatus;
+};
+
 type TaskContextValue = {
   tasks: Task[];
   routines: Routine[];
   loading: boolean;
   loadTasks: () => Promise<void>;
   createRoutine: (routineData: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Routine>;
+  createTask: (draft: TaskDraft) => Promise<Task>;
+  updateTask: (taskId: string, patch: Partial<TaskDraft>) => Promise<void>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
   getTasksForPatient: (patientId: string) => Task[];
   getRoutinesForPatient: (patientId: string) => Routine[];
 };
 
 const TaskContext = React.createContext<TaskContextValue | undefined>(undefined);
 
-// Helper to map DB snake_case to frontend camelCase
-function mapDbTaskToTask(dbTask: any): Task {
+// ── Icon encoding helpers ─────────────────────────────────────────────────────
+// We encode the icon inside the description column to avoid a DB schema change.
+// Format stored in Supabase: "ICON:🍽️|actual description text"
+const ICON_PREFIX = 'ICON:';
+const ICON_SEP = '|';
+
+function encodeIconDescription(icon: string | undefined, description: string | undefined): string {
+  const desc = description ?? '';
+  if (icon) return `${ICON_PREFIX}${icon}${ICON_SEP}${desc}`;
+  return desc;
+}
+
+function decodeIconDescription(raw: string | null | undefined): { icon: string; description: string } {
+  const s = raw ?? '';
+  if (s.startsWith(ICON_PREFIX)) {
+    const rest = s.slice(ICON_PREFIX.length);
+    const sepIdx = rest.indexOf(ICON_SEP);
+    if (sepIdx !== -1) return { icon: rest.slice(0, sepIdx), description: rest.slice(sepIdx + 1) };
+    return { icon: rest, description: '' };
+  }
+  return { icon: '📋', description: s };
+}
+
+// ── DB row mappers ────────────────────────────────────────────────────────────
+function mapDbTaskToTask(row: any): Task {
+  const { icon, description } = decodeIconDescription(row.description);
   return {
-    id: dbTask.id,
-    patientId: dbTask.patient_id,
-    routineId: dbTask.routine_id,
-    title: dbTask.title,
-    time: dbTask.time,
-    description: dbTask.description,
-    status: dbTask.status as TaskStatus,
-    completedAt: dbTask.completed_at,
-    createdAt: dbTask.created_at,
-    updatedAt: dbTask.updated_at,
+    id:          row.id,
+    patientId:   row.patient_id,
+    routineId:   row.routine_id ?? '',
+    title:       row.title      ?? '',
+    time:        row.time       ?? '',
+    description,
+    icon,
+    status:      row.status as TaskStatus,
+    completedAt: row.completed_at,
+    createdAt:   row.created_at,
+    updatedAt:   row.updated_at,
   };
 }
 
-function mapDbRoutineToRoutine(dbRoutine: any): Routine {
+function mapDbRoutineToRoutine(row: any): Routine {
   return {
-    id: dbRoutine.id,
-    patientId: dbRoutine.patient_id,
-    name: dbRoutine.name,
-    isActive: dbRoutine.is_active,
-    scheduleLabel: dbRoutine.schedule_label,
-    createdAt: dbRoutine.created_at,
-    updatedAt: dbRoutine.updated_at,
+    id:            row.id,
+    patientId:     row.patient_id,
+    name:          row.name           ?? '',
+    isActive:      row.is_active      ?? true,
+    scheduleLabel: row.schedule_label ?? '',
+    createdAt:     row.created_at,
+    updatedAt:     row.updated_at,
   };
 }
 
+// ── Provider ──────────────────────────────────────────────────────────────────
 export function TaskProvider({ children }: { children: React.ReactNode }) {
-  const [tasks, setTasks] = React.useState<Task[]>([]);
+  const [tasks,    setTasks]    = React.useState<Task[]>([]);
   const [routines, setRoutines] = React.useState<Routine[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const [loading,  setLoading]  = React.useState(true);
 
+  // ── Initial load + realtime ─────────────────────────────────────────────
   const loadTasks = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: tasksData, error: tasksError }, { data: routinesData, error: routinesError }] = await Promise.all([
-        supabase.from('tasks').select('*').order('created_at', { ascending: true }),
+      const [{ data: tData, error: tErr }, { data: rData, error: rErr }] = await Promise.all([
+        supabase.from('tasks').select('*').order('time', { ascending: true }),
         supabase.from('routines').select('*').order('created_at', { ascending: true }),
       ]);
-
-      if (tasksError) console.error('Error fetching tasks:', tasksError);
-      if (routinesError) console.error('Error fetching routines:', routinesError);
-
-      if (tasksData) setTasks(tasksData.map(mapDbTaskToTask));
-      if (routinesData) setRoutines(routinesData.map(mapDbRoutineToRoutine));
-    } catch (error) {
-      console.warn('Failed to load tasks from Supabase:', error);
+      if (tErr) console.error('tasks fetch error:', tErr);
+      if (rErr) console.error('routines fetch error:', rErr);
+      if (tData) setTasks(tData.map(mapDbTaskToTask));
+      if (rData) setRoutines(rData.map(mapDbRoutineToRoutine));
+    } catch (e) {
+      console.warn('loadTasks failed:', e);
     } finally {
       setLoading(false);
     }
@@ -96,142 +134,146 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     void loadTasks();
 
-    // Set up Realtime subscriptions for tasks
-    const taskSubscription = supabase
-      .channel('public:tasks')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          setTasks((currentTasks) => {
-            const newDbTask = payload.new as any;
-            if (payload.eventType === 'INSERT') {
-              return [...currentTasks, mapDbTaskToTask(newDbTask)];
-            }
-            if (payload.eventType === 'UPDATE') {
-              return currentTasks.map(t => t.id === newDbTask.id ? mapDbTaskToTask(newDbTask) : t);
-            }
-            if (payload.eventType === 'DELETE') {
-              return currentTasks.filter(t => t.id !== (payload.old as any).id);
-            }
-            return currentTasks;
-          });
-        }
-      )
+    const taskSub = supabase
+      .channel('ctx:tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, ({ eventType, new: n, old: o }) => {
+        setTasks((cur) => {
+          if (eventType === 'INSERT') {
+            // If we already have this id (optimistic insert), replace it; otherwise append.
+            const exists = cur.some(t => t.id === (n as any).id);
+            return exists
+              ? cur.map(t => t.id === (n as any).id ? mapDbTaskToTask(n) : t)
+              : [...cur, mapDbTaskToTask(n)];
+          }
+          if (eventType === 'UPDATE') return cur.map(t => t.id === (n as any).id ? mapDbTaskToTask(n) : t);
+          if (eventType === 'DELETE') return cur.filter(t => t.id !== (o as any).id);
+          return cur;
+        });
+      })
       .subscribe();
 
-    // Set up Realtime subscriptions for routines
-    const routineSubscription = supabase
-      .channel('public:routines')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'routines' },
-        (payload) => {
-          setRoutines((currentRoutines) => {
-            const newDbRoutine = payload.new as any;
-            if (payload.eventType === 'INSERT') {
-              return [...currentRoutines, mapDbRoutineToRoutine(newDbRoutine)];
-            }
-            if (payload.eventType === 'UPDATE') {
-              return currentRoutines.map(r => r.id === newDbRoutine.id ? mapDbRoutineToRoutine(newDbRoutine) : r);
-            }
-            if (payload.eventType === 'DELETE') {
-              return currentRoutines.filter(r => r.id !== (payload.old as any).id);
-            }
-            return currentRoutines;
-          });
-        }
-      )
+    const routineSub = supabase
+      .channel('ctx:routines')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'routines' }, ({ eventType, new: n, old: o }) => {
+        setRoutines((cur) => {
+          if (eventType === 'INSERT') return [...cur, mapDbRoutineToRoutine(n)];
+          if (eventType === 'UPDATE') return cur.map(r => r.id === (n as any).id ? mapDbRoutineToRoutine(n) : r);
+          if (eventType === 'DELETE') return cur.filter(r => r.id !== (o as any).id);
+          return cur;
+        });
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(taskSubscription);
-      supabase.removeChannel(routineSubscription);
+      supabase.removeChannel(taskSub);
+      supabase.removeChannel(routineSub);
     };
   }, [loadTasks]);
 
-  const createRoutine = React.useCallback(async (routineData: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // ── createRoutine ─────────────────────────────────────────────────────────
+  const createRoutine = React.useCallback(async (data: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => {
     const routineId = `routine_${Date.now()}`;
-    const dbRoutine = {
-      id: routineId,
-      patient_id: routineData.patientId,
-      name: routineData.name,
-      is_active: routineData.isActive,
-      schedule_label: routineData.scheduleLabel,
-    };
+    const { error } = await supabase.from('routines').insert({
+      id: routineId, patient_id: data.patientId,
+      name: data.name, is_active: data.isActive, schedule_label: data.scheduleLabel,
+    });
+    if (error) { console.error('createRoutine error:', error); throw error; }
 
-    const { error: routineError } = await supabase.from('routines').insert(dbRoutine);
-    if (routineError) {
-      console.error('Error creating routine:', routineError);
-      throw routineError;
-    }
-
-    if (routineData.tasks && routineData.tasks.length > 0) {
-      const dbTasks = routineData.tasks.map(task => ({
-        id: task.id || `task_${Date.now()}_${Math.random()}`,
-        patient_id: routineData.patientId,
-        routine_id: routineId,
-        title: task.title,
-        time: task.time,
-        description: task.description || '',
-        status: task.status || 'pending',
+    if (data.tasks?.length) {
+      const rows = data.tasks.map(t => ({
+        id: t.id || `task_${Date.now()}_${Math.random()}`,
+        patient_id: data.patientId, routine_id: routineId,
+        title: t.title, time: t.time,
+        description: encodeIconDescription(t.icon, t.description),
+        status: t.status || 'pending',
       }));
-
-      const { error: tasksError } = await supabase.from('tasks').insert(dbTasks);
-      if (tasksError) {
-        console.error('Error creating tasks:', tasksError);
-      }
+      const { error: tErr } = await supabase.from('tasks').insert(rows);
+      if (tErr) console.error('createRoutine tasks error:', tErr);
     }
-
-    // Return an optimistically generated routine (it will be corrected by real-time sync if needed)
-    return {
-      ...routineData,
-      id: routineId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as Routine;
+    return { ...data, id: routineId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Routine;
   }, []);
 
-  const updateTaskStatus = React.useCallback(async (taskId: string, status: TaskStatus) => {
-    // Optimistic UI update
-    setTasks(current => current.map(t => 
-      t.id === taskId 
-        ? { ...t, status, completedAt: status === 'done' ? new Date().toISOString() : undefined } 
-        : t
-    ));
+  // ── createTask ────────────────────────────────────────────────────────────
+  const createTask = React.useCallback(async (draft: TaskDraft): Promise<Task> => {
+    const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const row = {
+      id,
+      patient_id:  draft.patientId,
+      routine_id:  null,
+      title:       draft.title.trim(),
+      time:        draft.time.trim(),
+      description: encodeIconDescription(draft.icon, draft.description),
+      status:      draft.status ?? 'pending',
+    };
+    // Optimistic
+    const optimistic = mapDbTaskToTask({ ...row, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    setTasks(cur => [...cur, optimistic]);
 
+    const { data, error } = await supabase.from('tasks').insert(row).select().single();
+    if (error) {
+      console.error('createTask error:', error);
+      setTasks(cur => cur.filter(t => t.id !== id));
+      throw error;
+    }
+    const real = mapDbTaskToTask(data);
+    setTasks(cur => cur.map(t => t.id === id ? real : t));
+    return real;
+  }, []);
+
+  // ── updateTask ────────────────────────────────────────────────────────────
+  const updateTask = React.useCallback(async (taskId: string, patch: Partial<TaskDraft>) => {
+    setTasks(cur => cur.map(t => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        ...(patch.title       !== undefined ? { title:       patch.title       } : {}),
+        ...(patch.time        !== undefined ? { time:        patch.time        } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(patch.icon        !== undefined ? { icon:        patch.icon        } : {}),
+        ...(patch.status      !== undefined ? { status:      patch.status      } : {}),
+      };
+    }));
+
+    const current = tasks.find(t => t.id === taskId);
+    const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.title  !== undefined) dbPatch.title  = patch.title.trim();
+    if (patch.time   !== undefined) dbPatch.time   = patch.time.trim();
+    if (patch.status !== undefined) dbPatch.status = patch.status;
+    dbPatch.description = encodeIconDescription(patch.icon ?? current?.icon, patch.description ?? current?.description);
+
+    const { error } = await supabase.from('tasks').update(dbPatch).eq('id', taskId);
+    if (error) { console.error('updateTask error:', error); void loadTasks(); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, loadTasks]);
+
+  // ── updateTaskStatus ──────────────────────────────────────────────────────
+  const updateTaskStatus = React.useCallback(async (taskId: string, status: TaskStatus) => {
+    setTasks(cur => cur.map(t =>
+      t.id === taskId ? { ...t, status, completedAt: status === 'done' ? new Date().toISOString() : undefined } : t
+    ));
     const completedAt = status === 'done' ? new Date().toISOString() : null;
-    const { error } = await supabase
-      .from('tasks')
+    const { error } = await supabase.from('tasks')
       .update({ status, completed_at: completedAt, updated_at: new Date().toISOString() })
       .eq('id', taskId);
-
-    if (error) {
-      console.error('Error updating task status:', error);
-      // Might want to silently revert or show error if this fails.
-      // Easiest is to just call loadTasks() on error to resync.
-      loadTasks();
-    }
+    if (error) { console.error('updateTaskStatus error:', error); void loadTasks(); }
   }, [loadTasks]);
 
-  const getTasksForPatient = React.useCallback((patientId: string) => {
-    return tasks.filter(task => task.patientId === patientId);
-  }, [tasks]);
+  // ── deleteTask ────────────────────────────────────────────────────────────
+  const deleteTask = React.useCallback(async (taskId: string) => {
+    setTasks(cur => cur.filter(t => t.id !== taskId));
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) { console.error('deleteTask error:', error); void loadTasks(); }
+  }, [loadTasks]);
 
-  const getRoutinesForPatient = React.useCallback((patientId: string) => {
-    return routines.filter(routine => routine.patientId === patientId);
-  }, [routines]);
+  const getTasksForPatient    = React.useCallback((pid: string) => tasks.filter(t => t.patientId === pid), [tasks]);
+  const getRoutinesForPatient = React.useCallback((pid: string) => routines.filter(r => r.patientId === pid), [routines]);
 
   const value = React.useMemo(() => ({
-    tasks,
-    routines,
-    loading,
+    tasks, routines, loading,
     loadTasks,
-    createRoutine,
-    updateTaskStatus,
-    getTasksForPatient,
-    getRoutinesForPatient
-  }), [tasks, routines, loading, loadTasks, createRoutine, updateTaskStatus, getTasksForPatient, getRoutinesForPatient]);
+    createRoutine, createTask, updateTask, updateTaskStatus, deleteTask,
+    getTasksForPatient, getRoutinesForPatient,
+  }), [tasks, routines, loading, loadTasks, createRoutine, createTask, updateTask, updateTaskStatus, deleteTask, getTasksForPatient, getRoutinesForPatient]);
 
   return React.createElement(TaskContext.Provider, { value }, children);
 }

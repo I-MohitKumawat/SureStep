@@ -27,7 +27,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 type ActionState = 'done' | 'missed' | 'unsure' | null;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 
-type Task = { id: string; title: string; time: string; state: ActionState };
+type Task = { id: string; title: string; time: string; icon?: string; state: ActionState };
 
 
 // ─── Task meta: derive icon, hint, duration from task title ──────────────────
@@ -259,11 +259,12 @@ const RoutineCard = ({
   onHelp: (task: Task) => void;
 }) => {
   const meta = getTaskMeta(task.title);
+  const displayEmoji = task.icon ?? meta.emoji;
   return (
     <View style={styles.mainRoutineCard}>
       <View style={styles.routineTop}>
         <View style={styles.routineIconWrap}>
-          <Text style={styles.routineIcon}>{meta.emoji}</Text>
+          <Text style={styles.routineIcon}>{displayEmoji}</Text>
         </View>
         <View style={styles.routineTextWrap}>
           <Text style={styles.routineTaskTitle}>{task.title}</Text>
@@ -379,6 +380,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
     () => patientId
       ? tasks.filter((t) => t.patientId === patientId).map((t) => ({
           id: t.id, title: t.title, time: t.time,
+          icon: t.icon,
           state: t.status === 'pending' ? null : (t.status as ActionState),
         }))
       : [],
