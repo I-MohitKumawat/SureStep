@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "SureStep",
+    "slug": "surestep",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "jsEngine": "hermes",
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-font"
+    ]
+  }
+}
