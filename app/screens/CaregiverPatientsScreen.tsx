@@ -24,7 +24,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { supabase } from '../utils/supabaseClient';
-import { subscribeToCaregiversLinks } from '../../backend/caregiverLinks';
+import {
+  subscribeToCaregiversLinks,
+  fetchPendingRequests,
+  respondToPatientRequest,
+} from '../../backend/caregiverLinks';
 import { useAuth } from '../../packages/core/auth/AuthContext';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
@@ -150,7 +154,13 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
   const [rawTasks,    setRawTasks]    = useState<RawTask[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery,     setSearchQuery]     = useState('');
+  const [pendingRequests, setPendingRequests] = useState<Array<{
+    patient_phone: string;
+    patient_name: string;
+    confirmed_at: string;
+  }>>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
 
   // ── Data fetcher ────────────────────────────────────────────────────────────
   const loadPatients = useCallback(async (phone: string) => {
@@ -228,17 +238,50 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, []);
 
+  // ── Load pending requests ───────────────────────────────────────────────────
+  const loadPendingRequests = useCallback(async (phone: string) => {
+    setRequestsLoading(true);
+    try {
+      console.log('[DEBUG] Loading pending requests for:', phone);
+      const requests = await fetchPendingRequests(phone);
+      console.log('[DEBUG] Pending requests found:', JSON.stringify(requests));
+      setPendingRequests(requests);
+    } catch (e) {
+      console.error('[CaregiverPatients] loadPendingRequests error:', e);
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, []);
+
+  const handleRespond = useCallback(async (
+    patientPhone: string,
+    action: 'confirmed' | 'rejected',
+  ) => {
+    if (!caregiverPhone) return;
+    try {
+      await respondToPatientRequest(caregiverPhone, patientPhone, action);
+      void loadPendingRequests(caregiverPhone);
+      void loadPatients(caregiverPhone);
+    } catch (e) {
+      console.error('[CaregiverPatients] handleRespond error:', e);
+    }
+  }, [caregiverPhone, loadPendingRequests, loadPatients]);
+
   // ── Initial load ────────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (caregiverPhone) void loadPatients(caregiverPhone);
-  }, [caregiverPhone, loadPatients]);
-
+    if (caregiverPhone) {
+      void loadPatients(caregiverPhone);
+      void loadPendingRequests(caregiverPhone);
+    }
+  }, [caregiverPhone, loadPatients, loadPendingRequests]);
   // ── Realtime subscription ───────────────────────────────────────────────────
   React.useEffect(() => {
     if (!caregiverPhone) return;
-    return subscribeToCaregiversLinks(caregiverPhone, () => void loadPatients(caregiverPhone));
-  }, [caregiverPhone, loadPatients]);
-
+    return subscribeToCaregiversLinks(caregiverPhone, () => {
+      void loadPatients(caregiverPhone);
+      void loadPendingRequests(caregiverPhone);
+    });
+  }, [caregiverPhone, loadPatients, loadPendingRequests]);
   // ── Derived: prioritised alerts from rawTasks ───────────────────────────────
   const prioritizedAlerts = useMemo(() => {
     const alerts: PatientAlert[] = [];
@@ -344,14 +387,49 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
       )}
 
       {/* ── Alerts tab ────────────────────────────────────────────────────── */}
+      {/* ── Alerts tab ────────────────────────────────────────────────────── */}
       {activeTab === 'Alerts' && (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PRIORITY ALERTS</Text>
+            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>ALERTS</Text>
           </View>
 
-          <Text style={styles.sectionLabel}>PRIORITY ALERTS</Text>
+          {/* ── Pending patient requests ──────────────────────────────────── */}
+          <Text style={styles.sectionLabel}>PATIENT REQUESTS</Text>
+          {requestsLoading && <ActivityIndicator color={C.primary} style={{ marginBottom: 12 }} />}
+          {!requestsLoading && pendingRequests.length === 0 && (
+            <Text style={[styles.stateNote, { textAlign: 'left', marginTop: 0, marginBottom: 16 }]}>
+              No pending requests.
+            </Text>
+          )}
+          {pendingRequests.map((req) => (
+            <View key={req.patient_phone} style={requestStyles.card}>
+              <View style={requestStyles.avatar}>
+                <Text style={requestStyles.avatarInitial}>{req.patient_name[0]?.toUpperCase()}</Text>
+              </View>
+              <View style={requestStyles.info}>
+                <Text style={requestStyles.name}>{req.patient_name}</Text>
+                <Text style={requestStyles.sub}>Wants to add you as their caregiver</Text>
+              </View>
+              <View style={requestStyles.actions}>
+                <Pressable
+                  style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleRespond(req.patient_phone, 'confirmed')}
+                >
+                  <Text style={requestStyles.acceptText}>Accept</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleRespond(req.patient_phone, 'rejected')}
+                >
+                  <Text style={requestStyles.rejectText}>Reject</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
 
+          {/* ── Task alerts ───────────────────────────────────────────────── */}
+          <Text style={[styles.sectionLabel, { marginTop: 8 }]}>PRIORITY ALERTS</Text>
           {prioritizedAlerts.length === 0 ? (
             <Text style={styles.stateNote}>No active alerts right now.</Text>
           ) : prioritizedAlerts.map((alert) => (
@@ -467,7 +545,9 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
                   <IconComponent active={isActive} />
                 </View>
                 <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab}{tab === 'Alerts' && prioritizedAlerts.length > 0 ? ` (${prioritizedAlerts.length})` : ''}
+                  {tab}{tab === 'Alerts' && (prioritizedAlerts.length + pendingRequests.length) > 0
+                  ? ` (${prioritizedAlerts.length + pendingRequests.length})`
+                  : ''}
                 </Text>
                 {isActive && <View style={styles.activeIndicator} />}
               </Pressable>
@@ -591,5 +671,45 @@ const settingsStyles = StyleSheet.create({
   fieldTextWrap: { flex: 1 },
   fieldLabel:    { fontFamily: F.medium, fontSize: 11, color: C.textSecondary, letterSpacing: 0.4 },
   fieldValue:    { fontFamily: F.bold, fontSize: 15, color: C.textPrimary, marginTop: 1 },
+});
+
+
+const requestStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  avatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: C.primaryLight,
+    borderWidth: 2, borderColor: C.primary,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarInitial: { fontFamily: F.extraBold, fontSize: 18, color: C.primary },
+  info:          { flex: 1 },
+  name:          { fontFamily: F.bold, fontSize: 15, color: C.textPrimary },
+  sub:           { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginTop: 2 },
+  actions:       { flexDirection: 'column', gap: 6 },
+  acceptBtn: {
+    backgroundColor: '#0E7364',
+    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6,
+    alignItems: 'center',
+  },
+  acceptText: { fontFamily: F.bold, color: '#FFFFFF', fontSize: 12 },
+  rejectBtn: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6,
+    alignItems: 'center',
+    borderWidth: 1, borderColor: '#FECACA',
+  },
+  rejectText: { fontFamily: F.bold, color: '#DC2626', fontSize: 12 },
 });
 

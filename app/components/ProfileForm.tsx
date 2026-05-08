@@ -37,8 +37,13 @@ const ProfileForm = React.forwardRef<any, ProfileFormProps>(
       email: initialValues?.email ?? '',
       phone: initialValues?.phone ?? '',
       caregiverInfo: role === 'caregiver' ? {
-        relationship: initialValues?.caregiverInfo?.relationship ?? '',
-        experience: initialValues?.caregiverInfo?.experience ?? ''
+        relationship:    initialValues?.caregiverInfo?.relationship    ?? '',
+        experience:      initialValues?.caregiverInfo?.experience      ?? '',
+        educationLevel:  initialValues?.caregiverInfo?.educationLevel  ?? '',
+        yearsExperience: initialValues?.caregiverInfo?.yearsExperience ?? '',
+        certifications:  initialValues?.caregiverInfo?.certifications  ?? '',
+        languages:       initialValues?.caregiverInfo?.languages       ?? '',
+        availability:    initialValues?.caregiverInfo?.availability    ?? '',
       } : undefined
     }));
 
@@ -51,8 +56,13 @@ const ProfileForm = React.forwardRef<any, ProfileFormProps>(
         setValues(prev => ({
           ...prev,
           caregiverInfo: {
-            relationship: prev.caregiverInfo?.relationship ?? '',
-            experience: prev.caregiverInfo?.experience ?? '',
+            relationship:    prev.caregiverInfo?.relationship    ?? '',
+            experience:      prev.caregiverInfo?.experience      ?? '',
+            educationLevel:  prev.caregiverInfo?.educationLevel  ?? '',
+            yearsExperience: prev.caregiverInfo?.yearsExperience ?? '',
+            certifications:  prev.caregiverInfo?.certifications  ?? '',
+            languages:       prev.caregiverInfo?.languages       ?? '',
+            availability:    prev.caregiverInfo?.availability    ?? '',
             [field]: value
           }
         }));
@@ -159,6 +169,85 @@ const ProfileForm = React.forwardRef<any, ProfileFormProps>(
                 placeholderTextColor={theme.colors.textSecondary}
                 multiline
                 textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Education Level</Text>
+              <TextInput
+                style={[styles.input, {
+                  borderColor: theme.colors.borderSubtle,
+                  color: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.background
+                }]}
+                value={values.caregiverInfo?.educationLevel || ''}
+                onChangeText={(value) => updateCaregiverInfo('educationLevel', value)}
+                placeholder="e.g. Bachelor's in Nursing, Diploma in Healthcare"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Years of Experience</Text>
+              <TextInput
+                style={[styles.input, {
+                  borderColor: theme.colors.borderSubtle,
+                  color: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.background
+                }]}
+                value={values.caregiverInfo?.yearsExperience || ''}
+                onChangeText={(value) => updateCaregiverInfo('yearsExperience', value)}
+                placeholder="e.g. 3"
+                placeholderTextColor={theme.colors.textSecondary}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Certifications</Text>
+              <TextInput
+                style={[styles.input, {
+                  borderColor: theme.colors.borderSubtle,
+                  color: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.background,
+                  height: 80
+                }]}
+                value={values.caregiverInfo?.certifications || ''}
+                onChangeText={(value) => updateCaregiverInfo('certifications', value)}
+                placeholder="e.g. CPR Certified, Dementia Care Certificate"
+                placeholderTextColor={theme.colors.textSecondary}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Languages Spoken</Text>
+              <TextInput
+                style={[styles.input, {
+                  borderColor: theme.colors.borderSubtle,
+                  color: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.background
+                }]}
+                value={values.caregiverInfo?.languages || ''}
+                onChangeText={(value) => updateCaregiverInfo('languages', value)}
+                placeholder="e.g. English, Tamil, Hindi"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Availability</Text>
+              <TextInput
+                style={[styles.input, {
+                  borderColor: theme.colors.borderSubtle,
+                  color: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.background
+                }]}
+                value={values.caregiverInfo?.availability || ''}
+                onChangeText={(value) => updateCaregiverInfo('availability', value)}
+                placeholder="e.g. Weekdays 9am–5pm, Flexible"
+                placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
           </>
