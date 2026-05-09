@@ -62,18 +62,17 @@ export function CaregiverProvider({ children }: { children: React.ReactNode }) {
     async (c: CaregiverListing | null, patientPhone: string, patientName?: string) => {
       if (!patientPhone) return;
 
-      // Optimistic update so UI responds immediately
-      _setConfirmedCaregiver(c);
-
       try {
         if (c) {
+          // Save as pending — don't update UI until caregiver confirms
           await confirmCaregiver(patientPhone, c, patientName);
+          // Don't set confirmedCaregiver here — wait for caregiver to accept
         } else {
           await removeCaregiver(patientPhone);
+          _setConfirmedCaregiver(null);
         }
       } catch (e) {
         console.warn('[CaregiverContext] Supabase write failed:', e);
-        // Revert optimistic update on failure
         _setConfirmedCaregiver(null);
       }
     },

@@ -368,6 +368,7 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ── Caregiver search sub-view state ─────────────────────────────────────
   const [searchSubView, setSearchSubView] = useState<'list' | 'detail' | null>(null);
+  const [requestSent, setRequestSent] = useState(false); 
   const [viewingCaregiver, setViewingCaregiver] = useState<CaregiverListing | null>(null);
   const { confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver } = useCaregiver();
 
@@ -487,6 +488,14 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               </View>
             </View>
+          ) : requestSent ? (
+            <View style={[styles.mainRoutineCard, { alignItems: 'center', paddingVertical: 32 }]}>
+              <Text style={{ fontSize: 40, marginBottom: 12 }}>⏳</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textPrimary, textAlign: 'center', marginBottom: 6 }}>Request Sent!</Text>
+              <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, textAlign: 'center' }}>
+                Waiting for your caregiver to accept your request.
+              </Text>
+            </View>
           ) : (
             <View style={[styles.mainRoutineCard, { alignItems: 'center', paddingVertical: 32 }]}>
               <Text style={{ fontSize: 40, marginBottom: 12 }}>👨‍👩‍👧</Text>
@@ -588,10 +597,8 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
             }
           }}
           onConfirm={async (c) => {
-            // Pass patient name so it's written to Supabase at confirm time
             await setConfirmedCaregiver(c, patientId ?? '', displayName);
-            // Dismiss entire search flow — return to Home
-            setActiveTab('Home');
+            setRequestSent(true);
             setSearchSubView(null);
             setViewingCaregiver(null);
           }}
