@@ -112,6 +112,22 @@ const actionSpecs: Array<{ key: Exclude<ActionState, null>; icon: string; label?
   { key: 'unsure', icon: '❔' },
 ];
 
+// ─── Activity Tab Content ─────────────────────────────────────────────────────
+// Navigates immediately to the new enhanced PatientActivities hub.
+// Renders a brief loading view while the navigation fires.
+const ActivityTabContent = ({ onNavigate }: { onNavigate: () => void }) => {
+  React.useEffect(() => {
+    onNavigate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 32, marginBottom: 12 }}>🧩</Text>
+      <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textSecondary }}>Opening Activities…</Text>
+    </View>
+  );
+};
+
 // ─── Caregiver Profile Modal ──────────────────────────────────────────────────
 const CaregiverProfileModal = ({
   visible,
@@ -498,40 +514,9 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         </ScrollView>
 
-      /* ── Activity tab ────────────────────────────────────────────────── */
+      /* ── Activity tab — navigate to the Activity Hub screen ─────────── */
       ) : activeTab === 'Activity' ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerCard}>
-            <View>
-              <Text style={styles.greetingOverline}>ACTIVITIES</Text>
-              <Text style={[styles.greetingName, { fontSize: 26 }]}>What to do today?</Text>
-            </View>
-          </View>
-          {([
-            { id: 'games',    icon: '🧩', title: 'Games',    subtitle: 'Fun puzzles & memory games', color: '#FFF3E0', screen: 'PatientGames' },
-            { id: 'workout',  icon: '🏋️', title: 'Workout',  subtitle: 'Gentle exercises for you',   color: '#E8F5E9', screen: 'PatientWorkout' },
-            { id: 'relaxing', icon: '🎵', title: 'Relaxing', subtitle: 'Calm your mind & body',      color: '#EDE7F6', screen: 'PatientRelaxing' },
-          ] as const).map((item) => (
-            <Pressable
-              key={item.id}
-              onPress={() => navigation.navigate(item.screen as any)}
-              style={({ pressed }) => [
-                styles.mainRoutineCard,
-                { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: item.color, borderColor: 'transparent', marginBottom: 12 },
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 28 }}>{item.icon}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: F.extraBold, fontSize: 20, color: C.textPrimary }}>{item.title}</Text>
-                <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginTop: 2 }}>{item.subtitle}</Text>
-              </View>
-              <Text style={{ fontSize: 20, color: C.textMuted }}>›</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <ActivityTabContent onNavigate={() => navigation.navigate('PatientActivities')} />
 
       ) : activeTab === 'Search' && confirmedCaregiver ? (
         // ── Confirmed Caregiver Profile Card ─────────────────────────────────

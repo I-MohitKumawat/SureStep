@@ -16,6 +16,9 @@ import { PatientGamesScreen } from '../screens/PatientGamesScreen';
 import { PatientWorkoutScreen } from '../screens/PatientWorkoutScreen';
 import { PatientRelaxingScreen } from '../screens/PatientRelaxingScreen';
 import { AskAiScreen } from '../screens/AskAiScreen';
+import { ActivityDetailScreen } from '../screens/ActivityDetailScreen';
+import { ActivityPlayScreen } from '../screens/ActivityPlayScreen';
+import { ActivityReportsScreen } from '../screens/ActivityReportsScreen';
 import { RoleEntryScreen } from '../screens/RoleEntryScreen';
 import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
@@ -57,6 +60,9 @@ export type HomeStackParamList = {
   PatientWorkout: undefined;
   PatientRelaxing: undefined;
   AskAi: undefined;
+  ActivityDetail: { activityId: string };
+  ActivityPlay: { activityId: string };
+  ActivityReports: undefined;
 
   Settings: undefined;
 
@@ -198,6 +204,21 @@ function HomeStackNavigator({
         name="AskAi"
         component={AskAiScreen}
         options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <HomeStack.Screen
+        name="ActivityDetail"
+        component={ActivityDetailScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <HomeStack.Screen
+        name="ActivityPlay"
+        component={ActivityPlayScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <HomeStack.Screen
+        name="ActivityReports"
+        component={ActivityReportsScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
 
       <HomeStack.Screen name="Settings" component={MoreScreen} options={{ title: 'Settings' }} />

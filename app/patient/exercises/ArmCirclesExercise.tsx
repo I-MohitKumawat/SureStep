@@ -1,0 +1,1 @@
+export { ArmCirclesExercise } from './ChairMarchExercise';

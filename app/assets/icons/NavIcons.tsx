@@ -125,3 +125,120 @@ export const IconSettings = ({ size = D, color = '#6B7280', strokeWidth = 1.8 }:
   </Svg>
 );
 
+// ─── Activity Category Icons ──────────────────────────────────────────────────
+
+/** Games – puzzle piece */
+export const IconGames = ({ size = D, color = '#4F46E5', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.5 2.5 0 0 1 0 5H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.5 2.5 0 0 1 5 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5z"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+/** Workout – dumbbell */
+export const IconWorkout = ({ size = D, color = '#16A34A', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x="5.5" y="5" width="2" height="14" rx="1" stroke={color} strokeWidth={strokeWidth}/>
+    <Rect x="16.5" y="5" width="2" height="14" rx="1" stroke={color} strokeWidth={strokeWidth}/>
+    <Line x1="7.5" y1="12" x2="16.5" y2="12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Rect x="3" y="8" width="2.5" height="8" rx="1" stroke={color} strokeWidth={strokeWidth}/>
+    <Rect x="18.5" y="8" width="2.5" height="8" rx="1" stroke={color} strokeWidth={strokeWidth}/>
+  </Svg>
+);
+
+/** Relaxing – leaf */
+export const IconRelaxing = ({ size = D, color = '#7C3AED', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M17 8C8 10 5.9 16.17 3.82 19.34a1 1 0 0 0 1.38 1.38C7.55 18.7 13.5 17 17 8z"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Path d="M4 20l3-3" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+  </Svg>
+);
+
+// ─── Individual Activity Icons ─────────────────────────────────────────────────
+
+export const IconMatchPairs = ({ size = D, color = '#4F46E5', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x="2" y="4" width="9" height="13" rx="2" stroke={color} strokeWidth={strokeWidth}/>
+    <Rect x="13" y="4" width="9" height="13" rx="2" stroke={color} strokeWidth={strokeWidth}/>
+    <Line x1="5" y1="10" x2="9" y2="10" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Line x1="15" y1="10" x2="19" y2="10" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+  </Svg>
+);
+
+export const IconWordSearch = ({ size = D, color = '#059669', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth={strokeWidth}/>
+    <Line x1="3" y1="9" x2="21" y2="9" stroke={color} strokeWidth={strokeWidth}/>
+    <Line x1="3" y1="15" x2="21" y2="15" stroke={color} strokeWidth={strokeWidth}/>
+    <Line x1="9" y1="3" x2="9" y2="21" stroke={color} strokeWidth={strokeWidth}/>
+    <Line x1="15" y1="3" x2="15" y2="21" stroke={color} strokeWidth={strokeWidth}/>
+  </Svg>
+);
+
+export const IconJigsaw = ({ size = D, color = '#7C3AED', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.5 2.5 0 0 1 0 5H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.5 2.5 0 0 1 5 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5z"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+export const IconSitStep = ({ size = D, color = '#16A34A', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="5" r="2" stroke={color} strokeWidth={strokeWidth}/>
+    <Path d="M9 10h6M10 10v5l-2 4M14 10v5l2 4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+    <Line x1="5" y1="16" x2="19" y2="16" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+  </Svg>
+);
+
+export const IconSpinStrengthen = ({ size = D, color = '#15803D', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M21 2v6h-6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M3 12a9 9 0 0 1 15-6.7L21 8" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M3 22v-6h6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M21 12a9 9 0 0 1-15 6.7L3 16" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+  </Svg>
+);
+
+export const IconNeckRelief = ({ size = D, color = '#14532D', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="6" r="3" stroke={color} strokeWidth={strokeWidth}/>
+    <Path d="M12 9v4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Path d="M8 20c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Path d="M6 10c-1.5.5-2 1.5-2 2.5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Path d="M18 10c1.5.5 2 1.5 2 2.5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+  </Svg>
+);
+
+export const IconMusicListen = ({ size = D, color = '#7C3AED', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M3 18v-6a9 9 0 0 1 18 0v6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+  </Svg>
+);
+
+export const IconMeditation = ({ size = D, color = '#9333EA', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="5" r="2.5" stroke={color} strokeWidth={strokeWidth}/>
+    <Path d="M7 14c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Path d="M4 16c0-1.1.9-2 2-2M20 16c0-1.1-.9-2-2-2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Line x1="7" y1="14" x2="17" y2="14" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+  </Svg>
+);
+
+export const IconBreathing = ({ size = D, color = '#0EA5E9', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={strokeWidth}/>
+    <Circle cx="12" cy="12" r="7" stroke={color} strokeWidth={strokeWidth} strokeDasharray="3 2"/>
+    <Line x1="12" y1="2" x2="12" y2="5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Line x1="12" y1="19" x2="12" y2="22" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Line x1="2" y1="12" x2="5" y2="12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+    <Line x1="19" y1="12" x2="22" y2="12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
+  </Svg>
+);
