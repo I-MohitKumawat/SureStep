@@ -71,9 +71,9 @@ async function writeWavFile(
   }
 
   // Write to device cache and return a real file:// path
-  const path = `${FileSystem.cacheDirectory}surestep_${fileId}.wav`;
-  await FileSystem.writeAsStringAsync(path, b64, {
-    encoding: FileSystem.EncodingType.Base64,
+  const path = `${(FileSystem as any).cacheDirectory}surestep_${fileId}.wav`;
+  await (FileSystem as any).writeAsStringAsync(path, b64, {
+    encoding: (FileSystem as any).EncodingType.Base64,
   });
   return path;
 }
