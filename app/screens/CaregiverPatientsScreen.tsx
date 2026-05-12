@@ -59,15 +59,6 @@ type Patient = {
   statusLabel: 'On track' | 'Needs attention' | 'All done';
 };
 
-type AlertPriority = 'high' | 'medium' | 'low';
-type PatientAlert = {
-  id: string;
-  patientId: string;
-  patientName: string;
-  message: string;
-  priority: AlertPriority;
-};
-
 type RawTask = {
   id: string;
   patient_id: string;
@@ -105,6 +96,25 @@ const STATUS_COLORS: Record<Patient['statusLabel'], { bg: string; text: string; 
   'All done':        { bg: '#D1FAE5',       text: '#065F46',   dot: '#10B981'  },
   'Needs attention': { bg: '#FEE2E2',       text: '#991B1B',   dot: '#DC2626'  },
 };
+
+// ─── Risk helpers ─────────────────────────────────────────────────────────────
+
+type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
+const RISK_COLORS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
+  critical: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
+  high:     { bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
+  medium:   { bg: '#FEF9EC', text: '#78350F', border: '#FDE68A' },
+  low:      { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
+};
+const RISK_RANK: Record<RiskLevel, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function computeRiskLevel(missedCount: number, hasMeds: boolean, criticalAlerts: number): RiskLevel {
+  let score = missedCount * 3 + (hasMeds ? 2 : 0) + criticalAlerts * 4;
+  if (score >= 10) return 'critical';
+  if (score >= 6)  return 'high';
+  if (score >= 2)  return 'medium';
+  return 'low';
+}
 
 // ─── Patient Card ─────────────────────────────────────────────────────────────
 
@@ -282,50 +292,12 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
       void loadPendingRequests(caregiverPhone);
     });
   }, [caregiverPhone, loadPatients, loadPendingRequests]);
-  // ── Derived: prioritised alerts from rawTasks ───────────────────────────────
-  const prioritizedAlerts = useMemo(() => {
-    const alerts: PatientAlert[] = [];
-    const patientNameById = new Map(patients.map((p) => [p.id, p.name]));
-
-    const missed = rawTasks.filter((t) => t.status === 'missed');
-    const unsure = rawTasks.filter((t) => t.status === 'unsure');
-    const done   = rawTasks.filter((t) => t.status === 'done');
-
-    for (const t of missed) {
-      alerts.push({
-        id:          `missed-${t.id}`,
-        patientId:   t.patient_id,
-        patientName: patientNameById.get(t.patient_id) ?? 'Patient',
-        message:     `Missed routine: ${t.title}`,
-        priority:    'high',
-      });
-    }
-    for (const t of unsure) {
-      alerts.push({
-        id:          `unsure-${t.id}`,
-        patientId:   t.patient_id,
-        patientName: patientNameById.get(t.patient_id) ?? 'Patient',
-        message:     `Needs caregiver check: ${t.title}`,
-        priority:    'medium',
-      });
-    }
-    // One "all done" alert per patient if every task is complete
-    for (const p of patients) {
-      const pts = rawTasks.filter((t) => t.patient_id === p.id);
-      if (pts.length > 0 && pts.every((t) => t.status === 'done')) {
-        alerts.push({
-          id:          `done-${p.id}`,
-          patientId:   p.id,
-          patientName: p.name,
-          message:     'All routines completed',
-          priority:    'low',
-        });
-      }
-    }
-
-    const rank: Record<AlertPriority, number> = { high: 0, medium: 1, low: 2 };
-    return alerts.sort((a, b) => rank[a.priority] - rank[b.priority]);
-  }, [rawTasks, patients]);
+  // ── Total alert count for nav badge (missed + unsure across all patients) ───
+  const totalAlertCount = useMemo(() => {
+    const missed = rawTasks.filter(t => t.status === 'missed').length;
+    const unsure = rawTasks.filter(t => t.status === 'unsure').length;
+    return missed + unsure + pendingRequests.length;
+  }, [rawTasks, pendingRequests]);
 
   // ── Derived: filtered patient list ─────────────────────────────────────────
   const filteredPatients = useMemo(() => {
@@ -386,85 +358,141 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
         </ScrollView>
       )}
 
-      {/* ── Alerts tab ────────────────────────────────────────────────────── */}
-      {/* ── Alerts tab ────────────────────────────────────────────────────── */}
       {activeTab === 'Alerts' && (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>ALERTS</Text>
+            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PATIENT ALERTS</Text>
           </View>
 
-          {/* ── Pending patient requests ──────────────────────────────────── */}
-          <Text style={styles.sectionLabel}>PATIENT REQUESTS</Text>
-          {requestsLoading && <ActivityIndicator color={C.primary} style={{ marginBottom: 12 }} />}
-          {!requestsLoading && pendingRequests.length === 0 && (
-            <Text style={[styles.stateNote, { textAlign: 'left', marginTop: 0, marginBottom: 16 }]}>
-              No pending requests.
-            </Text>
+          {/* ── Patient request section ───────────────────────────────── */}
+          {pendingRequests.length > 0 && (
+            <>
+              <Text style={styles.sectionLabel}>PENDING REQUESTS</Text>
+              {pendingRequests.map((req) => (
+                <View key={req.patient_phone} style={requestStyles.card}>
+                  <View style={requestStyles.avatar}>
+                    <Text style={requestStyles.avatarInitial}>{req.patient_name[0]?.toUpperCase()}</Text>
+                  </View>
+                  <View style={requestStyles.info}>
+                    <Text style={requestStyles.name}>{req.patient_name}</Text>
+                    <Text style={requestStyles.sub}>Wants to add you as their caregiver</Text>
+                  </View>
+                  <View style={requestStyles.actions}>
+                    <Pressable
+                      style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => handleRespond(req.patient_phone, 'confirmed')}
+                    >
+                      <Text style={requestStyles.acceptText}>Accept</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => handleRespond(req.patient_phone, 'rejected')}
+                    >
+                      <Text style={requestStyles.rejectText}>Reject</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </>
           )}
-          {pendingRequests.map((req) => (
-            <View key={req.patient_phone} style={requestStyles.card}>
-              <View style={requestStyles.avatar}>
-                <Text style={requestStyles.avatarInitial}>{req.patient_name[0]?.toUpperCase()}</Text>
-              </View>
-              <View style={requestStyles.info}>
-                <Text style={requestStyles.name}>{req.patient_name}</Text>
-                <Text style={requestStyles.sub}>Wants to add you as their caregiver</Text>
-              </View>
-              <View style={requestStyles.actions}>
-                <Pressable
-                  style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
-                  onPress={() => handleRespond(req.patient_phone, 'confirmed')}
-                >
-                  <Text style={requestStyles.acceptText}>Accept</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
-                  onPress={() => handleRespond(req.patient_phone, 'rejected')}
-                >
-                  <Text style={requestStyles.rejectText}>Reject</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
 
-          {/* ── Task alerts ───────────────────────────────────────────────── */}
-          <Text style={[styles.sectionLabel, { marginTop: 8 }]}>PRIORITY ALERTS</Text>
-          {prioritizedAlerts.length === 0 ? (
-            <Text style={styles.stateNote}>No active alerts right now.</Text>
-          ) : prioritizedAlerts.map((alert) => (
-            <Pressable
-              key={alert.id}
-              onPress={() =>
-                navigation.navigate('CaregiverDashboard', {
-                  patientPhone: alert.patientId,
-                  patientName:  alert.patientName,
-                })
-              }
-              style={[
-                styles.alertRow,
-                alert.priority === 'high'
-                  ? styles.alertHigh
-                  : alert.priority === 'medium'
-                    ? styles.alertMedium
-                    : styles.alertLow,
-              ]}
-            >
-              <View style={styles.alertTextWrap}>
-                <Text style={styles.alertPatient}>{alert.patientName}</Text>
-                <Text style={styles.alertMessage}>{alert.message}</Text>
-              </View>
-              <View style={styles.alertRight}>
-                <Text style={styles.alertPriority}>{alert.priority.toUpperCase()}</Text>
+          {/* ── Level 3: Patient Alert Summary Cards ─────────────────── */}
+          <Text style={[styles.sectionLabel, { marginTop: pendingRequests.length > 0 ? 12 : 0 }]}>PATIENT SAFETY OVERVIEW</Text>
+
+          {loading && <ActivityIndicator color={C.primary} style={{ marginTop: 20 }} />}
+          {!loading && patients.length === 0 && (
+            <Text style={styles.stateNote}>No patients linked yet.</Text>
+          )}
+
+          {!loading && (() => {
+            // Build per-patient alert summaries sorted by risk
+            const summaries = patients.map(p => {
+              const pts = rawTasks.filter(t => t.patient_id === p.id);
+              const missed = pts.filter(t => t.status === 'missed');
+              const unsure = pts.filter(t => t.status === 'unsure');
+              const hasMeds = pts.some(t =>
+                t.title.toLowerCase().includes('medic') ||
+                t.title.toLowerCase().includes('tablet') ||
+                t.title.toLowerCase().includes('pill')
+              );
+              const totalAlerts = missed.length + unsure.length;
+              const criticalCount = missed.length;
+              const risk = computeRiskLevel(missed.length, hasMeds, 0);
+              return { patient: p, totalAlerts, criticalCount, unsureCount: unsure.length, risk };
+            }).sort((a, b) => RISK_RANK[a.risk] - RISK_RANK[b.risk]);
+
+            return summaries.map(({ patient, totalAlerts, criticalCount, unsureCount, risk }) => {
+              const riskC = RISK_COLORS[risk];
+              return (
                 <Pressable
-                  onPress={() => void Linking.openURL('tel:')}
-                  style={({ pressed }) => [styles.alertSosBtn, pressed && { opacity: 0.72 }]}
+                  key={patient.id}
+                  style={({ pressed }) => [l3Styles.card, pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] }]}
+                  onPress={() => navigation.navigate('CaregiverDashboard', {
+                    patientPhone: patient.id,
+                    patientName: patient.name,
+                  })}
                 >
-                  <Text style={styles.alertSosText}>SOS</Text>
+                  {/* Header row */}
+                  <View style={l3Styles.cardHeader}>
+                    <View style={l3Styles.avatar}>
+                      <Text style={l3Styles.avatarText}>{patient.name[0]?.toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[l3Styles.patientName, totalAlerts > 0 && l3Styles.patientNameUnseen]}>
+                        {patient.name}
+                      </Text>
+                      <Text style={l3Styles.lastSeen}>Last activity · {patient.lastActivity}</Text>
+                    </View>
+                    <View style={[l3Styles.riskBadge, { backgroundColor: riskC.bg, borderColor: riskC.border }]}>
+                      <Text style={[l3Styles.riskText, { color: riskC.text }]}>{risk.toUpperCase()}</Text>
+                    </View>
+                  </View>
+
+                  {/* Alert counts */}
+                  {totalAlerts > 0 ? (
+                    <View style={l3Styles.countRow}>
+                      <View style={l3Styles.countChip}>
+                        <Text style={l3Styles.countChipNum}>{totalAlerts}</Text>
+                        <Text style={l3Styles.countChipLabel}> Total Alerts</Text>
+                      </View>
+                      {criticalCount > 0 && (
+                        <View style={[l3Styles.countChip, l3Styles.countChipCrit]}>
+                          <Text style={[l3Styles.countChipNum, { color: '#991B1B' }]}>{criticalCount}</Text>
+                          <Text style={[l3Styles.countChipLabel, { color: '#991B1B' }]}> Missed</Text>
+                        </View>
+                      )}
+                      {unsureCount > 0 && (
+                        <View style={[l3Styles.countChip, l3Styles.countChipWarn]}>
+                          <Text style={[l3Styles.countChipNum, { color: '#92400E' }]}>{unsureCount}</Text>
+                          <Text style={[l3Styles.countChipLabel, { color: '#92400E' }]}> Follow-up</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <View style={l3Styles.allClearRow}>
+                      <Text style={l3Styles.allClearText}>✓  No active alerts</Text>
+                    </View>
+                  )}
+
+                  {/* Action buttons */}
+                  <View style={l3Styles.actionRow}>
+                    <Pressable
+                      style={({ pressed }) => [l3Styles.actionBtn, l3Styles.callBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => void Linking.openURL('tel:')}
+                    >
+                      <Text style={l3Styles.callBtnText}>📞  Call</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [l3Styles.actionBtn, l3Styles.notifyBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => void Linking.openURL('sms:')}
+                    >
+                      <Text style={l3Styles.notifyBtnText}>👨‍👩‍👧  Notify Family</Text>
+                    </Pressable>
+                  </View>
                 </Pressable>
-              </View>
-            </Pressable>
-          ))}
+              );
+            });
+          })()}
         </ScrollView>
       )}
 
@@ -545,8 +573,8 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
                   <IconComponent active={isActive} />
                 </View>
                 <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab}{tab === 'Alerts' && (prioritizedAlerts.length + pendingRequests.length) > 0
-                  ? ` (${prioritizedAlerts.length + pendingRequests.length})`
+                  {tab}{tab === 'Alerts' && totalAlertCount > 0
+                  ? ` (${totalAlertCount})`
                   : ''}
                 </Text>
                 {isActive && <View style={styles.activeIndicator} />}
@@ -713,3 +741,35 @@ const requestStyles = StyleSheet.create({
   rejectText: { fontFamily: F.bold, color: '#DC2626', fontSize: 12 },
 });
 
+// ─── Level 3 patient summary card styles ──────────────────────────────────────
+const l3Styles = StyleSheet.create({
+  card: {
+    backgroundColor: C.surface,
+    borderRadius: 20, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 14,
+    marginBottom: 14,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 3,
+  },
+  cardHeader:        { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  avatar:            { width: 48, height: 48, borderRadius: 24, backgroundColor: C.primaryLight, borderWidth: 2, borderColor: C.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  avatarText:        { fontFamily: F.extraBold, fontSize: 18, color: C.primary },
+  patientName:       { fontFamily: F.bold, fontSize: 17, color: C.textPrimary },
+  patientNameUnseen: { fontFamily: F.extraBold },
+  lastSeen:          { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginTop: 1 },
+  riskBadge:         { borderRadius: 10, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', justifyContent: 'center' },
+  riskText:          { fontFamily: F.bold, fontSize: 10, letterSpacing: 0.8 },
+  countRow:          { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  countChip:         { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  countChipCrit:     { backgroundColor: '#FEE2E2' },
+  countChipWarn:     { backgroundColor: '#FEF3C7' },
+  countChipNum:      { fontFamily: F.extraBold, fontSize: 14, color: C.textPrimary },
+  countChipLabel:    { fontFamily: F.medium, fontSize: 12, color: C.textSecondary },
+  allClearRow:       { marginBottom: 12, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#D1FAE5', borderRadius: 10 },
+  allClearText:      { fontFamily: F.semiBold, fontSize: 13, color: '#065F46' },
+  actionRow:         { flexDirection: 'row', gap: 8 },
+  actionBtn:         { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  callBtn:           { backgroundColor: C.primary, shadowColor: C.primary, shadowOpacity: 0.2, shadowOffset: { width: 0, height: 3 }, shadowRadius: 6, elevation: 3 },
+  callBtnText:       { fontFamily: F.bold, fontSize: 13, color: '#fff' },
+  notifyBtn:         { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: C.primary },
+  notifyBtnText:     { fontFamily: F.bold, fontSize: 13, color: C.primary },
+});

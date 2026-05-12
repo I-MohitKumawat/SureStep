@@ -39,6 +39,13 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const { tasks, loading: tasksLoading, createTask, updateTask, deleteTask } = useTasks();
   const [reminderSentKeys, setReminderSentKeys] = React.useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = React.useState<CaregiverTab>('Home');
+  // Level 1 – routine callout dismiss tracking
+  const [dismissedCallouts, setDismissedCallouts] = React.useState<Set<string>>(new Set());
+  // Level 2 – non-routine alert seen tracking
+  const [seenNonRoutineIds, setSeenNonRoutineIds] = React.useState<Set<string>>(new Set());
+  const [acknowledgedIds, setAcknowledgedIds] = React.useState<Set<string>>(new Set());
+  // Routine summary modal
+  const [showRoutineSummary, setShowRoutineSummary] = React.useState(false);
 
   // Patient identity comes from route params — never from AsyncStorage
   const patientPhone = route.params?.patientPhone ?? '';
@@ -245,55 +252,47 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     };
   };
 
-  const patientAlerts = useMemo(() => {
-    const alerts: Array<{ id: string; title: string; message: string; level: 'high' | 'medium' | 'low' }> = [];
-    const missed = patientTasks.filter((t) => t.status === 'missed');
-    const unsure = patientTasks.filter((t) => t.status === 'unsure');
+  // ── Level 1: routine callouts (missed / unsure tasks only) ─────────────────
+  const routineCallouts = useMemo(() => {
+    type Callout = { id: string; emoji: string; title: string; message: string; severity: 'high' | 'medium' };
+    const out: Callout[] = [];
+    for (const t of patientTasks) {
+      if (t.status === 'missed') {
+        out.push({ id: `missed-${t.id}`, emoji: t.icon ?? '📋', title: 'Missed routine', message: t.title, severity: 'high' });
+      } else if (t.status === 'unsure') {
+        out.push({ id: `unsure-${t.id}`, emoji: t.icon ?? '📋', title: 'Needs follow-up', message: t.title, severity: 'medium' });
+      }
+    }
+    return out.filter(c => !dismissedCallouts.has(c.id));
+  }, [patientTasks, dismissedCallouts]);
 
-    for (const task of missed) {
-      alerts.push({
-        id: `missed-${task.id}`,
-        title: 'Missed routine',
-        message: task.title,
-        level: 'high',
-      });
-    }
-    for (const task of unsure) {
-      alerts.push({
-        id: `unsure-${task.id}`,
-        title: 'Needs follow-up',
-        message: task.title,
-        level: 'medium',
-      });
-    }
+  // ── Level 2: non-routine alerts (battery / geofence / etc.) ────────────────
+  type NonRoutineAlert = { id: string; type: string; emoji: string; title: string; message: string; severity: 'critical' | 'high' | 'medium' | 'low' };
+  const nonRoutineAlerts = useMemo(() => {
+    const out: NonRoutineAlert[] = [];
     if (batteryLevel < 20) {
-      alerts.push({
-        id: 'battery-low',
-        title: 'Low battery',
-        message: `Patient device battery at ${batteryLevel}%`,
-        level: 'medium',
-      });
+      out.push({ id: 'battery-low', type: 'battery_critical', emoji: '🔋', title: 'Critical Battery', message: `Device battery at ${batteryLevel}% — charge required`, severity: 'high' });
     }
     if (patientCoords) {
       const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
-      const dist = haversineMeters(
-        fence.center.latitude,
-        fence.center.longitude,
-        patientCoords.latitude,
-        patientCoords.longitude,
-      );
+      const dist = haversineMeters(fence.center.latitude, fence.center.longitude, patientCoords.latitude, patientCoords.longitude);
       if (dist > fence.radiusM) {
-        alerts.push({
-          id: 'geo-outside',
-          title: 'Outside safe zone',
-          message: `${Math.round(dist - fence.radiusM)}m beyond boundary`,
-          level: 'high',
-        });
+        out.push({ id: 'geo-outside', type: 'geofence_breach', emoji: '📍', title: 'Outside Safe Zone', message: `${Math.round(dist - fence.radiusM)} m beyond boundary`, severity: 'critical' });
       }
     }
-    const rank = { high: 0, medium: 1, low: 2 } as const;
-    return alerts.sort((a, b) => rank[a.level] - rank[b.level]);
-  }, [batteryLevel, patientCoords, patientId, patientTasks]);
+    return out.filter(a => !acknowledgedIds.has(a.id));
+  }, [batteryLevel, patientCoords, patientId, acknowledgedIds]);
+
+  // Mark all non-routine alerts as seen when Alerts tab opens
+  React.useEffect(() => {
+    if (activeTab === 'Alerts' && nonRoutineAlerts.length > 0) {
+      setSeenNonRoutineIds(prev => {
+        const next = new Set(prev);
+        nonRoutineAlerts.forEach(a => next.add(a.id));
+        return next;
+      });
+    }
+  }, [activeTab, nonRoutineAlerts]);
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
@@ -308,32 +307,53 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
 
         {activeTab === 'Alerts' ? (
           <View style={styles.alertsContainer}>
-            <Text style={styles.alertsTitle}>Patient Alerts</Text>
-            {patientAlerts.length === 0 ? (
-              <Text style={styles.alertsEmpty}>No active alerts for this patient.</Text>
-            ) : patientAlerts.map((alert) => (
-              <View
-                key={alert.id}
-                style={[
-                  styles.alertCard,
-                  alert.level === 'high' ? styles.alertCardHigh : alert.level === 'medium' ? styles.alertCardMedium : styles.alertCardLow,
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.alertCardTitle}>{alert.title}</Text>
-                  <Text style={styles.alertCardMessage}>{alert.message}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <Text style={styles.alertsTitle}>Safety Alerts</Text>
+              {nonRoutineAlerts.length > 0 && (
+                <View style={alertStyles.countBadge}>
+                  <Text style={alertStyles.countBadgeText}>{nonRoutineAlerts.length}</Text>
                 </View>
-                <View style={styles.alertCardRight}>
-                  <Text style={styles.alertCardLevel}>{alert.level.toUpperCase()}</Text>
-                  <Pressable
-                    onPress={() => void openDialPad()}
-                    style={({ pressed }) => [styles.alertSosBtn, pressed && { opacity: 0.72 }]}
-                  >
-                    <Text style={styles.alertSosText}>SOS</Text>
-                  </Pressable>
-                </View>
+              )}
+            </View>
+            <Text style={alertStyles.sectionLabel}>NON-ROUTINE ALERTS</Text>
+            {nonRoutineAlerts.length === 0 ? (
+              <View style={alertStyles.emptyBox}>
+                <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
+                <Text style={alertStyles.emptyTitle}>All Clear</Text>
+                <Text style={alertStyles.emptyMsg}>No safety alerts at this time.</Text>
               </View>
-            ))}
+            ) : nonRoutineAlerts.map((alert) => {
+              const isSeen = seenNonRoutineIds.has(alert.id);
+              const sevColors = alert.severity === 'critical'
+                ? { bg: '#FEE2E2', border: '#FECACA', dot: '#DC2626' }
+                : alert.severity === 'high'
+                ? { bg: '#FEF3C7', border: '#FDE68A', dot: '#F59E0B' }
+                : { bg: '#E5E7EB', border: '#D1D5DB', dot: '#9CA3AF' };
+              return (
+                <View key={alert.id} style={[alertStyles.card, { backgroundColor: sevColors.bg, borderColor: sevColors.border }, isSeen && alertStyles.cardSeen]}>
+                  <View style={[alertStyles.dot, { backgroundColor: sevColors.dot }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[alertStyles.cardTitle, !isSeen && alertStyles.unseen]}>{alert.emoji}  {alert.title}</Text>
+                    <Text style={[alertStyles.cardMsg, isSeen && alertStyles.seenMsg]}>{alert.message}</Text>
+                    <Text style={alertStyles.cardTime}>{alert.severity.toUpperCase()} · {alert.type.replace(/_/g, ' ')}</Text>
+                  </View>
+                  <View style={{ gap: 6 }}>
+                    <Pressable
+                      onPress={() => void openDialPad()}
+                      style={({ pressed }) => [alertStyles.callBtn, pressed && { opacity: 0.8 }]}
+                    >
+                      <Text style={alertStyles.callBtnText}>📞 Call</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setAcknowledgedIds(prev => new Set(prev).add(alert.id))}
+                      style={({ pressed }) => [alertStyles.ackBtn, pressed && { opacity: 0.8 }]}
+                    >
+                      <Text style={alertStyles.ackBtnText}>✓ Done</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         ) : activeTab === 'Manage' ? (
           <View style={mStyles.container}>
@@ -479,6 +499,60 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
           </View>
         ) : (
         <View style={styles.routineOuterContainer}>
+          {/* ── Routine Summary Bar ───────────────────────────────────── */}
+          {(() => {
+            const missedTasks  = patientTasks.filter(t => t.status === 'missed');
+            const pendingTasks = patientTasks.filter(t => t.status === 'pending' || t.status === 'unsure');
+            const doneTasks    = patientTasks.filter(t => t.status === 'done');
+            return (
+              <Pressable
+                style={({ pressed }) => [rSumStyles.bar, pressed && { opacity: 0.88 }]}
+                onPress={() => setShowRoutineSummary(true)}
+              >
+                <View style={rSumStyles.statChip}>
+                  <View style={[rSumStyles.statDot, { backgroundColor: '#DC2626' }]} />
+                  <Text style={rSumStyles.statNum}>{missedTasks.length}</Text>
+                  <Text style={rSumStyles.statLabel}>Missed</Text>
+                </View>
+                <View style={rSumStyles.divider} />
+                <View style={rSumStyles.statChip}>
+                  <View style={[rSumStyles.statDot, { backgroundColor: '#F59E0B' }]} />
+                  <Text style={rSumStyles.statNum}>{pendingTasks.length}</Text>
+                  <Text style={rSumStyles.statLabel}>Pending</Text>
+                </View>
+                <View style={rSumStyles.divider} />
+                <View style={rSumStyles.statChip}>
+                  <View style={[rSumStyles.statDot, { backgroundColor: '#10B981' }]} />
+                  <Text style={rSumStyles.statNum}>{doneTasks.length}</Text>
+                  <Text style={rSumStyles.statLabel}>Completed</Text>
+                </View>
+                <Text style={rSumStyles.chevron}>›</Text>
+              </Pressable>
+            );
+          })()}
+
+          {/* ── Level 1: Routine Alert Callouts ──────────────────────────── */}
+          {routineCallouts.length > 0 && (
+            <View style={alertStyles.calloutStrip}>
+              <Text style={alertStyles.calloutHeader}>⚠️  Routine Alerts</Text>
+              {routineCallouts.map(c => (
+                <View key={c.id} style={[alertStyles.calloutChip, c.severity === 'high' ? alertStyles.calloutHigh : alertStyles.calloutMed]}>
+                  <Text style={alertStyles.calloutEmoji}>{c.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={alertStyles.calloutTitle}>{c.title}</Text>
+                    <Text style={alertStyles.calloutMsg}>{c.message}</Text>
+                  </View>
+                  <Pressable
+                    hitSlop={10}
+                    onPress={() => setDismissedCallouts(prev => new Set(prev).add(c.id))}
+                    style={({ pressed }) => [alertStyles.dismissBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Text style={alertStyles.dismissText}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
           <View style={styles.routineListViewport}>
             <Animated.ScrollView
               nestedScrollEnabled
@@ -708,6 +782,114 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
           })}
         </View>
       </View>
+
+      {/* ── Routine Summary Modal ─────────────────────────────────────── */}
+      <Modal
+        visible={showRoutineSummary}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRoutineSummary(false)}
+      >
+        <Pressable style={rSumStyles.overlay} onPress={() => setShowRoutineSummary(false)}>
+          <Pressable style={rSumStyles.sheet} onPress={e => e.stopPropagation()}>
+            <View style={rSumStyles.handle} />
+            <Text style={rSumStyles.sheetTitle}>Routine Overview</Text>
+            <Text style={rSumStyles.sheetSub}>Daily tasks for {patientName}</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
+              {/* Missed */}
+              {(() => {
+                const missed = patientTasks.filter(t => t.status === 'missed');
+                return missed.length > 0 ? (
+                  <View style={rSumStyles.section}>
+                    <View style={rSumStyles.sectionHeader}>
+                      <View style={[rSumStyles.sectionDot, { backgroundColor: '#DC2626' }]} />
+                      <Text style={[rSumStyles.sectionTitle, { color: '#991B1B' }]}>Missed ({missed.length})</Text>
+                    </View>
+                    {missed.map(t => (
+                      <View key={t.id} style={[rSumStyles.taskRow, rSumStyles.taskRowMissed]}>
+                        <Text style={rSumStyles.taskEmoji}>{t.icon ?? '📋'}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={rSumStyles.taskTitle}>{t.title}</Text>
+                          <Text style={rSumStyles.taskMeta}>{t.time}{t.description ? ` · ${t.description}` : ''}</Text>
+                        </View>
+                        <View style={rSumStyles.missedBadge}>
+                          <Text style={rSumStyles.missedBadgeText}>MISSED</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null;
+              })()}
+
+              {/* Pending / Unsure */}
+              {(() => {
+                const pending = patientTasks.filter(t => t.status === 'pending' || t.status === 'unsure');
+                return pending.length > 0 ? (
+                  <View style={rSumStyles.section}>
+                    <View style={rSumStyles.sectionHeader}>
+                      <View style={[rSumStyles.sectionDot, { backgroundColor: '#F59E0B' }]} />
+                      <Text style={[rSumStyles.sectionTitle, { color: '#92400E' }]}>Pending ({pending.length})</Text>
+                    </View>
+                    {pending.map(t => (
+                      <View key={t.id} style={[rSumStyles.taskRow, rSumStyles.taskRowPending]}>
+                        <Text style={rSumStyles.taskEmoji}>{t.icon ?? '📋'}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={rSumStyles.taskTitle}>{t.title}</Text>
+                          <Text style={rSumStyles.taskMeta}>{t.time}{t.description ? ` · ${t.description}` : ''}</Text>
+                        </View>
+                        <View style={[rSumStyles.missedBadge, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                          <Text style={[rSumStyles.missedBadgeText, { color: '#92400E' }]}>
+                            {t.status === 'unsure' ? 'CHECK' : 'PENDING'}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null;
+              })()}
+
+              {/* Completed */}
+              {(() => {
+                const done = patientTasks.filter(t => t.status === 'done');
+                return done.length > 0 ? (
+                  <View style={rSumStyles.section}>
+                    <View style={rSumStyles.sectionHeader}>
+                      <View style={[rSumStyles.sectionDot, { backgroundColor: '#10B981' }]} />
+                      <Text style={[rSumStyles.sectionTitle, { color: '#065F46' }]}>Completed ({done.length})</Text>
+                    </View>
+                    {done.map(t => (
+                      <View key={t.id} style={[rSumStyles.taskRow, rSumStyles.taskRowDone]}>
+                        <Text style={rSumStyles.taskEmoji}>{t.icon ?? '📋'}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[rSumStyles.taskTitle, { color: '#065F46' }]}>{t.title}</Text>
+                          <Text style={rSumStyles.taskMeta}>{t.time}{t.description ? ` · ${t.description}` : ''}</Text>
+                        </View>
+                        <View style={[rSumStyles.missedBadge, { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' }]}>
+                          <Text style={[rSumStyles.missedBadgeText, { color: '#065F46' }]}>✓ DONE</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null;
+              })()}
+
+              {patientTasks.length === 0 && (
+                <Text style={{ fontFamily: F.regular, color: C.textMuted, textAlign: 'center', marginTop: 24 }}>
+                  No routines added yet.
+                </Text>
+              )}
+            </ScrollView>
+
+            <Pressable
+              style={({ pressed }) => [rSumStyles.closeBtn, pressed && { opacity: 0.82 }]}
+              onPress={() => setShowRoutineSummary(false)}
+            >
+              <Text style={rSumStyles.closeBtnText}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Patient Profile Modal ──────────────────────────────────────── */}
       <Modal
@@ -1062,6 +1244,40 @@ const styles = StyleSheet.create({
   },
 });
 
+// ── Alert-system styles ────────────────────────────────────────────────────────
+const alertStyles = StyleSheet.create({
+  // Level 1 callout strip
+  calloutStrip: { marginBottom: 10, gap: 6 },
+  calloutHeader: { fontFamily: F.bold, fontSize: 11, color: '#92400E', letterSpacing: 0.8, marginBottom: 4 },
+  calloutChip: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  calloutHigh: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+  calloutMed:  { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+  calloutEmoji: { fontSize: 20 },
+  calloutTitle: { fontFamily: F.bold, fontSize: 13, color: '#111827' },
+  calloutMsg:   { fontFamily: F.regular, fontSize: 12, color: '#6B7280', marginTop: 1 },
+  dismissBtn:   { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' },
+  dismissText:  { fontFamily: F.bold, fontSize: 11, color: '#6B7280' },
+  // Level 2 non-routine alert card
+  sectionLabel: { fontFamily: F.bold, fontSize: 10, letterSpacing: 1.4, color: '#9CA3AF', marginBottom: 10 },
+  countBadge:   { marginLeft: 8, backgroundColor: '#DC2626', borderRadius: 999, width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  countBadgeText: { fontFamily: F.bold, fontSize: 11, color: '#fff' },
+  emptyBox:     { alignItems: 'center', paddingVertical: 32 },
+  emptyTitle:   { fontFamily: F.bold, fontSize: 16, color: '#111827', marginBottom: 4 },
+  emptyMsg:     { fontFamily: F.regular, fontSize: 13, color: '#6B7280' },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 10 },
+  cardSeen: { opacity: 0.72 },
+  dot: { width: 9, height: 9, borderRadius: 5, alignSelf: 'flex-start', marginTop: 4 },
+  cardTitle:  { fontFamily: F.bold, fontSize: 15, color: '#111827', marginBottom: 2 },
+  unseen:     { fontFamily: F.extraBold },
+  cardMsg:    { fontFamily: F.regular, fontSize: 13, color: '#374151' },
+  seenMsg:    { color: '#9CA3AF' },
+  cardTime:   { fontFamily: F.medium, fontSize: 10, color: '#9CA3AF', marginTop: 4, letterSpacing: 0.6 },
+  callBtn:    { backgroundColor: '#0E7A67', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center' },
+  callBtnText:{ fontFamily: F.bold, fontSize: 11, color: '#fff' },
+  ackBtn:     { backgroundColor: '#E5E7EB', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center' },
+  ackBtnText: { fontFamily: F.bold, fontSize: 11, color: '#374151' },
+});
+
 // ─── Rich Manage-tab styles ───────────────────────────────────────────────────
 const mStyles = StyleSheet.create({
   // List container
@@ -1175,3 +1391,58 @@ const mStyles = StyleSheet.create({
   saveBtnText: { fontFamily: F.bold, fontSize: 16, color: C.primaryText },
 });
 
+// ── Routine Summary Bar + Modal styles ────────────────────────────────────────
+const rSumStyles = StyleSheet.create({
+  // Summary bar
+  bar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: 14, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 11,
+    marginBottom: 10,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 1,
+  },
+  statChip:  { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  statDot:   { width: 8, height: 8, borderRadius: 4 },
+  statNum:   { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary },
+  statLabel: { fontFamily: F.medium, fontSize: 12, color: C.textSecondary },
+  divider:   { width: 1, height: 28, backgroundColor: C.border },
+  chevron:   { fontFamily: F.bold, fontSize: 20, color: C.textMuted, marginLeft: 8 },
+  // Modal
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: C.bg,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36,
+    maxHeight: '85%',
+    shadowColor: '#000', shadowOpacity: 0.2, shadowOffset: { width: 0, height: -4 }, shadowRadius: 20, elevation: 24,
+  },
+  handle:    { width: 40, height: 4, borderRadius: 2, backgroundColor: C.borderMid, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle:{ fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, marginBottom: 2 },
+  sheetSub:  { fontFamily: F.regular, fontSize: 13, color: C.textSecondary, marginBottom: 10 },
+  // Sections
+  section:     { marginBottom: 16 },
+  sectionHeader:{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  sectionDot:  { width: 10, height: 10, borderRadius: 5 },
+  sectionTitle:{ fontFamily: F.bold, fontSize: 14, letterSpacing: 0.4 },
+  // Task rows
+  taskRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6,
+  },
+  taskRowMissed:  { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+  taskRowPending: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+  taskRowDone:    { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+  taskEmoji:  { fontSize: 22 },
+  taskTitle:  { fontFamily: F.bold, fontSize: 14, color: C.textPrimary },
+  taskMeta:   { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginTop: 1 },
+  missedBadge:{ borderRadius: 999, borderWidth: 1, backgroundColor: '#FEE2E2', borderColor: '#FECACA', paddingHorizontal: 8, paddingVertical: 3 },
+  missedBadgeText: { fontFamily: F.bold, fontSize: 10, color: '#991B1B', letterSpacing: 0.5 },
+  // Close button
+  closeBtn: {
+    backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14,
+    alignItems: 'center', marginTop: 14,
+    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 6,
+  },
+  closeBtnText: { fontFamily: F.bold, fontSize: 16, color: C.primaryText },
+});
