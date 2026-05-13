@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -22,6 +23,7 @@ import { CaregiverDetailView } from './CaregiverDetailView';
 import { useCaregiver } from '../context/caregiverContext';
 import { useAuth } from '../../packages/core/auth/AuthContext';
 import { AiFab } from '../components/AiFab';
+import { writeLocationPing } from '../utils/geofence';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PatientDashboard'>;
 type ActionState = 'done' | 'missed' | 'unsure' | null;
@@ -417,6 +419,66 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
   // Name comes from Supabase via userProfileContext
   const displayName = profile?.fullName ?? 'You';
 
+  // ── Location publishing — write pings to Supabase so caregivers can see us ──
+  const locationSubRef = useRef<Location.LocationSubscription | null>(null);
+  const [locationStatus, setLocationStatus] = React.useState<'idle' | 'sharing' | 'error' | 'denied'>('idle');
+
+  useEffect(() => {
+    if (!patientId) return;
+    let active = true;
+
+    const startPublishing = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || !active) {
+          if (active) setLocationStatus('denied');
+          return;
+        }
+
+        // Write first ping immediately
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (active) {
+          await writeLocationPing({
+            patientId,
+            coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
+            accuracyM: loc.coords.accuracy ?? undefined,
+            source: 'foreground',
+          });
+          if (active) setLocationStatus('sharing');
+        }
+
+        // Then watch and write every 30 s or every 10 m of movement
+        locationSubRef.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 30_000, distanceInterval: 10 },
+          async (l) => {
+            if (!active) return;
+            try {
+              await writeLocationPing({
+                patientId,
+                coords: { latitude: l.coords.latitude, longitude: l.coords.longitude },
+                accuracyM: l.coords.accuracy ?? undefined,
+                source: 'foreground',
+              });
+              if (active) setLocationStatus('sharing');
+            } catch {
+              if (active) setLocationStatus('error');
+            }
+          },
+        );
+      } catch (err) {
+        console.warn('[PatientRoleScreen] location publish error:', err);
+        if (active) setLocationStatus('error');
+      }
+    };
+
+    void startPublishing();
+    return () => {
+      active = false;
+      locationSubRef.current?.remove();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
   // Load confirmed caregiver from Supabase on mount (via caregiverContext)
   React.useEffect(() => {
     if (patientId) void reloadCaregiver(patientId);
@@ -613,6 +675,27 @@ export const PatientRoleScreen: React.FC<Props> = ({ navigation, route }) => {
             )}
           </View>
 
+          {/* ── Location sharing status pill ─────────────────────────── */}
+          {locationStatus !== 'idle' && (
+            <View style={[
+              styles.locStatusPill,
+              locationStatus === 'sharing' && { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
+              locationStatus === 'error'   && { backgroundColor: '#FEF2F2', borderColor: '#EF4444' },
+              locationStatus === 'denied'  && { backgroundColor: '#F3F4F6', borderColor: '#9CA3AF' },
+            ]}>
+              <Text style={[
+                styles.locStatusText,
+                locationStatus === 'sharing' && { color: '#065F46' },
+                locationStatus === 'error'   && { color: '#991B1B' },
+                locationStatus === 'denied'  && { color: '#6B7280' },
+              ]}>
+                {locationStatus === 'sharing' ? '📡 Sharing location with caregiver' :
+                 locationStatus === 'error'   ? '⚠️ Location sharing failed — re-run supabase_geofence_schema.sql' :
+                                               '🔒 Location permission denied'}
+              </Text>
+            </View>
+          )}
+
           {/* ── Your Routine ────────────────────────────────────────────── */}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -740,11 +823,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: C.headerBg,
-    marginBottom: 20,
+    marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  locStatusPill: {
+    borderRadius: 10, borderWidth: 1, marginBottom: 12,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  locStatusText: { fontFamily: F.medium, fontSize: 12 },
   greetingOverline: { fontFamily: F.bold, color: C.textLabel, fontSize: 12, letterSpacing: 1.2 },
   greetingName: { fontFamily: F.extraBold, color: C.textPrimary, fontSize: 40, marginTop: -2 },
   greetingDate: { fontFamily: F.medium, color: C.textSecondary, fontSize: 14, marginTop: 0 },

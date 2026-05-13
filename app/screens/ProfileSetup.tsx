@@ -1,280 +1,483 @@
-import React from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator, Alert, Image, Platform, Pressable,
+  ScrollView, StyleSheet, Switch, Text, TextInput, View,
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
-import { ScreenContainer } from '../components/ScreenContainer';
+import * as ImagePicker from 'expo-image-picker';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useUserProfile } from '../context/userProfileContext';
 import { useAuth } from '../../packages/core/auth/AuthContext';
+import { supabase } from '../utils/supabaseClient';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'ProfileSetup'>;
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+const SPECIALIZATIONS = ['Alzheimer\'s','Dementia','Bedridden Care','Night Care','Emergency Assistance'];
+const AVAILABILITY    = ['Day Shift','Night Shift','Full Time','Emergency Calls'];
+const LANGUAGES       = ['English','Hindi','Kannada','Tamil','Telugu','Malayalam','Bengali'];
+const TRANSPORT       = ['Own Vehicle','Public Transport','None'];
+const GENDERS         = ['Male','Female','Other','Prefer not to say'];
+const PREF_LANGUAGES  = ['English','Hindi','Kannada','Tamil','Telugu'];
+
+// ── Step Indicator ─────────────────────────────────────────────────────────────
+function StepBar({ step }: { step: 1 | 2 }) {
+  return (
+    <View style={s.stepBar}>
+      <View style={s.stepItem}>
+        <View style={[s.stepCircle, s.stepDone]}>
+          {step === 1 ? <Text style={s.stepNum}>1</Text> : <Text style={s.stepCheck}>✓</Text>}
+        </View>
+        <Text style={[s.stepLabel, step === 1 && s.stepLabelActive]}>Profile Details</Text>
+      </View>
+      <View style={s.stepLine} />
+      <View style={s.stepItem}>
+        <View style={[s.stepCircle, step === 2 && s.stepDone, step === 1 && s.stepInactive]}>
+          <Text style={[s.stepNum, step === 1 && s.stepNumInactive]}>2</Text>
+        </View>
+        <Text style={[s.stepLabel, step === 2 && s.stepLabelActive]}>Preferences</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Floating label input ──────────────────────────────────────────────────────
+function FInput({ label, value, onChangeText, placeholder, multiline, keyboardType, error }: {
+  label: string; value: string; onChangeText: (v: string) => void;
+  placeholder?: string; multiline?: boolean; keyboardType?: 'default'|'numeric'; error?: boolean;
+}) {
+  return (
+    <View style={[s.fWrap, error && s.fError]}>
+      {value.length > 0 && <Text style={s.fLabel}>{label}</Text>}
+      <TextInput
+        style={[s.fInput, multiline && { height: 80, textAlignVertical: 'top' }]}
+        value={value} onChangeText={onChangeText}
+        placeholder={value.length === 0 ? label : placeholder ?? ''}
+        placeholderTextColor={C.textMuted}
+        multiline={multiline} keyboardType={keyboardType ?? 'default'}
+      />
+    </View>
+  );
+}
+
+// ── Chip row ──────────────────────────────────────────────────────────────────
+function Chips({ options, selected, onToggle }: {
+  options: string[]; selected: string[]; onToggle: (v: string) => void;
+}) {
+  return (
+    <View style={s.chips}>
+      {options.map((opt) => {
+        const on = selected.includes(opt);
+        return (
+          <Pressable key={opt} onPress={() => onToggle(opt)}
+            style={[s.chip, on && s.chipOn]}>
+            <Text style={[s.chipText, on && s.chipTextOn]}>{opt}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Dropdown ──────────────────────────────────────────────────────────────────
+function Dropdown({ label, value, options, onSelect }: {
+  label: string; value: string; options: string[]; onSelect: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Pressable style={s.fWrap} onPress={() => setOpen(p => !p)}>
+        {value && <Text style={s.fLabel}>{label}</Text>}
+        <View style={s.fRow}>
+          <Text style={[s.fInput, !value && { color: C.textMuted }]}>{value || label}</Text>
+          <Text style={s.chevron}>{open ? '▴' : '▾'}</Text>
+        </View>
+      </Pressable>
+      {open && (
+        <View style={s.ddBox}>
+          {options.map(opt => (
+            <Pressable key={opt} style={[s.ddItem, value === opt && s.ddItemOn]}
+              onPress={() => { onSelect(opt); setOpen(false); }}>
+              <Text style={[s.ddText, value === opt && s.ddTextOn]}>{opt}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ── Toggle row ────────────────────────────────────────────────────────────────
+function ToggleRow({ label, sub, value, onChange }: {
+  label: string; sub?: string; value: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <View style={s.toggleRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.toggleLabel}>{label}</Text>
+        {sub && <Text style={s.toggleSub}>{sub}</Text>}
+      </View>
+      <Switch value={value} onValueChange={onChange}
+        trackColor={{ false: '#D1D5DB', true: C.primary }}
+        thumbColor="#fff" />
+    </View>
+  );
+}
+
+// ── Stepper ───────────────────────────────────────────────────────────────────
+function Stepper({ label, value, onChange }: {
+  label: string; value: number; onChange: (v: number) => void;
+}) {
+  return (
+    <View style={s.stepperRow}>
+      <Text style={s.stepperLabel}>{label}</Text>
+      <View style={s.stepperCtrl}>
+        <Pressable style={s.stepperBtn} onPress={() => onChange(Math.max(0, value - 1))}>
+          <Text style={s.stepperBtnText}>−</Text>
+        </Pressable>
+        <Text style={s.stepperVal}>{value}</Text>
+        <Pressable style={s.stepperBtn} onPress={() => onChange(value + 1)}>
+          <Text style={s.stepperBtnText}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Main Screen
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function ProfileSetup({ route }: Props) {
   const { role } = route.params;
   const { saveProfile } = useUserProfile();
   const { login, auth } = useAuth();
 
-  const [dobDate,      setDobDate]      = React.useState<Date | null>(null);
-  const [showDobPicker, setShowDobPicker] = React.useState(false);
-  const [formData,     setFormData]     = React.useState({ name: '', dob: '', gender: '', city: '' });
-  const [language,     setLanguage]     = React.useState<'English' | 'Kannada' | 'Hindi' | 'Telugu' | 'Tamil'>('English');
-  const [languageOpen, setLanguageOpen] = React.useState(false);
-  const [genderOpen,   setGenderOpen]   = React.useState(false);
-  const [showErrors,   setShowErrors]   = React.useState(false);
-  const [submitting,   setSubmitting]   = React.useState(false);
-  const [submitError,  setSubmitError]  = React.useState<string | null>(null);
+  // ── Step 1 state ─────────────────────────────────────────────────────────
+  const [step,        setStep]        = useState<1|2>(1);
+  const [photoUri,    setPhotoUri]    = useState<string | null>(null);
+  const [photoUrl,    setPhotoUrl]    = useState<string | null>(null);
+  const [name,        setName]        = useState('');
+  const [dob,         setDob]         = useState('');
+  const [dobDate,     setDobDate]     = useState<Date | null>(null);
+  const [showDob,     setShowDob]     = useState(false);
+  const [gender,      setGender]      = useState('');
+  const [language,    setLanguage]    = useState('English');
+  const [city,        setCity]        = useState('');
+  const [showErrors,  setShowErrors]  = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const formatDob = (date: Date) =>
-    date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  // ── Step 2 state ─────────────────────────────────────────────────────────
+  const [yearsExp,       setYearsExp]       = useState(0);
+  const [dementiaExp,    setDementiaExp]    = useState(false);
+  const [patientsHandled,setPatientsHandled]= useState(0);
+  const [specs,          setSpecs]          = useState<string[]>([]);
+  const [langsSpoken,    setLangsSpoken]    = useState<string[]>([]);
+  const [availTypes,     setAvailTypes]     = useState<string[]>([]);
+  const [radiusKm,       setRadiusKm]       = useState(10);
+  const [transport,      setTransport]      = useState('');
+  const [hourlyRate,     setHourlyRate]     = useState('');
+  const [dailyRate,      setDailyRate]      = useState('');
+  const [aboutMe,        setAboutMe]        = useState('');
+  const [emergencyResp,  setEmergencyResp]  = useState(false);
+  const [canAssist,      setCanAssist]      = useState(false);
 
-  const onDobChange = (event: { type: string }, selectedDate?: Date) => {
-    if (Platform.OS === 'android') setShowDobPicker(false);
-    if (event.type === 'dismissed' || !selectedDate) return;
-    setDobDate(selectedDate);
-    setFormData((prev) => ({ ...prev, dob: formatDob(selectedDate) }));
+  const toggle = (arr: string[], v: string) =>
+    arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
+
+  // ── Photo picker ─────────────────────────────────────────────────────────
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Allow photo access to set a profile picture.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect: [1,1], quality: 0.7,
+    });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    setPhotoUri(uri);
+    // Upload to Supabase Storage
+    const phone = auth.user?.id ?? 'unknown';
+    const ext   = uri.split('.').pop() ?? 'jpg';
+    const path  = `${phone}/avatar.${ext}`;
+    try {
+      const res  = await fetch(uri);
+      const blob = await res.blob();
+      const { error } = await supabase.storage.from('profile-photos').upload(path, blob, { upsert: true, contentType: `image/${ext}` });
+      if (!error) {
+        const { data } = supabase.storage.from('profile-photos').getPublicUrl(path);
+        setPhotoUrl(data.publicUrl);
+      }
+    } catch { /* keep local URI, upload failed */ }
   };
 
-  const handleSubmit = async () => {
-    setSubmitError(null);
-    const requiredOk =
-      formData.name.trim() && formData.dob.trim() && formData.gender.trim() &&
-      formData.city.trim() && language.trim();
-    if (!requiredOk) { setShowErrors(true); return; }
+  const formatDob = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    // Phone comes from auth state — no AsyncStorage needed
+  // ── Step 1 continue ───────────────────────────────────────────────────────
+  const handleStep1 = () => {
+    if (!name.trim() || !dob || !gender || !city.trim()) { setShowErrors(true); return; }
+    if (role === 'caregiver') { setStep(2); setShowErrors(false); return; }
+    void handleFinish();
+  };
+
+  // ── Final save ────────────────────────────────────────────────────────────
+  const handleFinish = async () => {
     const phone = auth.user?.id;
-    if (!phone) {
-      setSubmitError('Session expired. Please go back and log in again.');
-      return;
-    }
-
-    setSubmitting(true);
+    if (!phone) { setSubmitError('Session expired — go back and log in.'); return; }
+    setSubmitting(true); setSubmitError(null);
     try {
       const draft = {
-        fullName: formData.name.trim(),
-        role,
-        dob:      formData.dob,
-        gender:   formData.gender,
-        city:     formData.city,
-        language,
+        fullName: name.trim(), role, dob, gender, city: city.trim(), language,
+        profilePhotoUrl:    photoUrl,
+        // caregiver professional fields
+        yearsExperience:    yearsExp,
+        dementiaExperience: dementiaExp,
+        patientsHandled,
+        specializations:    specs,
+        languagesSpoken:    langsSpoken,
+        availabilityTypes:  availTypes,
+        serviceRadiusKm:    radiusKm,
+        transportationMode: transport,
+        hourlyRate, dailyRate, aboutMe,
+        emergencyResponse:  emergencyResp,
+        canAssistNearby:    canAssist,
       };
-
-      // ── Save directly to Supabase (source of truth) ─────────────────────
       const saved = await saveProfile(draft);
-      if (!saved) {
-        setSubmitError('Failed to save profile. Check your connection and try again.');
-        return;
-      }
-
-      // ── Login with real role + name — routing handled by RoleNavigator ─────
-      const authRole: 'CAREGIVER' | 'PATIENT' = role === 'caregiver' ? 'CAREGIVER' : 'PATIENT';
-      login(
-        { id: phone, email: `${phone}@surestep.app`, role: authRole, fullName: draft.fullName },
-        'mock-token',
-      );
-
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
-      console.error('[ProfileSetup] handleSubmit error:', msg);
-      setSubmitError(msg);
+      if (!saved) { setSubmitError('Failed to save. Check connection and try again.'); return; }
+      const authRole: 'CAREGIVER'|'PATIENT' = role === 'caregiver' ? 'CAREGIVER' : 'PATIENT';
+      login({ id: phone, email: `${phone}@surestep.app`, role: authRole, fullName: draft.fullName }, 'mock-token');
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ── Step 1 validation helpers ─────────────────────────────────────────────
+  const nameErr   = showErrors && !name.trim();
+  const dobErr    = showErrors && !dob;
+  const genderErr = showErrors && !gender;
+  const cityErr   = showErrors && !city.trim();
 
-  const nameInvalid     = showErrors && !formData.name.trim();
-  const dobInvalid      = showErrors && !formData.dob.trim();
-  const genderInvalid   = showErrors && !formData.gender.trim();
-  const cityInvalid     = showErrors && !formData.city.trim();
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER STEP 1
+  // ─────────────────────────────────────────────────────────────────────────
+  if (step === 1) return (
+    <View style={s.root}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
-  return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {role === 'caregiver' && <StepBar step={1} />}
 
-        <Text style={styles.heading}>Set up your profile</Text>
-        <Text style={styles.subheading}>
-          {role === 'caregiver' ? 'Caregiver account' : 'Patient account'}
-        </Text>
+        {/* Avatar */}
+        <Pressable onPress={pickPhoto} style={s.avatarWrap}>
+          {photoUri
+            ? <Image source={{ uri: photoUri }} style={s.avatarImg} />
+            : <View style={s.avatarPlaceholder}><Text style={s.avatarIcon}>👤</Text></View>
+          }
+          <View style={s.avatarPlus}><Text style={s.avatarPlusText}>+</Text></View>
+        </Pressable>
+
+        <Text style={s.heading}>Set up your profile</Text>
+        <Text style={s.subheading}>{role === 'caregiver' ? 'Caregiver account' : 'Patient account'}</Text>
 
         {/* Name */}
-        <Text style={styles.label}>Full Name <Text style={styles.star}>*</Text></Text>
-        <TextInput
-          style={[styles.input, nameInvalid && styles.inputError]}
-          value={formData.name}
-          placeholder="Enter your name"
-          placeholderTextColor={C.textMuted}
-          onChangeText={(v) => setFormData((p) => ({ ...p, name: v }))}
-        />
-        {nameInvalid && <Text style={styles.errorText}>Name is required.</Text>}
+        <View style={[s.fWrap, nameErr && s.fError]}>
+          {name.length > 0 && <Text style={s.fLabel}>Full Name</Text>}
+          <TextInput style={s.fInput} value={name} onChangeText={setName}
+            placeholder="Full Name" placeholderTextColor={C.textMuted} />
+        </View>
+        {nameErr && <Text style={s.errText}>Name is required</Text>}
 
         {/* DOB */}
-        <Text style={styles.label}>Date of Birth <Text style={styles.star}>*</Text></Text>
-        <Pressable
-          onPress={() => setShowDobPicker((p) => !p)}
-          style={[styles.input, styles.selectorInput, dobInvalid && styles.inputError]}
-        >
-          <Text style={[styles.selectorText, !formData.dob && styles.selectorPlaceholder]}>
-            {formData.dob || 'Select date of birth'}
-          </Text>
-          <Text style={styles.chevron}>{showDobPicker ? '▴' : '▾'}</Text>
+        <Pressable style={[s.fWrap, dobErr && s.fError]} onPress={() => setShowDob(p => !p)}>
+          {dob && <Text style={s.fLabel}>Date of Birth</Text>}
+          <View style={s.fRow}>
+            <Text style={[s.fInput, !dob && { color: C.textMuted }]}>{dob || 'Date of Birth'}</Text>
+            <Text style={s.calIcon}>📅</Text>
+          </View>
         </Pressable>
-        {dobInvalid && <Text style={styles.errorText}>Date of birth is required.</Text>}
-        {showDobPicker && Platform.OS === 'ios' && (
-          <View style={styles.pickerWrap}>
-            <DateTimePicker
-              value={dobDate ?? new Date(1971, 5, 14)}
-              mode="date" display="spinner"
+        {dobErr && <Text style={s.errText}>Date of birth is required</Text>}
+        {showDob && Platform.OS === 'ios' && (
+          <View style={s.pickerWrap}>
+            <DateTimePicker value={dobDate ?? new Date(1975,0,1)} mode="date" display="spinner"
               maximumDate={new Date()}
-              onChange={onDobChange}
-            />
+              onChange={(e, d) => { if (e.type !== 'dismissed' && d) { setDobDate(d); setDob(formatDob(d)); } }} />
           </View>
         )}
-        {showDobPicker && Platform.OS === 'android' && (
-          <DateTimePicker
-            value={dobDate ?? new Date(1971, 5, 14)}
-            mode="date" display="default"
+        {showDob && Platform.OS === 'android' && (
+          <DateTimePicker value={dobDate ?? new Date(1975,0,1)} mode="date" display="default"
             maximumDate={new Date()}
-            onChange={onDobChange}
-          />
+            onChange={(e, d) => { setShowDob(false); if (e.type !== 'dismissed' && d) { setDobDate(d); setDob(formatDob(d)); } }} />
         )}
 
         {/* Gender */}
-        <Text style={styles.label}>Gender <Text style={styles.star}>*</Text></Text>
-        <Pressable
-          onPress={() => setGenderOpen((p) => !p)}
-          style={[styles.input, styles.selectorInput, genderInvalid && styles.inputError]}
-        >
-          <Text style={[styles.selectorText, !formData.gender && styles.selectorPlaceholder]}>
-            {formData.gender || 'Select gender'}
-          </Text>
-          <Text style={styles.chevron}>{genderOpen ? '▴' : '▾'}</Text>
-        </Pressable>
-        {genderInvalid && <Text style={styles.errorText}>Gender is required.</Text>}
-        {genderOpen && (
-          <View style={styles.dropdown}>
-            {(['Male', 'Female', 'Other'] as const).map((opt) => (
-              <Pressable
-                key={opt}
-                onPress={() => { setFormData((p) => ({ ...p, gender: opt })); setGenderOpen(false); }}
-                style={[styles.dropdownItem, formData.gender === opt && styles.dropdownItemSelected]}
-              >
-                <Text style={[styles.dropdownText, formData.gender === opt && styles.dropdownTextSelected]}>
-                  {opt}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <Dropdown label="Gender" value={gender} options={GENDERS} onSelect={setGender} />
+        {genderErr && <Text style={[s.errText, { marginTop: -10 }]}>Gender is required</Text>}
 
         {/* Language */}
-        <Text style={styles.label}>Preferred Language <Text style={styles.star}>*</Text></Text>
-        <Pressable
-          onPress={() => setLanguageOpen((p) => !p)}
-          style={[styles.input, styles.selectorInput]}
-        >
-          <Text style={styles.selectorText}>{language}</Text>
-          <Text style={styles.chevron}>{languageOpen ? '▴' : '▾'}</Text>
-        </Pressable>
-        {languageOpen && (
-          <View style={styles.dropdown}>
-            {(['English', 'Kannada', 'Hindi', 'Telugu', 'Tamil'] as const).map((opt) => (
-              <Pressable
-                key={opt}
-                onPress={() => { setLanguage(opt); setLanguageOpen(false); }}
-                style={[styles.dropdownItem, language === opt && styles.dropdownItemSelected]}
-              >
-                <Text style={[styles.dropdownText, language === opt && styles.dropdownTextSelected]}>
-                  {opt}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <Dropdown label="Preferred Language" value={language} options={PREF_LANGUAGES} onSelect={setLanguage} />
 
         {/* City */}
-        <Text style={styles.label}>City <Text style={styles.star}>*</Text></Text>
-        <TextInput
-          style={[styles.input, cityInvalid && styles.inputError]}
-          value={formData.city}
-          placeholder="Enter your city"
-          placeholderTextColor={C.textMuted}
-          onChangeText={(v) => setFormData((p) => ({ ...p, city: v }))}
-        />
-        {cityInvalid && <Text style={styles.errorText}>City is required.</Text>}
+        <View style={[s.fWrap, cityErr && s.fError]}>
+          {city.length > 0 && <Text style={s.fLabel}>City</Text>}
+          <TextInput style={s.fInput} value={city} onChangeText={setCity}
+            placeholder="City" placeholderTextColor={C.textMuted} />
+        </View>
+        {cityErr && <Text style={s.errText}>City is required</Text>}
 
-        {submitError ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorBoxText}>⚠ {submitError}</Text>
-          </View>
-        ) : null}
+        {submitError && <View style={s.errBox}><Text style={s.errBoxText}>⚠ {submitError}</Text></View>}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.submitButton,
-            (pressed || submitting) && styles.submitButtonPressed,
-            submitting && { opacity: 0.7 },
-          ]}
-          onPress={() => void handleSubmit()}
-          disabled={submitting}
-        >
+        <Pressable style={({ pressed }) => [s.cta, (pressed || submitting) && s.ctaPressed]}
+          onPress={() => void handleStep1()} disabled={submitting}>
           {submitting
-            ? <ActivityIndicator color={C.primaryText} />
-            : <Text style={styles.submitText}>Continue</Text>
-          }
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.ctaText}>{role === 'caregiver' ? 'Continue' : 'Get Started'}</Text>}
         </Pressable>
-
       </ScrollView>
-    </ScreenContainer>
+    </View>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER STEP 2 (caregiver only)
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <View style={s.root}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <StepBar step={2} />
+        <Text style={s.heading}>Professional Info</Text>
+        <Text style={s.subheading}>Help patients find the right match</Text>
+
+        <Text style={s.sectionTitle}>Experience</Text>
+        <Stepper label="Years of Caregiving Experience" value={yearsExp} onChange={setYearsExp} />
+        <Stepper label="Total Patients Handled" value={patientsHandled} onChange={setPatientsHandled} />
+        <ToggleRow label="Dementia Care Experience" value={dementiaExp} onChange={setDementiaExp} />
+
+        <Text style={s.sectionTitle}>Specializations</Text>
+        <Chips options={SPECIALIZATIONS} selected={specs}
+          onToggle={v => setSpecs(toggle(specs, v))} />
+
+        <Text style={s.sectionTitle}>Languages Spoken</Text>
+        <Chips options={LANGUAGES} selected={langsSpoken}
+          onToggle={v => setLangsSpoken(toggle(langsSpoken, v))} />
+
+        <Text style={s.sectionTitle}>Available For</Text>
+        <Chips options={AVAILABILITY} selected={availTypes}
+          onToggle={v => setAvailTypes(toggle(availTypes, v))} />
+
+        <Text style={s.sectionTitle}>Location & Transport</Text>
+        <Stepper label="Service Radius (km)" value={radiusKm} onChange={setRadiusKm} />
+        <Dropdown label="Transportation Mode" value={transport} options={TRANSPORT} onSelect={setTransport} />
+
+        <Text style={s.sectionTitle}>Charges</Text>
+        <FInput label="Hourly Rate (e.g. ₹300/hr)" value={hourlyRate} onChangeText={setHourlyRate} />
+        <FInput label="Daily Rate (e.g. ₹2000/day)" value={dailyRate} onChangeText={setDailyRate} />
+
+        <Text style={s.sectionTitle}>About Me</Text>
+        <FInput label="Short bio — introduce yourself to patients..." value={aboutMe} onChangeText={setAboutMe} multiline />
+
+        <Text style={s.sectionTitle}>Emergency Settings</Text>
+        <ToggleRow label="Emergency Response Availability"
+          sub="You can be contacted for patient emergencies"
+          value={emergencyResp} onChange={setEmergencyResp} />
+        <ToggleRow label="Can Assist Nearby Patients"
+          sub="Available to help patients in your area during emergencies"
+          value={canAssist} onChange={setCanAssist} />
+
+        {submitError && <View style={s.errBox}><Text style={s.errBoxText}>⚠ {submitError}</Text></View>}
+
+        <Pressable style={({ pressed }) => [s.cta, (pressed || submitting) && s.ctaPressed]}
+          onPress={() => void handleFinish()} disabled={submitting}>
+          {submitting
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.ctaText}>Complete Profile</Text>}
+        </Pressable>
+        <Pressable onPress={() => void handleFinish()} style={s.skipBtn}>
+          <Text style={s.skipText}>Skip for now</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: C.bg },
-  scrollContent: { paddingHorizontal: 22, paddingTop: 24, paddingBottom: 32 },
+// ── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root:  { flex: 1, backgroundColor: C.bg },
+  scroll:{ paddingHorizontal: 22, paddingTop: 20, paddingBottom: 48 },
 
-  heading:    { fontFamily: F.bold, fontSize: 26, color: C.textPrimary, marginBottom: 4 },
-  subheading: { fontFamily: F.regular, fontSize: 14, color: C.textSecondary, marginBottom: 24 },
+  // Step bar
+  stepBar:  { flexDirection:'row', alignItems:'center', justifyContent:'center', marginBottom: 28 },
+  stepItem: { alignItems:'center', gap: 4 },
+  stepLine: { flex:1, height:2, backgroundColor:'#D1FAE5', marginHorizontal: 8, marginBottom: 16 },
+  stepCircle:{ width:32, height:32, borderRadius:16, backgroundColor: C.primary, alignItems:'center', justifyContent:'center' },
+  stepDone:  { backgroundColor: C.primary },
+  stepInactive:{ backgroundColor:'#E5E7EB' },
+  stepNum:   { fontFamily: F.bold, fontSize:14, color:'#fff' },
+  stepNumInactive:{ color:'#9CA3AF' },
+  stepCheck: { fontFamily: F.bold, fontSize:14, color:'#fff' },
+  stepLabel: { fontFamily: F.regular, fontSize:11, color: C.textSecondary, textAlign:'center', width:64 },
+  stepLabelActive:{ fontFamily: F.bold, color: C.primary },
 
-  label: { fontFamily: F.semiBold, fontSize: 13, color: C.textBody, marginBottom: 8, marginLeft: 2 },
-  star:  { color: C.error },
+  // Avatar
+  avatarWrap:       { alignSelf:'center', marginBottom:20, position:'relative' },
+  avatarPlaceholder:{ width:90, height:90, borderRadius:45, backgroundColor:'#E5E7EB', alignItems:'center', justifyContent:'center' },
+  avatarImg:        { width:90, height:90, borderRadius:45 },
+  avatarIcon:       { fontSize:40 },
+  avatarPlus:       { position:'absolute', bottom:0, right:0, width:26, height:26, borderRadius:13, backgroundColor: C.primary, alignItems:'center', justifyContent:'center', borderWidth:2, borderColor:'#fff' },
+  avatarPlusText:   { color:'#fff', fontSize:16, fontFamily: F.bold, lineHeight:20 },
 
-  input: {
-    height: 52, borderRadius: 14, backgroundColor: C.surface,
-    borderWidth: 1.5, borderColor: C.border, paddingHorizontal: 16,
-    fontFamily: F.regular, fontSize: 16, color: C.textPrimary, marginBottom: 4,
-  },
-  inputError:          { borderColor: C.error },
-  selectorInput:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  selectorText:        { fontFamily: F.regular, fontSize: 16, color: C.textPrimary },
-  selectorPlaceholder: { color: C.textMuted },
-  chevron:             { fontFamily: F.regular, fontSize: 14, color: C.textSecondary },
+  heading:   { fontFamily: F.extraBold, fontSize:24, color: C.textPrimary, textAlign:'center', marginBottom:4 },
+  subheading:{ fontFamily: F.regular, fontSize:14, color: C.textSecondary, textAlign:'center', marginBottom:24 },
 
-  pickerWrap: {
-    borderRadius: 12, backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.border,
-    marginTop: -2, marginBottom: 8, overflow: 'hidden',
-  },
-  dropdown:             { borderRadius: 12, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border, paddingVertical: 4, marginTop: -2, marginBottom: 8 },
-  dropdownItem:         { paddingVertical: 11, paddingHorizontal: 16 },
-  dropdownItemSelected: { backgroundColor: C.primaryLight },
-  dropdownText:         { fontFamily: F.regular, fontSize: 15, color: C.textPrimary },
-  dropdownTextSelected: { fontFamily: F.bold, color: C.primary },
+  // Floating-label input
+  fWrap:  { borderWidth:1.5, borderColor: C.border, borderRadius:14, paddingHorizontal:14, paddingTop:8, paddingBottom:8, marginBottom:14, minHeight:52, justifyContent:'center' },
+  fError: { borderColor: C.error },
+  fLabel: { fontFamily: F.regular, fontSize:11, color: C.primary, marginBottom:2 },
+  fInput: { fontFamily: F.regular, fontSize:15, color: C.textPrimary, padding:0, minHeight:28 },
+  fRow:   { flexDirection:'row', alignItems:'center' },
+  chevron:{ fontSize:13, color: C.textSecondary, marginLeft:6 },
+  calIcon:{ fontSize:18, marginLeft:6 },
 
-  errorText: { fontFamily: F.regular, color: C.error, fontSize: 12, marginBottom: 8, marginLeft: 4 },
+  pickerWrap:{ borderRadius:12, backgroundColor: C.surface, borderWidth:1, borderColor: C.border, marginTop:-8, marginBottom:8, overflow:'hidden' },
 
-  submitButton: {
-    marginTop: 20, height: 52, borderRadius: 14, backgroundColor: C.primary,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: C.primary, shadowOpacity: 0.28, shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12, elevation: 6,
-  },
-  submitButtonPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
-  submitText:          { fontFamily: F.bold, fontSize: 17, color: C.primaryText },
+  ddBox:    { borderWidth:1.5, borderColor: C.border, borderRadius:14, backgroundColor: C.surface, paddingVertical:4, marginTop:-10, marginBottom:14, zIndex:100 },
+  ddItem:   { paddingVertical:11, paddingHorizontal:16 },
+  ddItemOn: { backgroundColor: C.primaryLight },
+  ddText:   { fontFamily: F.regular, fontSize:15, color: C.textPrimary },
+  ddTextOn: { fontFamily: F.bold, color: C.primary },
 
-  errorBox:     { marginTop: 12, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', paddingHorizontal: 14, paddingVertical: 10 },
-  errorBoxText: { fontFamily: F.semiBold, fontSize: 13, color: '#DC2626', lineHeight: 18 },
+  errText:{ fontFamily: F.regular, fontSize:12, color: C.error, marginTop:-10, marginBottom:8, marginLeft:4 },
+  errBox: { borderRadius:10, backgroundColor:'#FEF2F2', borderWidth:1, borderColor:'#FECACA', padding:12, marginBottom:12 },
+  errBoxText:{ fontFamily: F.semiBold, fontSize:13, color:'#DC2626' },
+
+  cta:       { height:52, borderRadius:26, backgroundColor: C.primary, alignItems:'center', justifyContent:'center', marginTop:12, shadowColor: C.primary, shadowOpacity:0.3, shadowOffset:{width:0,height:6}, shadowRadius:12, elevation:6 },
+  ctaPressed:{ opacity:0.88, transform:[{scale:0.98}] },
+  ctaText:   { fontFamily: F.bold, fontSize:17, color:'#fff' },
+  skipBtn:   { alignItems:'center', marginTop:14, paddingVertical:6 },
+  skipText:  { fontFamily: F.regular, fontSize:14, color: C.textMuted },
+
+  // Section title
+  sectionTitle:{ fontFamily: F.bold, fontSize:13, color: C.textLabel ?? C.textSecondary, letterSpacing:0.8, textTransform:'uppercase', marginTop:20, marginBottom:10 },
+
+  // Chips
+  chips:   { flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:4 },
+  chip:    { paddingHorizontal:14, paddingVertical:8, borderRadius:20, borderWidth:1.5, borderColor: C.border, backgroundColor: C.surface },
+  chipOn:  { backgroundColor: C.primary, borderColor: C.primary },
+  chipText:{ fontFamily: F.medium ?? F.regular, fontSize:13, color: C.textSecondary },
+  chipTextOn:{ color:'#fff' },
+
+  // Toggle
+  toggleRow:  { flexDirection:'row', alignItems:'center', paddingVertical:12, borderBottomWidth:1, borderBottomColor: C.border + '40' },
+  toggleLabel:{ fontFamily: F.semiBold, fontSize:14, color: C.textPrimary },
+  toggleSub:  { fontFamily: F.regular, fontSize:12, color: C.textSecondary, marginTop:2 },
+
+  // Stepper
+  stepperRow: { flexDirection:'row', alignItems:'center', paddingVertical:10, borderBottomWidth:1, borderBottomColor: C.border + '40', marginBottom:2 },
+  stepperLabel:{ flex:1, fontFamily: F.regular, fontSize:14, color: C.textPrimary },
+  stepperCtrl: { flexDirection:'row', alignItems:'center', gap:12 },
+  stepperBtn:  { width:32, height:32, borderRadius:16, backgroundColor: C.primaryLight ?? '#D1FAE5', alignItems:'center', justifyContent:'center' },
+  stepperBtnText:{ fontFamily: F.bold, fontSize:18, color: C.primary, lineHeight:22 },
+  stepperVal:  { fontFamily: F.bold, fontSize:16, color: C.textPrimary, minWidth:28, textAlign:'center' },
 });

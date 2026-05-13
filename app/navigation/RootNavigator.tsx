@@ -24,6 +24,9 @@ import { PhoneAuthScreen } from '../screens/PhoneAuthScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { CaregiverPatientsScreen } from '../screens/CaregiverPatientsScreen';
 import { GeofenceMapScreen } from '../screens/GeofenceMapScreen';
+import { GeofenceEditorScreen } from '../screens/GeofenceEditorScreen';
+import { FamilyDashboardScreen } from '../screens/FamilyDashboardScreen';
+import { CaregiverProfileEditScreen } from '../screens/CaregiverProfileEditScreen';
 
 import { PatientRoleScreen } from '../screens/PatientRoleScreen';
 import ProfileSetup from '../screens/ProfileSetup';
@@ -67,7 +70,7 @@ export type HomeStackParamList = {
   Settings: undefined;
 
   ProfileSetup: {
-    role: 'caregiver' | 'patient';
+    role: 'caregiver' | 'patient' | 'family';
   };
   ProfileView: undefined;
   ProfileEdit: undefined;
@@ -105,7 +108,25 @@ export type HomeStackParamList = {
   GeofenceMap: {
     patientId: string;
     patientName: string;
+    caregiverPhone?: string;
   };
+  GeofenceEditor: {
+    patientId: string;
+    patientName: string;
+    existingZone?: {
+      id: string;
+      label: string;
+      center: { latitude: number; longitude: number };
+      radiusM: number;
+    } | null;
+    initialCenter?: { latitude: number; longitude: number };
+  };
+  FamilyDashboard: {
+    patientPhone: string;
+    patientName: string;
+    familyPhone: string;
+  };
+  CaregiverProfileEdit: undefined;
 };
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -253,6 +274,21 @@ function HomeStackNavigator({
       <HomeStack.Screen
         name="GeofenceMap"
         component={GeofenceMapScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="GeofenceEditor"
+        component={GeofenceEditorScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="FamilyDashboard"
+        component={FamilyDashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="CaregiverProfileEdit"
+        component={CaregiverProfileEditScreen}
         options={{ headerShown: false }}
       />
     </HomeStack.Navigator>

@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -16,10 +15,15 @@ import {
   IconActivity,
 } from '../assets/icons/NavIcons';
 import {
+  checkBreach,
+  fetchPatientGeofences,
+  fetchLatestPatientLocation,
+  subscribeToPatientLocation,
   haversineMeters,
-  PATIENT_GEOFENCES,
   DEFAULT_GEOFENCE,
   type Coords,
+  type GeofenceZone,
+  type BreachStatus,
 } from '../utils/geofence';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'CaregiverDashboard'>;
@@ -52,10 +56,15 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const [patientName, setPatientName] = React.useState(
     route.params?.patientName ?? 'Patient'
   );
-  const [batteryLevel, setBatteryLevel] = React.useState(82);
-  const [patientCoords, setPatientCoords] = React.useState<Coords | null>(null);
+  const [batteryLevel,    setBatteryLevel]    = React.useState(82);
+  const [patientCoords,   setPatientCoords]   = React.useState<Coords | null>(null);
+  const [coordsTs,        setCoordsTs]        = React.useState(0);
+  const [zones,           setZones]           = React.useState<GeofenceZone[]>([]);
+  const [unackedAlerts,   setUnackedAlerts]   = React.useState(0);
+  // True only when we have REAL Supabase data (not fallback placeholders)
+  const [hasRealLocation, setHasRealLocation] = React.useState(false);
+  const [hasRealZones,    setHasRealZones]    = React.useState(false);
   const reminderTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const geoSubRef = React.useRef<Location.LocationSubscription | null>(null);
   const capsuleScrollY = React.useRef(new Animated.Value(0)).current;
 
   // ── Patient profile details (for avatar-tap modal) ───────────────────
@@ -172,34 +181,48 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   const completedTasks = patientTasks.filter((t) => t.status === 'done').length;
   const totalTasks = patientTasks.length;
 
-
   useEffect(() => () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); }, []);
 
-  // ── Location tracking (expo-location) ────────────────────────────────
+  // ── Load zones + unacked alerts from Supabase ─────────────────────
   useEffect(() => {
-    const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
-    const init = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') throw new Error('permission denied');
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        setPatientCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        geoSubRef.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, distanceInterval: 20 },
-          (l) => setPatientCoords({ latitude: l.coords.latitude, longitude: l.coords.longitude }),
-        );
-      } catch {
-        // Simulator / permission denied — demo offset for testing
-        setPatientCoords({
-          latitude:  fence.center.latitude  + 0.0018,
-          longitude: fence.center.longitude - 0.0012,
-        });
-      }
-    };
-    void init();
-    return () => { geoSubRef.current?.remove(); };
+    void fetchPatientGeofences(patientId).then((z) => {
+      setZones(z);
+      setHasRealZones(z.length > 0);
+    });
+    supabase
+      .from('geofence_alerts')
+      .select('id', { count: 'exact', head: true })
+      .eq('patient_id', patientId)
+      .is('acknowledged_at', null)
+      .then(({ count }) => setUnackedAlerts(count ?? 0));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [patientId]);
+
+  // ── Read PATIENT location from Supabase (not caregiver's own GPS) ────────
+  // 1. Fetch last known location on mount
+  useEffect(() => {
+    void fetchLatestPatientLocation(patientId).then((loc) => {
+      if (loc) {
+        setPatientCoords({ latitude: loc.latitude, longitude: loc.longitude });
+        setCoordsTs(loc.recordedAt);
+        setHasRealLocation(true);
+      }
+      // If null: no pings yet — leave patientCoords null, show "Locating"
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
+  // 2. Subscribe to live pings from the patient device via Supabase Realtime
+  useEffect(() => {
+    const unsub = subscribeToPatientLocation(patientId, (loc) => {
+      setPatientCoords({ latitude: loc.latitude, longitude: loc.longitude });
+      setCoordsTs(loc.recordedAt);
+      setHasRealLocation(true);
+    });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
 
   const openDialPad = async () => Linking.openURL('tel:');
 
@@ -273,37 +296,54 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
     if (batteryLevel < 20) {
       out.push({ id: 'battery-low', type: 'battery_critical', emoji: '🔋', title: 'Critical Battery', message: `Device battery at ${batteryLevel}% — charge required`, severity: 'high' });
     }
-    if (patientCoords) {
-      const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
-      const dist = haversineMeters(fence.center.latitude, fence.center.longitude, patientCoords.latitude, patientCoords.longitude);
-      if (dist > fence.radiusM) {
-        out.push({ id: 'geo-outside', type: 'geofence_breach', emoji: '📍', title: 'Outside Safe Zone', message: `${Math.round(dist - fence.radiusM)} m beyond boundary`, severity: 'critical' });
+    if (patientCoords && zones.length > 0) {
+      const breach = checkBreach(patientCoords, zones);
+      if (breach.status === 'breach') {
+        out.push({
+          id: 'geo-outside', type: 'geofence_breach', emoji: '📍',
+          title: 'Outside safe zone',
+          message: `${Math.round(breach.distanceM)}m beyond boundary`,
+          severity: 'high',
+        });
+      } else if (breach.status === 'approaching') {
+        out.push({
+          id: 'geo-approaching', type: 'geofence_approaching', emoji: '🚶',
+          title: 'Approaching zone boundary',
+          message: `${Math.round(breach.marginM)}m from edge of ${breach.zone.label}`,
+          severity: 'medium',
+        });
       }
     }
-    return out.filter(a => !acknowledgedIds.has(a.id));
-  }, [batteryLevel, patientCoords, patientId, acknowledgedIds]);
-
-  // Mark all non-routine alerts as seen when Alerts tab opens
-  React.useEffect(() => {
-    if (activeTab === 'Alerts' && nonRoutineAlerts.length > 0) {
-      setSeenNonRoutineIds(prev => {
-        const next = new Set(prev);
-        nonRoutineAlerts.forEach(a => next.add(a.id));
-        return next;
+    if (unackedAlerts > 0) {
+      out.push({
+        id: 'geo-unacked', type: 'geofence_unacked', emoji: '🔔',
+        title: 'Unacknowledged breach alerts',
+        message: `${unackedAlerts} alert${unackedAlerts > 1 ? 's' : ''} waiting for acknowledgement`,
+        severity: 'medium',
       });
     }
-  }, [activeTab, nonRoutineAlerts]);
+    const rank: Record<NonRoutineAlert['severity'], number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    return out.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  }, [batteryLevel, patientCoords, patientId, patientTasks, zones, unackedAlerts]);
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Pressable
-          onPress={() => navigation.navigate('CaregiverPatients')}
-          style={({ pressed }) => [styles.backNavBtn, pressed && { opacity: 0.72 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.backNavText}>← Back</Text>
-        </Pressable>
+        <View style={styles.topNavRow}>
+          <Pressable
+            onPress={() => navigation.navigate('CaregiverPatients')}
+            style={({ pressed }) => [styles.backNavBtn, pressed && { opacity: 0.72 }]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.backNavText}>← Back</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('CaregiverProfileEdit')}
+            style={({ pressed }) => [styles.myProfileBtn, pressed && { opacity: 0.8 }]}
+          >
+            <Text style={styles.myProfileBtnText}>👤 My Profile</Text>
+          </Pressable>
+        </View>
 
         {activeTab === 'Alerts' ? (
           <View style={styles.alertsContainer}>
@@ -626,46 +666,97 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
         )}
 
 
-          {/* ── Geofence Status Card ───────────────────────────────── */}
+          {/* ── Geofence Status Card (v2 — at-a-glance) ─────────────── */}
           {(() => {
-            const fence = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
-            const dist = patientCoords
-              ? haversineMeters(
-                  fence.center.latitude, fence.center.longitude,
-                  patientCoords.latitude, patientCoords.longitude,
-                )
-              : null;
-            const inZone   = dist !== null && dist <= fence.radiusM;
-            const zoneColor = inZone ? C.primary : '#DC2626';
-            const zoneBg    = inZone ? C.primaryLight : '#FEE2E2';
-            const distLabel = dist === null
-              ? 'Acquiring location…'
-              : inZone
-                ? `${Math.round(fence.radiusM - dist)} m inside boundary`
-                : `${Math.round(dist - fence.radiusM)} m from boundary`;
+            const coordsAgeS = coordsTs > 0 ? Math.floor((Date.now() - coordsTs) / 1000) : 999;
+            // Only compute breach when we have REAL data from Supabase
+            // (prevents false "Safe at Home" when both location and zones are defaults)
+            const breach: BreachStatus = hasRealLocation && hasRealZones && patientCoords
+              ? checkBreach(patientCoords, zones)
+              : { status: 'no_signal' };
+
+            // ── Visual config per state ────────────────────────────────
+            type GeoCardCfg = { bg: string; border: string; dotColor: string; icon: string; title: string; titleColor: string };
+            const cfg: GeoCardCfg = coordsAgeS > 120
+              ? { bg: '#1F2937', border: '#374151', dotColor: '#6B7280', icon: '📵', title: 'No Signal', titleColor: '#D1D5DB' }
+              : breach.status === 'safe'
+              ? { bg: '#ECFDF5', border: '#10B981',  dotColor: '#10B981',  icon: '🏠', title: 'Safe at Home',        titleColor: '#065F46' }
+              : breach.status === 'approaching'
+              ? { bg: '#FFFBEB', border: '#F59E0B',  dotColor: '#F59E0B',  icon: '🚶', title: 'Moving Nearby',       titleColor: '#92400E' }
+              : breach.status === 'breach'
+              ? { bg: '#FEF2F2', border: '#EF4444',  dotColor: '#EF4444',  icon: '⚠️', title: 'Outside Safe Area',   titleColor: '#991B1B' }
+              : { bg: C.surface, border: C.border,   dotColor: C.textMuted, icon: '📡', title: 'Locating Patient…',   titleColor: C.textSecondary };
+
+            // Distance label
+            const distLabel = (() => {
+              if (!patientCoords || zones.length === 0) return 'Acquiring GPS signal…';
+              const nearest = zones.reduce((best, z) => {
+                const d = haversineMeters(z.center.latitude, z.center.longitude, patientCoords.latitude, patientCoords.longitude);
+                const bd = haversineMeters(best.center.latitude, best.center.longitude, patientCoords.latitude, patientCoords.longitude);
+                return d < bd ? z : best;
+              }, zones[0]);
+              const d = haversineMeters(nearest.center.latitude, nearest.center.longitude, patientCoords.latitude, patientCoords.longitude);
+              return d <= nearest.radiusM
+                ? `${Math.round(nearest.radiusM - d)} m inside "${nearest.label}" zone`
+                : `${Math.round(d - nearest.radiusM)} m beyond "${nearest.label}" boundary`;
+            })();
+
             return (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.geoCard,
-                  { backgroundColor: zoneBg, borderColor: zoneColor },
-                  pressed && { opacity: 0.86 },
-                ]}
-                onPress={() =>
-                  navigation.navigate('GeofenceMap', {
-                    patientId,
-                    patientName,
-                  })
-                }
-              >
-                <View style={[styles.geoDot, { backgroundColor: zoneColor }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.geoTitle, { color: zoneColor }]}>
-                    {dist === null ? 'Locating patient…' : inZone ? 'In Safe Zone' : 'Outside Safe Zone'}
-                  </Text>
-                  <Text style={styles.geoMeta}>{distLabel}</Text>
+              <View style={[styles.geoCard, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+                {/* Top row: icon + status + age */}
+                <Pressable
+                  style={styles.geoTopRow}
+                  onPress={() => navigation.navigate('GeofenceMap', { patientId, patientName, caregiverPhone: patientPhone })}
+                >
+                  <Text style={styles.geoIcon}>{cfg.icon}</Text>
+                  <View style={{ flex: 1, marginHorizontal: 10 }}>
+                    <Text style={[styles.geoTitle, { color: cfg.titleColor }]}>{cfg.title}</Text>
+                    <Text style={styles.geoMeta} numberOfLines={2}>{distLabel}</Text>
+                  </View>
+                  {/* Unacked badge */}
+                  {unackedAlerts > 0 && (
+                    <View style={styles.geoAlertBadge}>
+                      <Text style={styles.geoAlertBadgeText}>{unackedAlerts}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.geoChevron}>›</Text>
+                </Pressable>
+
+                {/* Bottom row: zone pills + edit + age */}
+                <View style={styles.geoBottomRow}>
+                  <View style={styles.geoZonePills}>
+                    {zones.filter((z) => z.isActive).map((z) => (
+                      <View key={z.id} style={styles.geoZonePill}>
+                        <Text style={styles.geoZonePillText}>🏠 {z.label}  ⊙ {z.radiusM} m</Text>
+                      </View>
+                    ))}
+                    {zones.length === 0 && (
+                      <Text style={styles.geoNoZone}>No zone set</Text>
+                    )}
+                  </View>
+                  <Pressable
+                    onPress={() => navigation.navigate('GeofenceEditor', {
+                      patientId, patientName,
+                      existingZone: zones[0] ? {
+                        id: zones[0].id, label: zones[0].label,
+                        center: zones[0].center, radiusM: zones[0].radiusM,
+                      } : null,
+                    })}
+                    style={({ pressed }) => [styles.geoEditBtn, pressed && { opacity: 0.75 }]}
+                  >
+                    <Text style={styles.geoEditBtnText}>
+                      {zones.length === 0 ? '＋ Set Zone' : '✏ Edit Zone'}
+                    </Text>
+                  </Pressable>
                 </View>
-                <Text style={styles.geoChevron}>›</Text>
-              </Pressable>
+
+                {/* Age indicator */}
+                {coordsTs > 0 && (
+                  <Text style={styles.geoAge}>
+                    Updated {coordsAgeS < 5 ? 'just now' : `${coordsAgeS}s ago`}
+                  </Text>
+                )}
+              </View>
             );
           })()}
           </>
@@ -948,8 +1039,11 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
 const styles = StyleSheet.create({
   screen: { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 96 },
-  backNavBtn: { alignSelf: 'flex-start', marginBottom: 8, paddingVertical: 4, paddingRight: 4 },
-  backNavText: { fontFamily: F.bold, fontSize: 14, color: C.textSecondary },
+  backNavBtn:      { paddingVertical: 4, paddingRight: 4 },
+  backNavText:     { fontFamily: F.bold, fontSize: 14, color: C.textSecondary },
+  topNavRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  myProfileBtn:    { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: C.primaryLight ?? '#D1FAE5' },
+  myProfileBtnText:{ fontFamily: F.semiBold ?? F.bold, fontSize: 13, color: C.primary },
 
   // ── Header ──────────────────────────────────────────────────────────────────
   headerCard: { marginBottom: 14 },
@@ -999,18 +1093,28 @@ const styles = StyleSheet.create({
 
 
 
-  // Geofence card
+  // ── Geofence card (v2) ────────────────────────────────────────────────
   geoCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderRadius: 16, borderWidth: 1.5,
-    paddingHorizontal: 14, paddingVertical: 13,
-    marginTop: 12, marginHorizontal: 16,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
+    borderRadius: 20, borderWidth: 1.5,
+    paddingHorizontal: 14, paddingVertical: 14,
+    marginTop: 12, marginHorizontal: 0,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 3 }, shadowRadius: 10, elevation: 3,
   },
-  geoDot:     { width: 10, height: 10, borderRadius: 5 },
-  geoTitle:   { fontFamily: F.bold, fontSize: 15, marginBottom: 2 },
-  geoMeta:    { fontFamily: F.regular, fontSize: 13, color: C.textSecondary },
-  geoChevron: { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 26 },
+  geoTopRow:      { flexDirection: 'row', alignItems: 'center' },
+  geoIcon:        { fontSize: 26, lineHeight: 32 },
+  geoTitle:       { fontFamily: F.extraBold, fontSize: 14, letterSpacing: 0.3 },
+  geoMeta:        { fontFamily: F.medium, fontSize: 12, color: '#374151', marginTop: 3 },
+  geoChevron:     { fontFamily: F.bold, fontSize: 22, color: C.textMuted, lineHeight: 26 },
+  geoAlertBadge:  { backgroundColor: '#DC2626', borderRadius: 999, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, marginRight: 6 },
+  geoAlertBadgeText: { fontFamily: F.bold, fontSize: 11, color: '#fff' },
+  geoBottomRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  geoZonePills:   { flexDirection: 'row', flexWrap: 'wrap', gap: 5, flex: 1 },
+  geoZonePill:    { backgroundColor: 'rgba(14,122,103,0.10)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(14,122,103,0.22)' },
+  geoZonePillText:{ fontFamily: F.semiBold, fontSize: 11, color: C.primary },
+  geoNoZone:      { fontFamily: F.regular, fontSize: 12, color: C.textMuted },
+  geoEditBtn:     { backgroundColor: C.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8 },
+  geoEditBtnText: { fontFamily: F.bold, fontSize: 12, color: C.primary },
+  geoAge:         { fontFamily: F.regular, fontSize: 10, color: C.textMuted, marginTop: 6, textAlign: 'right' },
 
   // Alerts tab
   alertsContainer: {

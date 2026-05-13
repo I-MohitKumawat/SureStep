@@ -12,7 +12,38 @@
     "jsEngine": "hermes",
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-font"
-    ]
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SureStep monitors your patient's location continuously to alert you if they leave their safe zone.",
+          "locationAlwaysPermission": "SureStep needs background location access to monitor patient safety even when the app is closed.",
+          "locationWhenInUsePermission": "SureStep needs location access to show the patient's position on the map.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-task-manager"
+      ]
+    ],
+    "android": {
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "ios": {
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SureStep monitors your patient's location continuously to alert you if they leave their safe zone.",
+        "NSLocationAlwaysUsageDescription": "SureStep needs background location access to monitor patient safety even when the app is closed.",
+        "NSLocationWhenInUseUsageDescription": "SureStep needs location access to show the patient's position on the map.",
+        "UIBackgroundModes": ["location", "fetch"]
+      }
+    }
   }
 }

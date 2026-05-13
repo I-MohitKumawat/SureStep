@@ -55,17 +55,35 @@ export function UserProfileProvider({ children }) {
       } else if (role === 'CAREGIVER') {
         const { data: cg } = await supabase
           .from('caregivers')
-          .select('name, specialty, bio, availability, location')
+          .select('name, specialty, bio, availability, location, dob, gender, city, language, profile_photo_url, years_experience, dementia_experience, patients_handled, specializations, languages_spoken, availability_types, service_radius_km, transportation_mode, hourly_rate, daily_rate, about_me, emergency_response, can_assist_nearby')
           .eq('id', phone)
           .maybeSingle();
 
         setProfile({
-          fullName:     cg?.name         ?? baseName,
-          role:         'caregiver',
-          specialty:    cg?.specialty    ?? 'General',
-          bio:          cg?.bio          ?? '',
-          availability: cg?.availability ?? 'Flexible',
-          location:     cg?.location     ?? '',
+          fullName:            cg?.name                ?? baseName,
+          role:                'caregiver',
+          dob:                 cg?.dob                 ?? '',
+          gender:              cg?.gender              ?? '',
+          city:                cg?.city                ?? '',
+          language:            cg?.language            ?? 'English',
+          specialty:           cg?.specialty           ?? 'General',
+          bio:                 cg?.bio                 ?? '',
+          availability:        cg?.availability        ?? 'Flexible',
+          location:            cg?.location            ?? '',
+          profilePhotoUrl:     cg?.profile_photo_url   ?? null,
+          yearsExperience:     cg?.years_experience    ?? 0,
+          dementiaExperience:  cg?.dementia_experience ?? false,
+          patientsHandled:     cg?.patients_handled    ?? 0,
+          specializations:     cg?.specializations     ?? [],
+          languagesSpoken:     cg?.languages_spoken    ?? [],
+          availabilityTypes:   cg?.availability_types  ?? [],
+          serviceRadiusKm:     cg?.service_radius_km   ?? 10,
+          transportationMode:  cg?.transportation_mode ?? 'public',
+          hourlyRate:          cg?.hourly_rate         ?? '',
+          dailyRate:           cg?.daily_rate          ?? '',
+          aboutMe:             cg?.about_me            ?? '',
+          emergencyResponse:   cg?.emergency_response  ?? false,
+          canAssistNearby:     cg?.can_assist_nearby   ?? false,
         });
       }
     } catch (e) {
@@ -114,17 +132,43 @@ export function UserProfileProvider({ children }) {
         if (patientRes.error) throw patientRes.error;
 
       } else if (draft.role === 'caregiver') {
+        // Build the specializations label for the legacy `specialty` column
+        const specLabel = draft.specializations?.length > 0
+          ? draft.specializations.join(', ')
+          : (draft.specialty ?? 'Family Caregiver');
+        const availLabel = draft.availabilityTypes?.length > 0
+          ? draft.availabilityTypes.join(', ')
+          : (draft.availability ?? 'Flexible');
+
         const [userRes, cgRes] = await Promise.all([
           supabase.from('mock_users').upsert({
             phone_number: phone, otp: '0000', role: 'caregiver', full_name: draft.fullName ?? '',
           }),
           supabase.from('caregivers').upsert({
-            id:           phone,
-            name:         draft.fullName     ?? '',
-            specialty:    draft.specialty    ?? 'Family Caregiver',
-            bio:          draft.bio          ?? '',
-            availability: draft.availability ?? 'Flexible',
-            location:     draft.location     ?? draft.city ?? '',
+            id:                   phone,
+            name:                 draft.fullName          ?? '',
+            specialty:            specLabel,
+            bio:                  draft.bio               ?? draft.aboutMe ?? '',
+            availability:         availLabel,
+            location:             draft.location          ?? draft.city ?? '',
+            dob:                  draft.dob               ?? '',
+            gender:               draft.gender            ?? '',
+            city:                 draft.city              ?? '',
+            language:             draft.language          ?? 'English',
+            profile_photo_url:    draft.profilePhotoUrl   ?? null,
+            years_experience:     draft.yearsExperience   ?? 0,
+            dementia_experience:  draft.dementiaExperience ?? false,
+            patients_handled:     draft.patientsHandled   ?? 0,
+            specializations:      draft.specializations   ?? [],
+            languages_spoken:     draft.languagesSpoken   ?? [],
+            availability_types:   draft.availabilityTypes ?? [],
+            service_radius_km:    draft.serviceRadiusKm   ?? 10,
+            transportation_mode:  draft.transportationMode ?? 'public',
+            hourly_rate:          draft.hourlyRate         ?? '',
+            daily_rate:           draft.dailyRate          ?? '',
+            about_me:             draft.aboutMe            ?? '',
+            emergency_response:   draft.emergencyResponse  ?? false,
+            can_assist_nearby:    draft.canAssistNearby    ?? false,
           }),
         ]);
         if (userRes.error) throw userRes.error;

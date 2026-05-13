@@ -1,20 +1,28 @@
 /**
- * GeofenceMapScreen
- * Full-screen map showing the circular geofence boundary and patient's live
- * location, powered by expo-location (works in Expo Go + production).
+ * GeofenceMapScreen  (v3 — full UX overhaul)
  *
- * Tap the back arrow to return to the caregiver dashboard.
+ * What's new over v2:
+ *  - Reads PATIENT location from Supabase Realtime (not caregiver's own GPS)
+ *  - Friendly state card: "Safe at Home", "Moving Nearby", "Outside Safe Area"
+ *  - Pulsing animation on patient marker during live updates
+ *  - Breach history slide-up panel
+ *  - "+ Add Zone" FAB always visible
+ *  - "Navigate to Patient" button when in breach
+ *  - Confidence indicator (location age)
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  Animated,
+  Linking,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
+import MapView, { Circle, Marker, Polyline } from 'react-native-maps';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { HomeStackParamList } from '../navigation/RootNavigator';
@@ -22,76 +30,253 @@ import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import {
   haversineMeters,
-  PATIENT_GEOFENCES,
-  DEFAULT_GEOFENCE,
+  checkBreach,
+  fetchPatientGeofences,
+  fetchLocationTrail,
+  fetchLatestPatientLocation,
+  fetchBreachHistory,
+  subscribeToPatientLocation,
+  acknowledgeAlert,
+  logBreachAlert,
   type Coords,
+  type GeofenceZone,
+  type BreachStatus,
+  type BreachAlert,
 } from '../utils/geofence';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'GeofenceMap'>;
 
+// ─── State card config ────────────────────────────────────────────────────────
+
+type StateConfig = {
+  bg: string; border: string; dot: string;
+  emoji: string; title: string; subtitle: string;
+  titleColor: string;
+};
+
+function getStateConfig(status: BreachStatus['status'], ageS: number): StateConfig {
+  if (ageS > 120) return {
+    bg: '#1F2937', border: '#374151', dot: '#6B7280',
+    emoji: '📵', title: 'No Signal',
+    subtitle: `Location lost · last seen ${Math.floor(ageS / 60)} min ago`,
+    titleColor: '#D1D5DB',
+  };
+  switch (status) {
+    case 'safe': return {
+      bg: '#ECFDF5', border: '#10B981', dot: '#10B981',
+      emoji: '🏠', title: 'Safe at Home',
+      subtitle: 'Patient is inside the safe zone',
+      titleColor: '#065F46',
+    };
+    case 'approaching': return {
+      bg: '#FFFBEB', border: '#F59E0B', dot: '#F59E0B',
+      emoji: '🚶', title: 'Moving Nearby',
+      subtitle: 'Patient is close to the zone boundary',
+      titleColor: '#92400E',
+    };
+    case 'breach': return {
+      bg: '#FEF2F2', border: '#EF4444', dot: '#EF4444',
+      emoji: '⚠️', title: 'Outside Safe Area',
+      subtitle: 'Patient has left the safe zone',
+      titleColor: '#991B1B',
+    };
+    default: return {
+      bg: C.surface, border: C.border, dot: C.textMuted,
+      emoji: '📡', title: 'Locating Patient…',
+      subtitle: 'Acquiring GPS signal',
+      titleColor: C.textSecondary,
+    };
+  }
+}
+
+function formatAge(ageS: number): string {
+  if (ageS < 5)  return 'Live · just now';
+  if (ageS < 60) return `Updated ${ageS}s ago`;
+  return `Updated ${Math.floor(ageS / 60)}m ago`;
+}
+
+function formatBreachTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const h = Math.floor(diffMin / 60);
+  return `${h}h ${diffMin % 60}m ago`;
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
 export const GeofenceMapScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { patientName, patientId } = route.params;
-  const fence   = PATIENT_GEOFENCES[patientId] ?? DEFAULT_GEOFENCE;
+  const { patientId, patientName, caregiverPhone } = route.params;
 
-  const [coords, setCoords] = useState<Coords | null>(null);
-  const [ready,  setReady]  = useState(false);
-  const subRef = useRef<Location.LocationSubscription | null>(null);
+  // ── Core data ─────────────────────────────────────────────────────────────
+  const [coords,     setCoords]     = useState<Coords | null>(null);
+  const [coordsTs,   setCoordsTs]   = useState(0);
+  const [ageS,       setAgeS]       = useState(0);
+  const [zones,      setZones]      = useState<GeofenceZone[]>([]);
+  const [trail,      setTrail]      = useState<Coords[]>([]);
+  const [history,    setHistory]    = useState<BreachAlert[]>([]);
+  const [ready,      setReady]      = useState(false);
 
-  const startTracking = useCallback(async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') throw new Error('permission denied');
+  // ── Breach dedup ──────────────────────────────────────────────────────────
+  const [lastAlertId, setLastAlertId] = useState<string | null>(null);
+  const [acked,       setAcked]       = useState(false);
 
-      // Initial fix
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+  // ── Panel state ───────────────────────────────────────────────────────────
+  const [showHistory, setShowHistory] = useState(false);
 
-      // Live updates
-      subRef.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
-        (l) => setCoords({ latitude: l.coords.latitude, longitude: l.coords.longitude }),
-      );
-    } catch {
-      // Simulator / permission denied — use demo offset from geofence centre
-      setCoords({
-        latitude:  fence.center.latitude  + 0.0018,
-        longitude: fence.center.longitude - 0.0012,
-      });
-    } finally {
-      setReady(true);
-    }
-  }, [fence.center]);
+  // ── Pulse animation ───────────────────────────────────────────────────────
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  const triggerPulse = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(pulseAnim, { toValue: 1.35, duration: 200, useNativeDriver: true }),
+      Animated.timing(pulseAnim, { toValue: 1.0,  duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, [pulseAnim]);
+
+  const mapRef    = useRef<MapView>(null);
+  const ageTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Age counter ───────────────────────────────────────────────────────────
   useEffect(() => {
-    void startTracking();
-    return () => { subRef.current?.remove(); };
-  }, [startTracking]);
+    ageTimer.current = setInterval(() => {
+      if (coordsTs > 0) setAgeS(Math.floor((Date.now() - coordsTs) / 1000));
+    }, 1000);
+    return () => { if (ageTimer.current) clearInterval(ageTimer.current); };
+  }, [coordsTs]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
-  const distance = coords
-    ? haversineMeters(
-        fence.center.latitude, fence.center.longitude,
-        coords.latitude,       coords.longitude,
-      )
-    : null;
+  // ── Reload zones whenever this screen comes back into focus ──────────────
+  // (Fixes stale zones after user edits/deletes in GeofenceEditorScreen)
+  useFocusEffect(
+    useCallback(() => {
+      void fetchPatientGeofences(patientId).then(setZones);
+    }, [patientId]),
+  );
 
-  const inZone    = distance !== null && distance <= fence.radiusM;
-  const zoneColor = inZone ? C.primary : '#DC2626';
-  const zoneBg    = inZone ? C.primaryLight : '#FEE2E2';
-  const zoneLabel = inZone ? 'In Safe Zone' : 'Outside Safe Zone';
-  const distLabel = distance === null
-    ? 'Calculating…'
-    : inZone
-      ? `${Math.round(fence.radiusM - distance)} m inside boundary`
-      : `${Math.round(distance - fence.radiusM)} m from boundary`;
+  // ── Initial full data load ────────────────────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      const [trailData, latestLoc, histData] = await Promise.all([
+        fetchLocationTrail(patientId, 25),
+        fetchLatestPatientLocation(patientId),
+        fetchBreachHistory(patientId, 10),
+      ]);
+      setTrail(trailData);
+      setHistory(histData);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+      if (latestLoc) {
+        const c: Coords = { latitude: latestLoc.latitude, longitude: latestLoc.longitude };
+        setCoords(c);
+        setCoordsTs(latestLoc.recordedAt);
+        setAgeS(Math.floor((Date.now() - latestLoc.recordedAt) / 1000));
+
+        // Centre map on patient
+        mapRef.current?.animateToRegion({
+          ...c, latitudeDelta: 0.018, longitudeDelta: 0.018,
+        }, 600);
+      }
+
+      setReady(true);
+    };
+    void load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
+  // ── Realtime subscription to new location pings ──────────────────────────
+  useEffect(() => {
+    const unsub = subscribeToPatientLocation(patientId, (loc) => {
+      const c: Coords = { latitude: loc.latitude, longitude: loc.longitude };
+      setCoords(c);
+      setCoordsTs(loc.recordedAt);
+      setAgeS(0);
+      setTrail((prev) => [...prev.slice(-24), c]);
+      triggerPulse();
+      // Auto-pan map to the new patient position
+      mapRef.current?.animateToRegion({
+        ...c, latitudeDelta: 0.018, longitudeDelta: 0.018,
+      }, 800);
+    });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
+  // ── Derived: breach status ────────────────────────────────────────────────
+  const breachStatus: BreachStatus = coords && zones.length > 0
+    ? checkBreach(coords, zones)
+    : { status: 'no_signal' };
+
+  const cfg = getStateConfig(breachStatus.status, ageS);
+
+  // ── Derived: distance label ───────────────────────────────────────────────
+  const distLabel = (() => {
+    if (!coords || zones.length === 0) return 'Acquiring GPS signal…';
+    const nearest = zones.reduce((best, z) => {
+      const d  = haversineMeters(z.center.latitude, z.center.longitude, coords.latitude, coords.longitude);
+      const bd = haversineMeters(best.center.latitude, best.center.longitude, coords.latitude, coords.longitude);
+      return d < bd ? z : best;
+    }, zones[0]);
+    const d = haversineMeters(nearest.center.latitude, nearest.center.longitude, coords.latitude, coords.longitude);
+    return d <= nearest.radiusM
+      ? `${Math.round(nearest.radiusM - d)}m inside "${nearest.label}"`
+      : `${Math.round(d - nearest.radiusM)}m beyond "${nearest.label}" boundary`;
+  })();
+
+  // ── Auto-log breach (deduplicated) ────────────────────────────────────────
+  useEffect(() => {
+    // Don't log breach if the zone is a fallback (non-real UUID) — tables may not exist yet
+    const realZoneId = breachStatus.status === 'breach' &&
+      breachStatus.zone?.id && !breachStatus.zone.id.startsWith('fallback-')
+        ? breachStatus.zone.id
+        : null;
+
+    if (breachStatus.status === 'breach' && coords && !lastAlertId && realZoneId !== undefined) {
+      void logBreachAlert({
+        patientId,
+        geofenceId: realZoneId,
+        breachType: 'exit',
+        coords,
+        distanceM: breachStatus.distanceM,
+      }).then((id) => { if (id) setLastAlertId(id); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [breachStatus.status]);
+
+  const handleAck = useCallback(async () => {
+    if (!lastAlertId || !caregiverPhone) return;
+    await acknowledgeAlert(lastAlertId, caregiverPhone);
+    setAcked(true);
+    // Refresh history
+    const h = await fetchBreachHistory(patientId, 10);
+    setHistory(h);
+  }, [lastAlertId, caregiverPhone, patientId]);
+
+  const centerOnPatient = useCallback(() => {
+    if (!coords || !mapRef.current) return;
+    mapRef.current.animateToRegion({
+      ...coords, latitudeDelta: 0.012, longitudeDelta: 0.012,
+    }, 500);
+  }, [coords]);
+
+  const markerColor = breachStatus.status === 'breach'
+    ? '#EF4444'
+    : breachStatus.status === 'approaching'
+      ? '#F59E0B'
+      : C.primary;
+
+  // ── Guide to patient (open maps app) ─────────────────────────────────────
+  const guideToPatient = useCallback(() => {
+    if (!coords) return;
+    const url = `https://maps.google.com/maps?daddr=${coords.latitude},${coords.longitude}`;
+    void Linking.openURL(url);
+  }, [coords]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.screen}>
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -100,67 +285,213 @@ export const GeofenceMapScreen: React.FC<Props> = ({ navigation, route }) => {
         >
           <Text style={styles.backIcon}>‹</Text>
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {patientName}'s Location
-        </Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{patientName}'s Location</Text>
+          <Text style={[styles.headerSub, ageS > 60 && { color: '#F59E0B' }]}>
+            {ageS === 0 && coordsTs === 0 ? 'Loading…' : formatAge(ageS)}
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => setShowHistory(!showHistory)}
+          style={styles.historyBtn}
+        >
+          <Text style={styles.historyBtnText}>📋</Text>
+          {history.filter(h => !h.acknowledgedAt).length > 0 && (
+            <View style={styles.historyBadge}>
+              <Text style={styles.historyBadgeText}>
+                {history.filter(h => !h.acknowledgedAt).length}
+              </Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
-      {/* Map or loader */}
+      {/* ── Map or Loader ────────────────────────────────────────────────── */}
       {!ready ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={C.primary} />
-          <Text style={styles.loadingText}>Acquiring location…</Text>
+          <Text style={styles.loadingText}>Loading patient location…</Text>
         </View>
       ) : (
         <>
           <MapView
+            ref={mapRef}
             style={styles.map}
-            showsUserLocation={false}
+            showsUserLocation={!coords}  // Show blue dot for caregiver when no patient data
+            showsMyLocationButton={!coords}
             initialRegion={{
-              ...fence.center,
-              latitudeDelta:  0.020,
-              longitudeDelta: 0.020,
+              ...(coords ?? zones[0]?.center ?? { latitude: 12.9716, longitude: 77.5946 }),
+              latitudeDelta:  0.022,
+              longitudeDelta: 0.022,
             }}
           >
-            {/* Geofence boundary circle */}
-            <Circle
-              center={fence.center}
-              radius={fence.radiusM}
-              fillColor="rgba(14,122,103,0.10)"
-              strokeColor="rgba(14,122,103,0.55)"
-              strokeWidth={2.5}
-            />
+            {/* Safe zones */}
+            {zones.filter((z) => z.isActive).map((zone) => (
+              <React.Fragment key={zone.id}>
+                <Circle
+                  center={zone.center}
+                  radius={zone.radiusM}
+                  fillColor="rgba(14,122,103,0.09)"
+                  strokeColor="rgba(14,122,103,0.50)"
+                  strokeWidth={2.5}
+                />
+                <Marker coordinate={zone.center} anchor={{ x: 0.5, y: 0.5 }}>
+                  <View style={styles.zoneLabel}>
+                    <Text style={styles.zoneLabelText}>🏠 {zone.label}</Text>
+                  </View>
+                </Marker>
+              </React.Fragment>
+            ))}
 
-            {/* Geofence centre dot */}
-            <Marker coordinate={fence.center} anchor={{ x: 0.5, y: 0.5 }}>
-              <View style={styles.centrePin} />
-            </Marker>
+            {/* Approaching ring (80% of radius) */}
+            {breachStatus.status === 'approaching' && zones.length > 0 && (
+              <Circle
+                center={zones[0].center}
+                radius={zones[0].radiusM * 0.80}
+                fillColor="transparent"
+                strokeColor="rgba(245,158,11,0.40)"
+                strokeWidth={2}
+              />
+            )}
 
-            {/* Patient marker */}
+            {/* Location trail */}
+            {trail.length > 1 && (
+              <Polyline
+                coordinates={trail}
+                strokeColor="rgba(14,122,103,0.35)"
+                strokeWidth={3}
+                lineDashPattern={[6, 4]}
+              />
+            )}
+
+            {/* Patient marker — emoji for reliable cross-platform rendering */}
             {coords && (
-              <Marker
-                coordinate={coords}
-                title={patientName}
-                description={zoneLabel}
-              >
-                <View style={[styles.patientMarker, { backgroundColor: zoneColor }]}>
-                  <Text style={styles.patientMarkerText}>
-                    {patientName[0]?.toUpperCase()}
+              <Marker coordinate={coords} title={patientName} description={distLabel}>
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                  <Text style={[styles.patientMarkerEmoji, { color: markerColor }]}>
+                    {breachStatus.status === 'breach' ? '⚠️' : '🧍'}
                   </Text>
-                </View>
+                  <Text style={styles.patientMarkerLabel} numberOfLines={1}>
+                    {patientName.split(' ')[0]}
+                  </Text>
+                </Animated.View>
               </Marker>
             )}
           </MapView>
 
-          {/* Status overlay */}
-          <View style={[styles.statusBar, { backgroundColor: zoneBg, borderColor: zoneColor }]}>
-            <View style={[styles.statusDot, { backgroundColor: zoneColor }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.statusTitle, { color: zoneColor }]}>{zoneLabel}</Text>
-              <Text style={styles.statusMeta}>{distLabel}</Text>
+          {/* Re-centre button */}
+          <Pressable
+            onPress={centerOnPatient}
+            style={({ pressed }) => [styles.reCentreBtn, pressed && { opacity: 0.75 }]}
+          >
+            <Text style={styles.reCentreIcon}>◎</Text>
+          </Pressable>
+
+          {/* + Add / Edit Zone FAB */}
+          {(() => {
+            // Only treat as existing zone if it has a real DB UUID (not a fallback ID)
+            const realZone = zones[0] && !zones[0].id.startsWith('fallback-') ? zones[0] : null;
+            return (
+              <Pressable
+                onPress={() => navigation.navigate('GeofenceEditor', {
+                  patientId,
+                  patientName,
+                  existingZone: realZone ? {
+                    id: realZone.id, label: realZone.label,
+                    center: realZone.center, radiusM: realZone.radiusM,
+                  } : null,
+                })}
+                style={({ pressed }) => [styles.editZoneFab, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.editZoneFabText}>
+                  {realZone ? '⊙ Zones' : '＋ Set Zone'}
+                </Text>
+              </Pressable>
+            );
+          })()}
+
+          {/* ── Breach History Panel ───────────────────────────────────── */}
+          {showHistory && (
+            <View style={styles.historyPanel}>
+              <View style={styles.historyPanelHandle} />
+              <Text style={styles.historyPanelTitle}>Recent Alerts</Text>
+              <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                {history.length === 0 ? (
+                  <Text style={styles.historyEmpty}>No breach alerts recorded.</Text>
+                ) : history.map((alert) => (
+                  <View key={alert.id} style={styles.historyRow}>
+                    <Text style={styles.historyRowIcon}>
+                      {alert.breachType === 'exit' ? '🔴' : '🟢'}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.historyRowLabel}>
+                        {alert.breachType === 'exit'
+                          ? `Left safe zone${alert.distanceM ? ` · ${Math.round(alert.distanceM)}m away` : ''}`
+                          : 'Returned to safe zone'}
+                      </Text>
+                      <Text style={styles.historyRowTime}>{formatBreachTime(alert.createdAt)}</Text>
+                    </View>
+                    {!alert.acknowledgedAt ? (
+                      <View style={styles.historyUnackedDot} />
+                    ) : (
+                      <Text style={styles.historyAcked}>✓</Text>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
             </View>
-            <Text style={styles.radiusLabel}>⊙ {fence.radiusM} m zone</Text>
+          )}
+
+          {/* ── Status Card ────────────────────────────────────────────── */}
+          <View style={[styles.statusCard, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+
+            {/* Top row */}
+            <View style={styles.statusTopRow}>
+              <Text style={styles.statusEmoji}>{cfg.emoji}</Text>
+              <View style={{ flex: 1, marginHorizontal: 10 }}>
+                <Text style={[styles.statusTitle, { color: cfg.titleColor }]}>{cfg.title}</Text>
+                <Text style={styles.statusSubtitle}>{cfg.subtitle}</Text>
+                <Text style={styles.statusDist} numberOfLines={2}>{distLabel}</Text>
+              </View>
+              <View style={[styles.statusDot, { backgroundColor: cfg.dot }]} />
+            </View>
+
+            {/* Zone pills */}
+            {zones.length > 0 && (
+              <View style={styles.zonePills}>
+                {zones.filter((z) => z.isActive).map((z) => (
+                  <View key={z.id} style={styles.zonePill}>
+                    <Text style={styles.zonePillText}>🏠 {z.label} · {z.radiusM}m</Text>
+                  </View>
+                ))}
+                {zones.length === 0 && (
+                  <Text style={styles.noZoneText}>No safe zones configured</Text>
+                )}
+              </View>
+            )}
+
+            {/* Guide to patient button (breach only) */}
+            {breachStatus.status === 'breach' && coords && (
+              <Pressable
+                onPress={guideToPatient}
+                style={({ pressed }) => [styles.guideBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.guideBtnText}>🗺 Guide Me to {patientName}</Text>
+              </Pressable>
+            )}
+
+            {/* Acknowledge breach */}
+            {breachStatus.status === 'breach' && lastAlertId && !acked && (
+              <Pressable
+                onPress={() => void handleAck()}
+                style={({ pressed }) => [styles.ackBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.ackBtnText}>✓  Acknowledge Alert</Text>
+              </Pressable>
+            )}
+            {acked && (
+              <Text style={styles.ackedText}>Alert acknowledged ✓</Text>
+            )}
           </View>
         </>
       )}
@@ -174,42 +505,120 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 54, paddingBottom: 14,
-    backgroundColor: C.surface,
-    borderBottomWidth: 1, borderBottomColor: C.border,
+    paddingHorizontal: 14, paddingTop: 54, paddingBottom: 12,
+    backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  backBtn:     { width: 40, alignItems: 'flex-start' },
-  backIcon:    { fontFamily: F.bold, fontSize: 28, color: C.primary, lineHeight: 32 },
-  headerTitle: { fontFamily: F.bold, fontSize: 17, color: C.textPrimary, flex: 1, textAlign: 'center' },
+  backBtn:      { width: 40, alignItems: 'flex-start' },
+  backIcon:     { fontFamily: F.bold, fontSize: 28, color: C.primary, lineHeight: 32 },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle:  { fontFamily: F.bold, fontSize: 16, color: C.textPrimary },
+  headerSub:    { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginTop: 1 },
 
-  loadingWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText:  { fontFamily: F.medium, fontSize: 15, color: C.textSecondary },
+  historyBtn: {
+    width: 40, height: 36, alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+  },
+  historyBtnText: { fontSize: 20 },
+  historyBadge: {
+    position: 'absolute', top: 0, right: 0,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center',
+  },
+  historyBadgeText: { fontFamily: F.bold, fontSize: 9, color: '#fff' },
+
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  loadingText: { fontFamily: F.medium, fontSize: 15, color: C.textSecondary },
 
   map: { flex: 1 },
 
-  centrePin: {
-    width: 12, height: 12, borderRadius: 6,
-    backgroundColor: C.primary, borderWidth: 2, borderColor: C.primaryText,
+  zoneLabel: {
+    backgroundColor: 'rgba(14,122,103,0.85)', borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 3,
   },
-  patientMarker: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: C.surface,
-    shadowColor: '#000', shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 3 }, shadowRadius: 6, elevation: 6,
-  },
-  patientMarkerText: { fontFamily: F.extraBold, fontSize: 16, color: '#fff' },
+  zoneLabelText: { fontFamily: F.bold, fontSize: 11, color: '#fff' },
 
-  statusBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    marginHorizontal: 16, marginVertical: 14,
-    borderRadius: 18, borderWidth: 1.5,
-    paddingHorizontal: 16, paddingVertical: 14,
-    shadowColor: '#000', shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 3,
+  patientMarkerEmoji: { fontSize: 32, textAlign: 'center' },
+  patientMarkerLabel: {
+    fontFamily: F.bold, fontSize: 11, color: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6,
+    paddingHorizontal: 5, paddingVertical: 1,
+    textAlign: 'center', overflow: 'hidden',
   },
-  statusDot:   { width: 10, height: 10, borderRadius: 5 },
-  statusTitle: { fontFamily: F.bold, fontSize: 16, marginBottom: 2 },
-  statusMeta:  { fontFamily: F.regular, fontSize: 13, color: C.textSecondary },
-  radiusLabel: { fontFamily: F.semiBold, fontSize: 12, color: C.textMuted },
+
+  reCentreBtn: {
+    position: 'absolute', right: 14, bottom: 230,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 4,
+  },
+  reCentreIcon: { fontSize: 22, color: C.primary },
+
+  editZoneFab: {
+    position: 'absolute', right: 14, bottom: 284,
+    backgroundColor: C.primary, borderRadius: 999,
+    paddingHorizontal: 14, paddingVertical: 9,
+    shadowColor: C.primary, shadowOpacity: 0.35, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 6,
+  },
+  editZoneFabText: { fontFamily: F.bold, fontSize: 13, color: '#fff' },
+
+  // Breach history panel
+  historyPanel: {
+    position: 'absolute', left: 12, right: 12, bottom: 230,
+    backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14,
+    shadowColor: '#000', shadowOpacity: 0.10, shadowOffset: { width: 0, height: -3 }, shadowRadius: 12, elevation: 8,
+  },
+  historyPanelHandle: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: C.borderMid,
+    alignSelf: 'center', marginBottom: 10,
+  },
+  historyPanelTitle:  { fontFamily: F.bold, fontSize: 13, color: C.textPrimary, marginBottom: 8 },
+  historyEmpty:       { fontFamily: F.regular, fontSize: 13, color: C.textMuted, textAlign: 'center', paddingVertical: 16 },
+  historyRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 7,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  historyRowIcon:   { fontSize: 16, marginRight: 8 },
+  historyRowLabel:  { fontFamily: F.medium, fontSize: 13, color: C.textPrimary },
+  historyRowTime:   { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginTop: 1 },
+  historyUnackedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginLeft: 8 },
+  historyAcked:     { fontFamily: F.bold, fontSize: 12, color: C.primary, marginLeft: 8 },
+
+  // Status card
+  statusCard: {
+    marginHorizontal: 12, marginBottom: 14,
+    borderRadius: 22, borderWidth: 1.5,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14,
+    shadowColor: '#000', shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 3 }, shadowRadius: 10, elevation: 5,
+  },
+  statusTopRow:   { flexDirection: 'row', alignItems: 'flex-start' },
+  statusEmoji:    { fontSize: 30, lineHeight: 36 },
+  statusTitle:    { fontFamily: F.extraBold, fontSize: 16, letterSpacing: 0.2 },
+  statusSubtitle: { fontFamily: F.regular, fontSize: 12, color: '#6B7280', marginTop: 2 },
+  statusDist:     { fontFamily: F.medium, fontSize: 12, color: '#374151', marginTop: 4 },
+  statusDot:      { width: 12, height: 12, borderRadius: 6, marginTop: 6 },
+
+  zonePills:  { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  zonePill: {
+    backgroundColor: 'rgba(14,122,103,0.10)', borderRadius: 999,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: 'rgba(14,122,103,0.25)',
+  },
+  zonePillText: { fontFamily: F.semiBold, fontSize: 11, color: C.primary },
+  noZoneText:   { fontFamily: F.medium, fontSize: 12, color: C.textMuted },
+
+  guideBtn: {
+    marginTop: 12, borderRadius: 12,
+    backgroundColor: C.primary, paddingVertical: 11, alignItems: 'center',
+  },
+  guideBtnText: { fontFamily: F.bold, fontSize: 14, color: '#fff' },
+
+  ackBtn: {
+    marginTop: 8, borderRadius: 12,
+    backgroundColor: '#EF4444', paddingVertical: 11, alignItems: 'center',
+  },
+  ackBtnText: { fontFamily: F.bold, fontSize: 14, color: '#fff' },
+  ackedText:  { fontFamily: F.medium, fontSize: 13, color: C.primary, textAlign: 'center', marginTop: 10 },
 });
