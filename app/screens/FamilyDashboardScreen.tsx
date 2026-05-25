@@ -107,23 +107,9 @@ export const FamilyDashboardScreen: React.FC<Props> = ({ navigation, route }) =>
   useEffect(() => {
     void fetchPatientGeofences(patientPhone).then(setZones);
 
-    supabase
-      .from('geofence_alerts')
-      .select('*')
-      .eq('patient_id', patientPhone)
-      .order('created_at', { ascending: false })
-      .limit(15)
-      .then(({ data }) => {
-        if (data) setAlerts(data.map((r: {
-          id: string; patient_id: string; geofence_id: string | null;
-          breach_type: 'exit' | 'enter'; distance_m: number;
-          created_at: string; acknowledged_at: string | null;
-        }) => ({
-          id: r.id, patientId: r.patient_id, geofenceId: r.geofence_id,
-          breachType: r.breach_type, distanceM: Number(r.distance_m),
-          createdAt: r.created_at, acknowledgedAt: r.acknowledged_at,
-        })));
-      });
+    // REMOVED: Supabase migration to Express/PostgreSQL
+    console.warn('[FamilyDashboard] Load geofence alerts: Supabase removed, setting to empty array');
+    setAlerts([]);
   }, [patientPhone]);
 
   // ── Age counter ────────────────────────────────────────────────────────────

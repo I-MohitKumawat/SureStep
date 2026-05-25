@@ -77,12 +77,10 @@ export const CaregiverSearchView: React.FC<Props> = ({ onSelect }) => {
     void (async () => {
       setLoading(true); setError(null);
       try {
-        const { data, error: e } = await supabase
-          .from('caregivers')
-          .select('*')
-          .order('name', { ascending: true });
-        if (e) setError('Unable to load caregivers. Please try again.');
-        else setCaregivers((data ?? []) as CaregiverListing[]);
+        // REMOVED: Supabase migration to Express/PostgreSQL
+        console.warn('[CaregiverSearchView] Search: Supabase removed, returning empty array');
+        setCaregivers([]);
+        setLoading(false);
       } catch { setError('Network error. Check your connection.'); }
       setLoading(false);
     })();

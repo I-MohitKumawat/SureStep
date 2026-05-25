@@ -10,12 +10,11 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { ScreenContainer } from '../components/ScreenContainer';
-import type { HomeStackParamList } from '../navigation/RootNavigator';
-import { C } from '../theme/colors';
-import { F } from '../theme/fonts';
-import { supabase } from '../utils/supabaseClient';
-import { useAuth } from '../../packages/core/auth/AuthContext';
+import { ScreenContainer } from '../../components/ScreenContainer';
+import type { HomeStackParamList } from '../../navigation/RootNavigator';
+import { C } from '../../theme/colors';
+import { F } from '../../theme/fonts';
+import { useAuth } from '../../../packages/core/auth/AuthContext';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PhoneAuth'>;
 
@@ -39,34 +38,13 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // ── Single Supabase query — no AsyncStorage, no fallback ──────────────
-      const { data, error } = await supabase
-        .from('mock_users')
-        .select('role, full_name')
-        .eq('phone_number', phoneNumber)
-        .maybeSingle();
-
-      if (error) {
-        setAuthError('Cannot reach server. Check your connection and try again.');
-        return;
-      }
-
-      if (!data) {
-        // Phone not found in DB → new user registration flow
-        login(
-          { id: phoneNumber, email: `${phoneNumber}@surestep.app`, role: 'NEW_USER' },
-          'mock-token',
-        );
-        navigation.navigate('RoleEntry');
-        return;
-      }
-
-      // Existing user — log in with their DB role + name (no extra fetch needed)
-      const role = data.role === 'caregiver' ? 'CAREGIVER' : 'PATIENT';
+      // REMOVED: Supabase migration to Express/PostgreSQL
+      // Default to NEW_USER for all logins until Express backend is ready
       login(
-        { id: phoneNumber, email: `${phoneNumber}@surestep.app`, role, fullName: data.full_name ?? '' },
+        { id: phoneNumber, email: `${phoneNumber}@surestep.app`, role: 'NEW_USER' },
         'mock-token',
       );
+      navigation.navigate('RoleEntry');
 
     } catch (e: unknown) {
       setAuthError('Connection error. Please try again.');

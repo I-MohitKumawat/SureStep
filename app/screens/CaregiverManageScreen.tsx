@@ -5,7 +5,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
-import { supabase } from '../utils/supabaseClient';
 import { useAuth } from '../../packages/core/auth/AuthContext';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
@@ -87,37 +86,21 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation, route }) =>
   const [metaInput,     setMetaInput]     = useState('');
 
   // ── Load tasks from Supabase ───────────────────────────────────────────
+  // REMOVED: Supabase migration to Express/PostgreSQL
   const loadItems = useCallback(async () => {
     if (!caregiverPhone) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('time', { ascending: true });
-
-    if (!error && data) {
-      setItems(data.map((t: any) => ({
-        id:       t.id,
-        title:    t.title,
-        time:     t.time,
-        meta:     t.description || '',
-        status:   t.status,
-        icon:     pickIconForTitle(t.title),
-        patientId: t.patient_id,
-      })));
-    }
+    console.warn('[CaregiverManage] loadItems: Supabase removed, returning empty array');
+    setItems([]);
     setLoading(false);
   }, [caregiverPhone]);
 
   useEffect(() => { void loadItems(); }, [loadItems]);
 
   // ── Realtime subscription ──────────────────────────────────────────────
+  // REMOVED: Supabase migration to Express/PostgreSQL
   useEffect(() => {
-    const channel = supabase
-      .channel(channelId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void loadItems())
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {};
   }, [loadItems, channelId]);
 
   const clearForm = () => {
@@ -155,41 +138,8 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation, route }) =>
     const cleanMeta  = metaInput.trim();
     if (!cleanTitle || !cleanTime) return;
 
-    if (editingId) {
-      // Update in Supabase
-      const { error } = await supabase
-        .from('tasks')
-        .update({ title: cleanTitle, time: cleanTime, description: cleanMeta, updated_at: new Date().toISOString() })
-        .eq('id', editingId);
-      if (!error) {
-        // Optimistic update
-        setItems((prev) => prev.map((item) =>
-          item.id === editingId
-            ? { ...item, title: cleanTitle, time: cleanTime, meta: cleanMeta, icon: pickIconForTitle(cleanTitle) }
-            : item,
-        ));
-      }
-    } else {
-      // Insert new task — use first patient linked to this caregiver, or caregiver's own phone
-      const newTask = {
-        id:          `task_${Date.now()}`,
-        patient_id:  caregiverPhone ?? 'unknown',
-        routine_id:  null,
-        title:       cleanTitle,
-        time:        cleanTime,
-        description: cleanMeta,
-        status:      'pending',
-      };
-      const { data, error } = await supabase.from('tasks').insert(newTask).select().single();
-      if (!error && data) {
-        setItems((prev) => [...prev, {
-          id: data.id, title: data.title, time: data.time,
-          meta: data.description || '', status: data.status,
-          icon: pickIconForTitle(data.title), patientId: data.patient_id,
-        }]);
-      }
-    }
-
+    // REMOVED: Supabase migration to Express/PostgreSQL
+    console.warn('[CaregiverManage] saveRoutine: Supabase removed, no-op');
     setIsFormVisible(false);
     clearForm();
   };
@@ -197,7 +147,8 @@ export const CaregiverManageScreen: React.FC<Props> = ({ navigation, route }) =>
   const deleteRoutine = async (id: string) => {
     // Optimistic remove
     setItems((prev) => prev.filter((item) => item.id !== id));
-    await supabase.from('tasks').delete().eq('id', id);
+    // REMOVED: Supabase migration to Express/PostgreSQL
+    console.warn('[CaregiverManage] deleteRoutine: Supabase removed, no-op');
     if (editingId === id) { setIsFormVisible(false); clearForm(); }
   };
 

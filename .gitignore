@@ -22,4 +22,4 @@ ios/
 Thumbs.db
 .vscode/
 .idea/
-
+.env

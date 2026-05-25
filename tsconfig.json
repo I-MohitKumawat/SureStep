@@ -30,6 +30,7 @@
   },
   "include": [
     "App.tsx",
+    "src/**/*",
     "app/**/*",
     "packages/ui/**/*",
     "packages/core/**/*"

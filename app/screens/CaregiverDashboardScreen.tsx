@@ -6,7 +6,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useTasks } from '../context/taskContext';
 import { readPatientProfile } from '../utils/sharedProfile';
-import { supabase } from '../utils/supabaseClient';
+// import { supabase } from '../utils/supabaseClient'; // REMOVED: Supabase migration to Express/PostgreSQL
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 import {
@@ -157,23 +157,16 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   }, [loadProfile]);
 
   // Load patient DB details for the Profile modal
+  // REMOVED: Supabase migration to Express/PostgreSQL
   useEffect(() => {
-    supabase
-      .from('mock_users')
-      .select('full_name, dob, gender, city, language')
-      .eq('phone_number', patientPhone)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setPatientDetails({
-            fullName: data.full_name ?? patientName,
-            dob: data.dob ?? '—',
-            gender: data.gender ?? '—',
-            city: data.city ?? '—',
-            language: data.language ?? 'English',
-          });
-        }
-      });
+    console.warn('[CaregiverDashboard] Load patient DB details: Supabase removed, using default values');
+    setPatientDetails({
+      fullName: patientName,
+      dob: '—',
+      gender: '—',
+      city: '—',
+      language: 'English',
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientPhone]);
 
@@ -184,17 +177,14 @@ export const CaregiverDashboardScreen: React.FC<Props> = ({ navigation, route })
   useEffect(() => () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); }, []);
 
   // ── Load zones + unacked alerts from Supabase ─────────────────────
+  // REMOVED: Supabase migration to Express/PostgreSQL
   useEffect(() => {
     void fetchPatientGeofences(patientId).then((z) => {
       setZones(z);
       setHasRealZones(z.length > 0);
     });
-    supabase
-      .from('geofence_alerts')
-      .select('id', { count: 'exact', head: true })
-      .eq('patient_id', patientId)
-      .is('acknowledged_at', null)
-      .then(({ count }) => setUnackedAlerts(count ?? 0));
+    console.warn('[CaregiverDashboard] Load unacked alerts: Supabase removed, setting to 0');
+    setUnackedAlerts(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 

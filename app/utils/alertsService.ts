@@ -11,7 +11,7 @@
  *            CaregiverPatientsScreen Alerts tab.
  */
 
-import { supabase } from './supabaseClient';
+// import { supabase } from './supabaseClient'; // REMOVED: Supabase migration to Express/PostgreSQL
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,22 +42,13 @@ export type AlertSeenRow = {
 };
 
 // ─── Fetch non-routine alerts for a patient ───────────────────────────────────
+// REMOVED: Supabase migration to Express/PostgreSQL
 
 export async function fetchNonRoutineAlerts(
   patientId: string,
 ): Promise<CaregiverAlert[]> {
-  const { data, error } = await supabase
-    .from('caregiver_alerts')
-    .select('*')
-    .eq('patient_id', patientId)
-    .eq('is_acknowledged', false)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('[alertsService] fetchNonRoutineAlerts:', error.message);
-    return [];
-  }
-  return (data ?? []) as CaregiverAlert[];
+  console.warn('[alertsService] fetchNonRoutineAlerts: Supabase removed, returning empty array');
+  return [];
 }
 
 // ─── Fetch all non-routine alerts for multiple patients ───────────────────────
@@ -65,19 +56,8 @@ export async function fetchNonRoutineAlerts(
 export async function fetchNonRoutineAlertsForPatients(
   patientIds: string[],
 ): Promise<CaregiverAlert[]> {
-  if (patientIds.length === 0) return [];
-  const { data, error } = await supabase
-    .from('caregiver_alerts')
-    .select('*')
-    .in('patient_id', patientIds)
-    .eq('is_acknowledged', false)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('[alertsService] fetchNonRoutineAlertsForPatients:', error.message);
-    return [];
-  }
-  return (data ?? []) as CaregiverAlert[];
+  console.warn('[alertsService] fetchNonRoutineAlertsForPatients: Supabase removed, returning empty array');
+  return [];
 }
 
 // ─── Fetch seen alert IDs for a caregiver ────────────────────────────────────
@@ -85,16 +65,8 @@ export async function fetchNonRoutineAlertsForPatients(
 export async function fetchSeenAlertIds(
   caregiverPhone: string,
 ): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from('caregiver_alert_seen')
-    .select('alert_id')
-    .eq('caregiver_phone', caregiverPhone);
-
-  if (error) {
-    console.error('[alertsService] fetchSeenAlertIds:', error.message);
-    return new Set();
-  }
-  return new Set((data ?? []).map((r: { alert_id: string }) => r.alert_id));
+  console.warn('[alertsService] fetchSeenAlertIds: Supabase removed, returning empty set');
+  return new Set();
 }
 
 // ─── Mark alerts as seen ──────────────────────────────────────────────────────
@@ -103,18 +75,7 @@ export async function markAlertsAsSeen(
   caregiverPhone: string,
   alertIds: string[],
 ): Promise<void> {
-  if (alertIds.length === 0) return;
-  const rows = alertIds.map((id) => ({
-    alert_id: id,
-    caregiver_phone: caregiverPhone,
-  }));
-  const { error } = await supabase
-    .from('caregiver_alert_seen')
-    .upsert(rows, { onConflict: 'alert_id,caregiver_phone', ignoreDuplicates: true });
-
-  if (error) {
-    console.error('[alertsService] markAlertsAsSeen:', error.message);
-  }
+  console.warn('[alertsService] markAlertsAsSeen: Supabase removed, no-op');
 }
 
 // ─── Acknowledge a single alert ───────────────────────────────────────────────
@@ -123,14 +84,7 @@ export async function acknowledgeAlert(
   alertId: string,
   caregiverPhone: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('caregiver_alerts')
-    .update({ is_acknowledged: true, acknowledged_by: caregiverPhone })
-    .eq('id', alertId);
-
-  if (error) {
-    console.error('[alertsService] acknowledgeAlert:', error.message);
-  }
+  console.warn('[alertsService] acknowledgeAlert: Supabase removed, no-op');
 }
 
 // ─── Insert a non-routine alert (used for demo / sensor triggers) ─────────────
@@ -142,14 +96,7 @@ export async function insertNonRoutineAlert(
   title: string,
   message: string,
 ): Promise<void> {
-  const id = `${type}-${patientId}-${Date.now()}`;
-  const { error } = await supabase.from('caregiver_alerts').upsert(
-    [{ id, patient_id: patientId, type, severity, title, message, is_acknowledged: false }],
-    { onConflict: 'id', ignoreDuplicates: true },
-  );
-  if (error) {
-    console.error('[alertsService] insertNonRoutineAlert:', error.message);
-  }
+  console.warn('[alertsService] insertNonRoutineAlert: Supabase removed, no-op');
 }
 
 // ─── Realtime subscription to caregiver_alerts ───────────────────────────────
@@ -158,21 +105,8 @@ export function subscribeToNonRoutineAlerts(
   patientId: string,
   onChange: () => void,
 ): () => void {
-  const channel = supabase
-    .channel(`caregiver_alerts_${patientId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'caregiver_alerts',
-        filter: `patient_id=eq.${patientId}`,
-      },
-      onChange,
-    )
-    .subscribe();
-
-  return () => { void supabase.removeChannel(channel); };
+  console.warn('[alertsService] subscribeToNonRoutineAlerts: Supabase removed, returning no-op');
+  return () => {};
 }
 
 // ─── Risk assessment ──────────────────────────────────────────────────────────

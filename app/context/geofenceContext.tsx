@@ -20,7 +20,7 @@ import React, {
   useState,
 } from 'react';
 import * as Location from 'expo-location';
-import { supabase } from '../utils/supabaseClient';
+// import { supabase } from '../utils/supabaseClient'; // REMOVED: Supabase migration to Express/PostgreSQL
 import {
   checkBreach,
   fetchPatientGeofences,
@@ -131,29 +131,10 @@ export function GeofenceProvider({
   }, []);
 
   // ── Load alerts (unacknowledged) ────────────────────────────────────────────
+  // REMOVED: Supabase migration to Express/PostgreSQL
   const loadAlerts = useCallback(async (pid: string) => {
-    const { data } = await supabase
-      .from('geofence_alerts')
-      .select('*')
-      .eq('patient_id', pid)
-      .is('acknowledged_at', null)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (data) {
-      setAlerts(data.map((r: {
-        id: string; patient_id: string; geofence_id: string | null;
-        breach_type: 'exit' | 'enter'; distance_m: number;
-        created_at: string; acknowledged_at: string | null;
-      }) => ({
-        id:            r.id,
-        patientId:     r.patient_id,
-        geofenceId:    r.geofence_id,
-        breachType:    r.breach_type,
-        distanceM:     Number(r.distance_m),
-        createdAt:     r.created_at,
-        acknowledgedAt: r.acknowledged_at,
-      })));
-    }
+    console.warn('[geofenceContext] loadAlerts: Supabase removed, setting empty array');
+    setAlerts([]);
   }, []);
 
   // ── Foreground location subscription ───────────────────────────────────────
@@ -200,28 +181,9 @@ export function GeofenceProvider({
   }, [patientId]);
 
   // ── Realtime subscription for new alerts ───────────────────────────────────
+  // REMOVED: Supabase migration to Express/PostgreSQL
   useEffect(() => {
-    const channel = supabase
-      .channel(`geofence_alerts_${patientId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'geofence_alerts', filter: `patient_id=eq.${patientId}` },
-        (payload) => {
-          const r = payload.new as {
-            id: string; patient_id: string; geofence_id: string | null;
-            breach_type: 'exit' | 'enter'; distance_m: number;
-            created_at: string; acknowledged_at: string | null;
-          };
-          setAlerts((prev) => [{
-            id: r.id, patientId: r.patient_id, geofenceId: r.geofence_id,
-            breachType: r.breach_type, distanceM: Number(r.distance_m),
-            createdAt: r.created_at, acknowledgedAt: r.acknowledged_at,
-          }, ...prev]);
-        },
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
+    return () => {};
   }, [patientId]);
 
   // ── Bootstrap on mount ─────────────────────────────────────────────────────

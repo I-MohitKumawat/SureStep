@@ -23,7 +23,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
-import { supabase } from '../utils/supabaseClient';
 import {
   subscribeToCaregiversLinks,
   fetchPendingRequests,
@@ -173,79 +172,14 @@ export const CaregiverPatientsScreen: React.FC<Props> = ({ navigation }) => {
   const [requestsLoading, setRequestsLoading] = useState(false);
 
   // ── Data fetcher ────────────────────────────────────────────────────────────
+  // REMOVED: Supabase migration to Express/PostgreSQL
   const loadPatients = useCallback(async (phone: string) => {
-    // Only show spinner on first load — keep existing list visible during refreshes
     setPatients((prev) => { if (prev.length === 0) setLoading(true); return prev; });
     setError(null);
-
-    try {
-      // 1. Fetch linked patient phones
-      const linksResult = await supabase
-        .from('patient_caregiver_links')
-        .select('patient_phone')
-        .eq('caregiver_phone', phone);
-
-      if (linksResult.error) { setError('Failed to load patients.'); setLoading(false); return; }
-      if (!linksResult.data || linksResult.data.length === 0) {
-        setPatients([]);
-        setRawTasks([]);
-        setLoading(false);
-        return;
-      }
-
-      const patientPhones: string[] = linksResult.data.map(
-        (l: { patient_phone: string }) => l.patient_phone,
-      );
-
-      // 2. Fetch names and tasks in parallel
-      const nameMap = new Map<string, string>();
-      const [patientsRes, usersRes, tasksRes] = await Promise.all([
-        supabase.from('patients').select('id, name').in('id', patientPhones),
-        supabase.from('mock_users').select('phone_number, full_name').in('phone_number', patientPhones),
-        supabase
-          .from('tasks')
-          .select('id, patient_id, title, status, completed_at')
-          .in('patient_id', patientPhones),
-      ]);
-
-      // patients table takes priority, then mock_users fills gaps
-      if (patientsRes.data) {
-        for (const p of patientsRes.data as { id: string; name: string }[]) {
-          if (p.name) nameMap.set(p.id, p.name);
-        }
-      }
-      if (usersRes.data) {
-        for (const u of usersRes.data as { phone_number: string; full_name: string }[]) {
-          if (!nameMap.has(u.phone_number) && u.full_name) nameMap.set(u.phone_number, u.full_name);
-        }
-      }
-
-      const allTasks: RawTask[] = tasksRes.data ?? [];
-      setRawTasks(allTasks);
-
-      // 3. Build patient rows
-      const built: Patient[] = patientPhones.map((p) => {
-        const pts       = allTasks.filter((t) => t.patient_id === p);
-        const completed = pts.filter((t) => t.status === 'done').length;
-        const total     = pts.length;
-        const hasMissed = pts.some((t) => t.status === 'missed');
-        return {
-          id:             p,
-          name:           nameMap.get(p) ?? `Patient (${p.slice(-4)})`,
-          completedTasks: completed,
-          totalTasks:     total,
-          lastActivity:   computeLastActivity(pts),
-          statusLabel:    deriveStatusLabel(completed, total, hasMissed),
-        };
-      });
-
-      setPatients(built);
-    } catch (e) {
-      console.error('[CaregiverPatients] loadPatients error:', e);
-      setError('Failed to load patients. Check your connection.');
-    } finally {
-      setLoading(false);
-    }
+    console.warn('[CaregiverPatients] loadPatients: Supabase removed, returning empty array');
+    setPatients([]);
+    setRawTasks([]);
+    setLoading(false);
   }, []);
 
   // ── Load pending requests ───────────────────────────────────────────────────

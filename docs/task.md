@@ -30,3 +30,8 @@ view more in activities
 family and cargiver shared documents for preciption
 sasta app only device 
 familarity ai engine: famiar face, fav music, known routines
+
+Migrate from Clerk to custom SMS OTP auth (for production scaling):
+  - Swap Clerk hooks/providers on frontend for local secure-store JWT handling.
+  - Build Express routes/controllers on backend for code generation and verification.
+  - Integrate local Indian SMS gateway (e.g. MSG91, Fast2SMS) for cheaper SMS delivery.

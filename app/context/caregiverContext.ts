@@ -10,7 +10,7 @@ import {
   confirmCaregiver,
   removeCaregiver,
 } from '../../backend/caregiverLinks';
-import { supabase } from '../utils/supabaseClient';
+// import { supabase } from '../utils/supabaseClient'; // REMOVED: Supabase migration to Express/PostgreSQL
 import type { CaregiverListing } from '../screens/CaregiverSearchView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

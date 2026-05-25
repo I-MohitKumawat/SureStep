@@ -9,7 +9,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '../navigation/RootNavigator';
 import { useUserProfile } from '../context/userProfileContext';
 import { useAuth } from '../../packages/core/auth/AuthContext';
-import { supabase } from '../utils/supabaseClient';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 
@@ -206,11 +205,8 @@ export default function ProfileSetup({ route }: Props) {
     try {
       const res  = await fetch(uri);
       const blob = await res.blob();
-      const { error } = await supabase.storage.from('profile-photos').upload(path, blob, { upsert: true, contentType: `image/${ext}` });
-      if (!error) {
-        const { data } = supabase.storage.from('profile-photos').getPublicUrl(path);
-        setPhotoUrl(data.publicUrl);
-      }
+      // REMOVED: Supabase migration to Express/PostgreSQL
+      console.warn('[ProfileSetup] uploadPhoto: Supabase removed, keeping local URI');
     } catch { /* keep local URI, upload failed */ }
   };
 

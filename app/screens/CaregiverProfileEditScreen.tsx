@@ -125,7 +125,8 @@ export const CaregiverProfileEditScreen: React.FC<Props> = ({ navigation }) => {
     const ext = uri.split('.').pop() ?? 'jpg';
     try {
       const blob = await (await fetch(uri)).blob();
-      await supabase.storage.from('profile-photos').upload(`${phone}/avatar.${ext}`, blob, { upsert:true, contentType:`image/${ext}` });
+      // REMOVED: Supabase migration to Express/PostgreSQL
+      console.warn('[CaregiverProfileEdit] uploadPhoto: Supabase removed, keeping local URI');
     } catch { /* ignore */ }
   };
 

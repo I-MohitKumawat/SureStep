@@ -8,7 +8,7 @@
  *   - Haversine math (unchanged)
  */
 
-import { supabase } from './supabaseClient';
+// import { supabase } from './supabaseClient'; // REMOVED: Supabase migration to Express/PostgreSQL
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,66 +97,27 @@ export function checkBreach(coords: Coords, zones: GeofenceZone[]): BreachStatus
 }
 
 // ─── Supabase CRUD ────────────────────────────────────────────────────────────
+// REMOVED: Supabase migration to Express/PostgreSQL
+// These functions will be replaced with Express API calls
 
 /** Fetch all geofence zones for a given patient from Supabase. */
 export async function fetchPatientGeofences(patientId: string): Promise<GeofenceZone[]> {
-  const { data, error } = await supabase
-    .from('patient_geofences')
-    .select('*')
-    .eq('patient_id', patientId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.warn('[geofence] fetchPatientGeofences error:', error.message);
-    return [];   // Return empty — callers distinguish "no zones" from "safe"
-  }
-
-  if (!data || data.length === 0) return [];  // No zones saved yet
-
-  return data.map(rowToZone);
+  console.warn('[geofence] fetchPatientGeofences: Supabase removed, returning empty array');
+  return [];
 }
 
 /** Persist a zone to Supabase. Pass `id` to update, omit to insert. Throws on error. */
 export async function saveGeofenceZone(
   zone: Omit<GeofenceZone, 'id'> & { id?: string },
 ): Promise<GeofenceZone> {
-  const row = {
-    patient_id:    zone.patientId,
-    label:         zone.label,
-    latitude:      zone.center.latitude,
-    longitude:     zone.center.longitude,
-    radius_m:      zone.radiusM,
-    is_active:     zone.isActive,
-    boundary_type: zone.boundaryType ?? 'soft',
-    created_by:    zone.createdBy,
-    updated_at:    new Date().toISOString(),
-  };
-
-  if (zone.id) {
-    const { data, error } = await supabase
-      .from('patient_geofences')
-      .update(row)
-      .eq('id', zone.id)
-      .select()
-      .single();
-    if (error) throw new Error(`Update failed: ${error.message} (code: ${error.code})`);
-    return rowToZone(data);
-  } else {
-    const { data, error } = await supabase
-      .from('patient_geofences')
-      .insert(row)
-      .select()
-      .single();
-    if (error) throw new Error(`Insert failed: ${error.message} (code: ${error.code})`);
-    return rowToZone(data);
-  }
+  console.warn('[geofence] saveGeofenceZone: Supabase removed, throwing error');
+  throw new Error('Supabase removed - migrate to Express API');
 }
 
 /** Delete a zone by ID. Returns true on success. */
 export async function deleteGeofenceZone(id: string): Promise<boolean> {
-  const { error } = await supabase.from('patient_geofences').delete().eq('id', id);
-  if (error) { console.warn('[geofence] delete error:', error.message); return false; }
-  return true;
+  console.warn('[geofence] deleteGeofenceZone: Supabase removed, returning false');
+  return false;
 }
 
 /** Log a breach event to geofence_alerts. */
@@ -167,28 +128,13 @@ export async function logBreachAlert(params: {
   coords: Coords;
   distanceM: number;
 }): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('geofence_alerts')
-    .insert({
-      patient_id:   params.patientId,
-      geofence_id:  params.geofenceId,
-      breach_type:  params.breachType,
-      latitude:     params.coords.latitude,
-      longitude:    params.coords.longitude,
-      distance_m:   params.distanceM,
-    })
-    .select('id')
-    .single();
-  if (error) { console.warn('[geofence] logBreachAlert error:', error.message); return null; }
-  return data?.id ?? null;
+  console.warn('[geofence] logBreachAlert: Supabase removed, returning null');
+  return null;
 }
 
 /** Acknowledge an alert. */
 export async function acknowledgeAlert(alertId: string, byPhone: string): Promise<void> {
-  await supabase
-    .from('geofence_alerts')
-    .update({ acknowledged_by: byPhone, acknowledged_at: new Date().toISOString() })
-    .eq('id', alertId);
+  console.warn('[geofence] acknowledgeAlert: Supabase removed, no-op');
 }
 
 /** Write a location ping to patient_locations. */
@@ -198,20 +144,7 @@ export async function writeLocationPing(params: {
   accuracyM?: number;
   source: 'foreground' | 'background';
 }): Promise<void> {
-  const { error } = await supabase.from('patient_locations').insert({
-    patient_id:  params.patientId,
-    latitude:    params.coords.latitude,
-    longitude:   params.coords.longitude,
-    accuracy_m:  params.accuracyM,
-    source:      params.source,
-  });
-  if (error) {
-    console.warn('[geofence] writeLocationPing error:', error.message,
-      '\npatientId:', params.patientId,
-      '\ncoords:', params.coords);
-  } else {
-    console.log('[geofence] ping written ✓', params.coords.latitude.toFixed(5), params.coords.longitude.toFixed(5));
-  }
+  console.warn('[geofence] writeLocationPing: Supabase removed, no-op');
 }
 
 /** Fetch the last N location pings for trail display. */
@@ -219,35 +152,16 @@ export async function fetchLocationTrail(
   patientId: string,
   limit = 20,
 ): Promise<Coords[]> {
-  const { data } = await supabase
-    .from('patient_locations')
-    .select('latitude, longitude')
-    .eq('patient_id', patientId)
-    .order('recorded_at', { ascending: false })
-    .limit(limit);
-  return (data ?? []).map((r: { latitude: number; longitude: number }) => ({
-    latitude:  Number(r.latitude),
-    longitude: Number(r.longitude),
-  })).reverse();
+  console.warn('[geofence] fetchLocationTrail: Supabase removed, returning empty array');
+  return [];
 }
 
 /** Fetch the single most-recent location ping for a patient. */
 export async function fetchLatestPatientLocation(
   patientId: string,
 ): Promise<(Coords & { recordedAt: number }) | null> {
-  const { data } = await supabase
-    .from('patient_locations')
-    .select('latitude, longitude, recorded_at')
-    .eq('patient_id', patientId)
-    .order('recorded_at', { ascending: false })
-    .limit(1)
-    .single();
-  if (!data) return null;
-  return {
-    latitude:   Number(data.latitude),
-    longitude:  Number(data.longitude),
-    recordedAt: new Date(data.recorded_at).getTime(),
-  };
+  console.warn('[geofence] fetchLatestPatientLocation: Supabase removed, returning null');
+  return null;
 }
 
 export type BreachAlert = {
@@ -266,26 +180,8 @@ export async function fetchBreachHistory(
   patientId: string,
   limit = 10,
 ): Promise<BreachAlert[]> {
-  const { data } = await supabase
-    .from('geofence_alerts')
-    .select('id, breach_type, latitude, longitude, distance_m, acknowledged_at, created_at')
-    .eq('patient_id', patientId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  return (data ?? []).map((r: {
-    id: string; breach_type: string; latitude: number | null;
-    longitude: number | null; distance_m: number | null;
-    acknowledged_at: string | null; created_at: string;
-  }) => ({
-    id:             r.id,
-    breachType:     r.breach_type as 'exit' | 'enter',
-    latitude:       r.latitude,
-    longitude:      r.longitude,
-    distanceM:      r.distance_m,
-    acknowledgedAt: r.acknowledged_at,
-    createdAt:      r.created_at,
-  }));
+  console.warn('[geofence] fetchBreachHistory: Supabase removed, returning empty array');
+  return [];
 }
 
 /**
@@ -296,32 +192,8 @@ export function subscribeToPatientLocation(
   patientId: string,
   onUpdate: (coords: Coords & { recordedAt: number }) => void,
 ): () => void {
-  // Unique channel name per subscription to avoid "cannot add callbacks after subscribe()" error
-  const channelName = `patient-loc-${patientId}-${Date.now()}`;
-  const channel = supabase
-    .channel(channelName)
-    .on(
-      'postgres_changes',
-      {
-        event:  'INSERT',
-        schema: 'public',
-        table:  'patient_locations',
-        filter: `patient_id=eq.${patientId}`,
-      },
-      (payload) => {
-        const row = payload.new as {
-          latitude: number; longitude: number; recorded_at: string;
-        };
-        onUpdate({
-          latitude:   Number(row.latitude),
-          longitude:  Number(row.longitude),
-          recordedAt: new Date(row.recorded_at).getTime(),
-        });
-      },
-    )
-    .subscribe();
-
-  return () => { void supabase.removeChannel(channel); };
+  console.warn('[geofence] subscribeToPatientLocation: Supabase removed, returning no-op');
+  return () => {};
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
