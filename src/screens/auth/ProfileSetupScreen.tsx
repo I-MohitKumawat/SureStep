@@ -1,109 +1,212 @@
-import React, { useCallback, useRef, useState } from 'react';
+/**
+ * SureStep — src/screens/auth/ProfileSetupScreen.tsx
+ * Onboarding screen matching the clean step-based UI from reference.
+ * Patient: 2 steps total (1: RoleSelection, 2: ProfileSetup)
+ * Caregiver: 3 steps total (1: RoleSelection, 2: Basic Info, 3: Professional Info)
+ */
+import React, { useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Platform, Pressable,
   ScrollView, StyleSheet, Switch, Text, TextInput, View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-// Navigation types migrated to src/types/navigation.types.ts
-// useUserProfile removed — use useAuth() from src/context/AuthContext instead
 import { useAuth } from '../../context/AuthContext';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
-import { updateCaregiverProfile, updatePatientProfile } from '../../services/userService';
+import { updateCaregiverProfile, updatePatientProfile, updateMe } from '../../services/userService';
 import { provisionUser } from '../../services/authService';
+import { ScreenContainer } from '../../components/shared/ScreenContainer';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'ProfileSetupScreen'>;
 
-// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const SPECIALIZATIONS = ['Alzheimer\'s','Dementia','Bedridden Care','Night Care','Emergency Assistance'];
-const AVAILABILITY    = ['Day Shift','Night Shift','Full Time','Emergency Calls'];
-const LANGUAGES       = ['English','Hindi','Kannada','Tamil','Telugu','Malayalam','Bengali'];
-const TRANSPORT       = ['Own Vehicle','Public Transport','None'];
-const GENDERS         = ['Male','Female','Other','Prefer not to say'];
-const PREF_LANGUAGES  = ['English','Hindi','Kannada','Tamil','Telugu'];
+// ─── Constants ───────────────────────────────────────────────────────────────
+const SPECIALIZATIONS = [
+  "Alzheimer's",
+  "Dementia",
+  "Bedridden Care",
+  "Night Care",
+  "Emergency Assistance",
+];
+const LANGUAGES = [
+  "English",
+  "Hindi",
+  "Kannada",
+  "Tamil",
+  "Telugu",
+  "Malayalam",
+  "Bengali",
+];
+const AVAILABILITY = [
+  "Day Shift",
+  "Night Shift",
+  "Full Time",
+  "Emergency Calls",
+];
+const GENDERS = ["Male", "Female"];
+const PREF_LANGUAGES = ["English", "Hindi", "Kannada", "Tamil", "Telugu"];
 
-// â”€â”€ Step Indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function StepBar({ step }: { step: 1 | 2 }) {
-  return (
-    <View style={s.stepBar}>
-      <View style={s.stepItem}>
-        <View style={[s.stepCircle, s.stepDone]}>
-          {step === 1 ? <Text style={s.stepNum}>1</Text> : <Text style={s.stepCheck}>âœ“</Text>}
-        </View>
-        <Text style={[s.stepLabel, step === 1 && s.stepLabelActive]}>Profile Details</Text>
-      </View>
-      <View style={s.stepLine} />
-      <View style={s.stepItem}>
-        <View style={[s.stepCircle, step === 2 && s.stepDone, step === 1 && s.stepInactive]}>
-          <Text style={[s.stepNum, step === 1 && s.stepNumInactive]}>2</Text>
-        </View>
-        <Text style={[s.stepLabel, step === 2 && s.stepLabelActive]}>Preferences</Text>
-      </View>
-    </View>
-  );
-}
-
-// â”€â”€ Floating label input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function FInput({ label, value, onChangeText, placeholder, multiline, keyboardType, error }: {
-  label: string; value: string; onChangeText: (v: string) => void;
-  placeholder?: string; multiline?: boolean; keyboardType?: 'default'|'numeric'; error?: boolean;
+// ─── Step Indicator ──────────────────────────────────────────────────────────
+function StepIndicator({
+  current,
+  total,
+  labels,
+}: {
+  current: number;
+  total: number;
+  labels: string[];
 }) {
   return (
-    <View style={[s.fWrap, error && s.fError]}>
-      {value.length > 0 && <Text style={s.fLabel}>{label}</Text>}
-      <TextInput
-        style={[s.fInput, multiline && { height: 80, textAlignVertical: 'top' }]}
-        value={value} onChangeText={onChangeText}
-        placeholder={value.length === 0 ? label : placeholder ?? ''}
-        placeholderTextColor={C.textMuted}
-        multiline={multiline} keyboardType={keyboardType ?? 'default'}
-      />
-    </View>
-  );
-}
-
-// â”€â”€ Chip row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function Chips({ options, selected, onToggle }: {
-  options: string[]; selected: string[]; onToggle: (v: string) => void;
-}) {
-  return (
-    <View style={s.chips}>
-      {options.map((opt) => {
-        const on = selected.includes(opt);
+    <View style={si.wrap}>
+      {Array.from({ length: total }, (_, i) => {
+        const idx = i + 1;
+        const done = idx < current;
+        const active = idx === current;
         return (
-          <Pressable key={opt} onPress={() => onToggle(opt)}
-            style={[s.chip, on && s.chipOn]}>
-            <Text style={[s.chipText, on && s.chipTextOn]}>{opt}</Text>
-          </Pressable>
+          <React.Fragment key={idx}>
+            <View style={si.item}>
+              <View
+                style={[
+                  si.circle,
+                  done && si.circleDone,
+                  active && si.circleActive,
+                ]}
+              >
+                {done ? (
+                  <Text style={si.check}>✓</Text>
+                ) : (
+                  <Text
+                    style={[
+                      si.num,
+                      active && si.numActive,
+                      !active && !done && si.numMuted,
+                    ]}
+                  >
+                    {idx}
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={[si.label, active && si.labelActive, done && si.labelDone]}
+              >
+                {labels[i]}
+              </Text>
+            </View>
+            {i < total - 1 && <View style={[si.dash, done && si.dashDone]} />}
+          </React.Fragment>
         );
       })}
     </View>
   );
 }
 
-// â”€â”€ Dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function Dropdown({ label, value, options, onSelect }: {
-  label: string; value: string; options: string[]; onSelect: (v: string) => void;
+// ─── Underline Input ─────────────────────────────────────────────────────────
+function UnderlineInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+  keyboardType,
+  error,
+  rightElement,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  keyboardType?: "default" | "numeric" | "phone-pad";
+  error?: boolean;
+  rightElement?: React.ReactNode;
+}) {
+  const [focused, setFocused] = useState(false);
+  const showFloatingLabel = value.length > 0 || focused;
+
+  return (
+    <View style={ui.container}>
+      <View style={ui.wrapper}>
+        <Text
+          style={[
+            ui.label,
+            showFloatingLabel ? ui.labelVisible : ui.labelHidden,
+            focused && ui.labelFocused,
+            error && ui.labelError,
+          ]}
+        >
+          {label}
+        </Text>
+        <View style={ui.row}>
+          <TextInput
+            style={[
+              ui.input,
+              multiline && ui.inputMultiline,
+              focused && ui.inputFocused,
+              error && ui.inputError,
+            ]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={focused ? "" : placeholder || label}
+            placeholderTextColor={C.textMuted}
+            multiline={multiline}
+            keyboardType={keyboardType ?? "default"}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          />
+          {rightElement}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Dropdown Picker ─────────────────────────────────────────────────────────
+function DropdownPicker({
+  label,
+  value,
+  options,
+  onSelect,
+  error,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onSelect: (v: string) => void;
+  error?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
   return (
-    <View style={{ marginBottom: 14 }}>
-      <Pressable style={s.fWrap} onPress={() => setOpen(p => !p)}>
-        {value && <Text style={s.fLabel}>{label}</Text>}
-        <View style={s.fRow}>
-          <Text style={[s.fInput, !value && { color: C.textMuted }]}>{value || label}</Text>
-          <Text style={s.chevron}>{open ? 'â–´' : 'â–¾'}</Text>
+    <View style={dp.container}>
+      <Pressable style={dp.wrapper} onPress={() => setOpen((prev) => !prev)}>
+        <Text style={[dp.label, value.length > 0 && dp.labelVisible, error && dp.labelError]}>
+          {label}
+        </Text>
+        <View style={dp.inputRow}>
+          <Text style={[dp.valueText, !value && dp.valuePlaceholder]}>
+            {value || label}
+          </Text>
+          <Text style={dp.chevron}>{open ? "▲" : "▼"}</Text>
         </View>
       </Pressable>
+
       {open && (
-        <View style={s.ddBox}>
-          {options.map(opt => (
-            <Pressable key={opt} style={[s.ddItem, value === opt && s.ddItemOn]}
-              onPress={() => { onSelect(opt); setOpen(false); }}>
-              <Text style={[s.ddText, value === opt && s.ddTextOn]}>{opt}</Text>
+        <View style={dp.dropdown}>
+          {options.map((opt) => (
+            <Pressable
+              key={opt}
+              style={[dp.item, value === opt && dp.itemSelected]}
+              onPress={() => {
+                onSelect(opt);
+                setOpen(false);
+              }}
+            >
+              <Text style={[dp.itemText, value === opt && dp.itemTextSelected]}>
+                {opt}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -112,408 +215,1016 @@ function Dropdown({ label, value, options, onSelect }: {
   );
 }
 
-// â”€â”€ Toggle row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ToggleRow({ label, sub, value, onChange }: {
-  label: string; sub?: string; value: boolean; onChange: (v: boolean) => void;
+// ─── Interactive Chips ───────────────────────────────────────────────────────
+function SelectionChips({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (val: string) => void;
 }) {
   return (
-    <View style={s.toggleRow}>
-      <View style={{ flex: 1 }}>
-        <Text style={s.toggleLabel}>{label}</Text>
-        {sub && <Text style={s.toggleSub}>{sub}</Text>}
-      </View>
-      <Switch value={value} onValueChange={onChange}
-        trackColor={{ false: '#D1D5DB', true: C.primary }}
-        thumbColor="#fff" />
+    <View style={ch.container}>
+      {options.map((opt) => {
+        const isSelected = selected.includes(opt);
+        return (
+          <Pressable
+            key={opt}
+            onPress={() => onToggle(opt)}
+            style={[ch.chip, isSelected && ch.chipActive]}
+          >
+            <Text style={[ch.chipText, isSelected && ch.chipTextActive]}>
+              {opt}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-// â”€â”€ Stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function Stepper({ label, value, onChange }: {
-  label: string; value: number; onChange: (v: number) => void;
+// ─── Stepper Row ─────────────────────────────────────────────────────────────
+function StepperRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
 }) {
   return (
-    <View style={s.stepperRow}>
-      <Text style={s.stepperLabel}>{label}</Text>
-      <View style={s.stepperCtrl}>
-        <Pressable style={s.stepperBtn} onPress={() => onChange(Math.max(0, value - 1))}>
-          <Text style={s.stepperBtnText}>âˆ’</Text>
+    <View style={st.container}>
+      <Text style={st.label}>{label}</Text>
+      <View style={st.controls}>
+        <Pressable
+          style={st.button}
+          onPress={() => onChange(Math.max(0, value - 1))}
+        >
+          <Text style={st.buttonText}>−</Text>
         </Pressable>
-        <Text style={s.stepperVal}>{value}</Text>
-        <Pressable style={s.stepperBtn} onPress={() => onChange(value + 1)}>
-          <Text style={s.stepperBtnText}>+</Text>
+        <Text style={st.value}>{value}</Text>
+        <Pressable style={st.button} onPress={() => onChange(value + 1)}>
+          <Text style={st.buttonText}>+</Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Main Screen
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-export default function ProfileSetupScreen({ route }: Props) {
-  const { role } = route.params;
-  const { login, user } = useAuth();
+export default function ProfileSetupScreen({ route, navigation }: Props) {
+  const { login, user, firebaseUser, logout } = useAuth();
+  const role =
+    route.params?.role ||
+    (user?.role && user.role !== "NEW_USER" ? user.role : "PATIENT");
+
+  // Flow State logic
+  const [step, setStep] = useState<2 | 3>(2); // Starts at step 2 (Role selection was step 1)
+  const totalSteps = role === "CAREGIVER" ? 3 : 2;
+  const stepLabels =
+    role === "CAREGIVER"
+      ? ["Your Role", "Basic Info", "Professional"]
+      : ["Your Role", "Profile Info"];
+
+  // Form Fields State
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [dob, setDob] = useState("");
+  const [dobDate, setDobDate] = useState<Date | null>(null);
+  const [showDob, setShowDob] = useState(false);
+  const [gender, setGender] = useState("");
+  const [language, setLanguage] = useState("English");
+  const [city, setCity] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [optInNews, setOptInNews] = useState(true);
+
+  // Professional Caregiver Fields (Step 3)
+  const [yearsExp, setYearsExp] = useState(0);
+  const [maxPatients, setMaxPatients] = useState(3);
+  const [radiusKm, setRadiusKm] = useState(10);
+  const [specs, setSpecs] = useState<string[]>([]);
+  const [langsSpoken, setLangsSpoken] = useState<string[]>([]);
+  const [availTypes, setAvailTypes] = useState<string[]>([]);
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [dailyRate, setDailyRate] = useState("");
+  const [bio, setBio] = useState("");
+  const [isDiscoverable, setIsDiscoverable] = useState(true);
+
+  // Validation / Location / API state
+  const [showErrors, setShowErrors] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [locLoading, setLocLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission needed",
+        "Allow photo access to set a profile picture."
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled) return;
+    setPhotoUri(result.assets[0].uri);
+  };
+
+  const detectLocation = async () => {
+    setLocLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location permission is required to detect city.");
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({});
+      const reverse = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      if (reverse && reverse.length > 0) {
+        const item = reverse[0];
+        const cityName = item.city || item.subregion || item.district || item.region || "";
+        if (cityName) {
+          setCity(cityName);
+        } else {
+          Alert.alert("Location Resolved", "Unable to extract city name from address details. Please type manually.");
+        }
+      }
+    } catch (e) {
+      console.warn("Location error:", e);
+      Alert.alert("Error", "Could not fetch current city location.");
+    } finally {
+      setLocLoading(false);
+    }
+  };
+
+  const handleNext = () => {
+    // Validation
+    if (!photoUri) {
+      setSubmitError("Profile photo is mandatory. Please upload a photo of yourself.");
+      return;
+    }
+    if (!name.trim() || !dob || !gender || !city.trim()) {
+      setSubmitError("Please fill out all required fields.");
+      setShowErrors(true);
+      return;
+    }
+    if (role === "PATIENT") {
+      if (!emergencyName.trim() || !emergencyPhone.trim()) {
+        setSubmitError("Please fill out all required fields.");
+        setShowErrors(true);
+        return;
+      }
+    }
+    setSubmitError(null);
+
+    if (role === "CAREGIVER" && step === 2) {
+      setStep(3);
+      setShowErrors(false);
+      return;
+    }
+    void handleFinish();
+  };
 
   const saveProfile = async (draft: any) => {
     try {
-      if (role === 'CAREGIVER') {
-        const res = await updateCaregiverProfile(draft);
+      if (role === "CAREGIVER") {
+        const res = await updateCaregiverProfile({
+          years_of_experience: draft.yearsExperience,
+          specializations: draft.specializations,
+          languages_spoken: draft.languagesSpoken,
+          availability_types: draft.availabilityTypes,
+          service_radius_km: draft.serviceRadiusKm,
+          bio: draft.aboutMe,
+          hourly_rate: draft.hourlyRate ? parseFloat(draft.hourlyRate) : null,
+          daily_rate: draft.dailyRate ? parseFloat(draft.dailyRate) : null,
+          max_patients: draft.maxPatients,
+          is_discoverable: draft.isDiscoverable,
+        });
         return res.status === 200 || res.status === 201;
       } else {
-        const res = await updatePatientProfile(draft);
+        const res = await updatePatientProfile({
+          emergency_contact_name: draft.emergencyContactName,
+          emergency_contact_phone: draft.emergencyContactPhone,
+          diagnosis: null,
+          diagnosis_date: null,
+          medications: [],
+          known_triggers: [],
+          comfort_items: [],
+          favourite_songs: [],
+        });
         return res.status === 200 || res.status === 201;
       }
     } catch (err) {
-      console.error('[ProfileSetup] Failed to save profile:', err);
+      console.error("[ProfileSetup] Failed to save profile:", err);
       return false;
     }
   };
 
-  // â”€â”€ Step 1 state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const [step,        setStep]        = useState<1|2>(1);
-  const [photoUri,    setPhotoUri]    = useState<string | null>(null);
-  const [photoUrl,    setPhotoUrl]    = useState<string | null>(null);
-  const [name,        setName]        = useState('');
-  const [dob,         setDob]         = useState('');
-  const [dobDate,     setDobDate]     = useState<Date | null>(null);
-  const [showDob,     setShowDob]     = useState(false);
-  const [gender,      setGender]      = useState('');
-  const [language,    setLanguage]    = useState('English');
-  const [city,        setCity]        = useState('');
-  const [showErrors,  setShowErrors]  = useState(false);
-  const [submitting,  setSubmitting]  = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // —————————————————————————————————————————————————————————————————————————————————————————————
-  const [yearsExp,       setYearsExp]       = useState(0);
-  const [dementiaExp,    setDementiaExp]    = useState(false);
-  const [patientsHandled,setPatientsHandled]= useState(0);
-  const [specs,          setSpecs]          = useState<string[]>([]);
-  const [langsSpoken,    setLangsSpoken]    = useState<string[]>([]);
-  const [availTypes,     setAvailTypes]     = useState<string[]>([]);
-  const [radiusKm,       setRadiusKm]       = useState(10);
-  const [transport,      setTransport]      = useState('');
-  const [hourlyRate,     setHourlyRate]     = useState('');
-  const [dailyRate,      setDailyRate]      = useState('');
-  const [aboutMe,        setAboutMe]        = useState('');
-  const [emergencyResp,  setEmergencyResp]  = useState(false);
-  const [canAssist,      setCanAssist]      = useState(false);
-
-  const toggle = (arr: string[], v: string) =>
-    arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
-
-  // â”€â”€ Photo picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const pickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Allow photo access to set a profile picture.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [1,1], quality: 0.7,
-    });
-    if (result.canceled) return;
-    const uri = result.assets[0].uri;
-    setPhotoUri(uri);
-    // Upload to Supabase Storage
-    const phone = user?.id ?? 'unknown';
-    const ext   = uri.split('.').pop() ?? 'jpg';
-    const path  = `${phone}/avatar.${ext}`;
-    try {
-      const res  = await fetch(uri);
-      const blob = await res.blob();
-      // REMOVED: Supabase migration to Express/PostgreSQL
-      console.warn('[ProfileSetup] uploadPhoto: Supabase removed, keeping local URI');
-    } catch { /* keep local URI, upload failed */ }
-  };
-
-  const formatDob = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  // â”€â”€ Step 1 continue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleStep1 = () => {
-    if (!name.trim() || !dob || !gender || !city.trim()) { setShowErrors(true); return; }
-    if (role === 'CAREGIVER') { setStep(2); setShowErrors(false); return; }
-    void handleFinish();
-  };
-
-  // ── Final save ──────────────────────────────────────────────────────────────
   const handleFinish = async () => {
-    const phone = user?.phone;
-    if (!phone) { setSubmitError('Session expired — go back and log in.'); return; }
-    setSubmitting(true); setSubmitError(null);
+    const phone = firebaseUser?.phoneNumber || user?.phone;
+    if (!phone) {
+      setSubmitError("Session expired — go back and log in.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
     try {
       const draft = {
-        fullName: name.trim(), role, dob, gender, city: city.trim(), language,
-        profilePhotoUrl:    photoUrl,
+        fullName: name.trim(),
+        role,
+        dob,
+        gender,
+        city: city.trim(),
+        language,
+        profilePhotoUrl: photoUri,
+        // patient fields
+        emergencyContactName: emergencyName.trim(),
+        emergencyContactPhone: emergencyPhone.trim(),
         // caregiver professional fields
-        yearsExperience:    yearsExp,
-        dementiaExperience: dementiaExp,
-        patientsHandled,
-        specializations:    specs,
-        languagesSpoken:    langsSpoken,
-        availabilityTypes:  availTypes,
-        serviceRadiusKm:    radiusKm,
-        transportationMode: transport,
-        hourlyRate, dailyRate, aboutMe,
-        emergencyResponse:  emergencyResp,
-        canAssistNearby:    canAssist,
+        yearsExperience: yearsExp,
+        maxPatients,
+        specializations: specs,
+        languagesSpoken: langsSpoken,
+        availabilityTypes: availTypes,
+        serviceRadiusKm: radiusKm,
+        hourlyRate,
+        dailyRate,
+        aboutMe: bio.trim(),
+        isDiscoverable,
       };
 
-      // 1. Provision the user in backend DB first (which seeds profile tables)
-      const provisionRes = await provisionUser({
-        name: name.trim(),
-        role: role as 'PATIENT' | 'CAREGIVER' | 'FAMILY',
-        phone: phone,
-        preferred_language: language === 'Hindi' ? 'hi' : 'en',
-      });
-
-      if (!provisionRes.data?.success) {
-        setSubmitError('Failed to setup account. Please try again.');
+      // 1. Provision user in backend DB
+      let provisionedUser: any;
+      try {
+        const provisionRes = await provisionUser({
+          name: name.trim(),
+          role: role as "PATIENT" | "CAREGIVER" | "FAMILY",
+          phone: phone,
+          preferred_language: language === "Hindi" ? "hi" : "en",
+        });
+        provisionedUser = provisionRes.data?.data?.user;
+        if (!provisionedUser) {
+          setSubmitError("Failed to create account. Please try again.");
+          return;
+        }
+      } catch (provErr: any) {
+        const errMsg =
+          provErr.response?.data?.error?.message ||
+          provErr.message ||
+          "Account creation failed.";
+        setSubmitError(errMsg);
         return;
       }
 
-      const dbUser = provisionRes.data.data.user;
+      // 2. Update core user fields
+      try {
+        await updateMe({
+          name: name.trim(),
+          date_of_birth: dobDate
+            ? dobDate.toISOString().split("T")[0]
+            : undefined,
+          gender: draft.gender,
+          city: draft.city,
+          preferred_language: language === "Hindi" ? "hi" : "en",
+          photo_url: photoUri ? "https://surestep.app/mock-avatar.png" : undefined,
+        });
+      } catch (updateErr) {
+        console.warn("[ProfileSetup] updateMe failed:", updateErr);
+      }
 
-      // 2. Update the provisioned profile rows with detailed fields
+      // 3. Update role-specific extended profile rows
       const saved = await saveProfile(draft);
-      if (!saved) { setSubmitError('Failed to save profile details. Check connection and try again.'); return; }
+      if (!saved) {
+        setSubmitError(
+          "Failed to save profile details. Check your connection and try again."
+        );
+        return;
+      }
 
-      // 3. Mark context as authenticated with active profile details
+      // 4. Mark context as authenticated
       login({
-        id: dbUser.id,
-        phone: dbUser.phone,
-        name: dbUser.name,
-        role: dbUser.role as any,
+        id: provisionedUser.id,
+        phone: provisionedUser.phone || phone,
+        name: name.trim(),
+        role: provisionedUser.role as any,
       });
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Something went wrong.');
+      console.error("[ProfileSetup] handleFinish error:", e);
+      setSubmitError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // â”€â”€ Step 1 validation helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const nameErr   = showErrors && !name.trim();
-  const dobErr    = showErrors && !dob;
-  const genderErr = showErrors && !gender;
-  const cityErr   = showErrors && !city.trim();
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigation.replace("WelcomeScreen");
+    } catch (e) {
+      console.error("Logout failed:", e);
+    }
+  };
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // RENDER STEP 1
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  if (step === 1) return (
-    <View style={s.root}>
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+  const toggleList = (arr: string[], val: string) =>
+    arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
 
-        {role === 'CAREGIVER' && <StepBar step={1} />}
+  const formatDob = (d: Date) =>
+    d.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
 
-        {/* Avatar */}
-        <Pressable onPress={pickPhoto} style={s.avatarWrap}>
-          {photoUri
-            ? <Image source={{ uri: photoUri }} style={s.avatarImg} />
-            : <View style={s.avatarPlaceholder}><Text style={s.avatarIcon}>ðŸ‘¤</Text></View>
-          }
-          <View style={s.avatarPlus}><Text style={s.avatarPlusText}>+</Text></View>
-        </Pressable>
+  const hasErrors = (field: string) => {
+    if (!showErrors) return false;
+    if (field === "name") return !name.trim();
+    if (field === "dob") return !dob;
+    if (field === "gender") return !gender;
+    if (field === "city") return !city.trim();
+    if (field === "emergencyName") return !emergencyName.trim();
+    if (field === "emergencyPhone") return !emergencyPhone.trim();
+    return false;
+  };
 
-        <Text style={s.heading}>Set up your profile</Text>
-        <Text style={s.subheading}>{role === 'CAREGIVER' ? 'Caregiver account' : 'Patient account'}</Text>
-
-        {/* Name */}
-        <View style={[s.fWrap, nameErr && s.fError]}>
-          {name.length > 0 && <Text style={s.fLabel}>Full Name</Text>}
-          <TextInput style={s.fInput} value={name} onChangeText={setName}
-            placeholder="Full Name" placeholderTextColor={C.textMuted} />
-        </View>
-        {nameErr && <Text style={s.errText}>Name is required</Text>}
-
-        {/* DOB */}
-        <Pressable style={[s.fWrap, dobErr && s.fError]} onPress={() => setShowDob(p => !p)}>
-          {dob && <Text style={s.fLabel}>Date of Birth</Text>}
-          <View style={s.fRow}>
-            <Text style={[s.fInput, !dob && { color: C.textMuted }]}>{dob || 'Date of Birth'}</Text>
-            <Text style={s.calIcon}>ðŸ“…</Text>
-          </View>
-        </Pressable>
-        {dobErr && <Text style={s.errText}>Date of birth is required</Text>}
-        {showDob && Platform.OS === 'ios' && (
-          <View style={s.pickerWrap}>
-            <DateTimePicker value={dobDate ?? new Date(1975,0,1)} mode="date" display="spinner"
-              maximumDate={new Date()}
-              onChange={(e, d) => { if (e.type !== 'dismissed' && d) { setDobDate(d); setDob(formatDob(d)); } }} />
-          </View>
-        )}
-        {showDob && Platform.OS === 'android' && (
-          <DateTimePicker value={dobDate ?? new Date(1975,0,1)} mode="date" display="default"
-            maximumDate={new Date()}
-            onChange={(e, d) => { setShowDob(false); if (e.type !== 'dismissed' && d) { setDobDate(d); setDob(formatDob(d)); } }} />
-        )}
-
-        {/* Gender */}
-        <Dropdown label="Gender" value={gender} options={GENDERS} onSelect={setGender} />
-        {genderErr && <Text style={[s.errText, { marginTop: -10 }]}>Gender is required</Text>}
-
-        {/* Language */}
-        <Dropdown label="Preferred Language" value={language} options={PREF_LANGUAGES} onSelect={setLanguage} />
-
-        {/* City */}
-        <View style={[s.fWrap, cityErr && s.fError]}>
-          {city.length > 0 && <Text style={s.fLabel}>City</Text>}
-          <TextInput style={s.fInput} value={city} onChangeText={setCity}
-            placeholder="City" placeholderTextColor={C.textMuted} />
-        </View>
-        {cityErr && <Text style={s.errText}>City is required</Text>}
-
-        {submitError && <View style={s.errBox}><Text style={s.errBoxText}>âš  {submitError}</Text></View>}
-
-        <Pressable style={({ pressed }) => [s.cta, (pressed || submitting) && s.ctaPressed]}
-          onPress={() => void handleStep1()} disabled={submitting}>
-          {submitting
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={s.ctaText}>{role === 'CAREGIVER' ? 'Continue' : 'Get Started'}</Text>}
-        </Pressable>
-      </ScrollView>
-    </View>
-  );
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // RENDER STEP 2 (caregiver only)
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
-    <View style={s.root}>
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <StepBar step={2} />
-        <Text style={s.heading}>Professional Info</Text>
-        <Text style={s.subheading}>Help patients find the right match</Text>
+    <ScreenContainer edges={["top", "bottom", "left", "right"]} style={s.root}>
+      {() => (
+        <>
+          {/* Top action bar */}
+          <View style={s.topBar}>
+            <Pressable
+              onPress={() => {
+                if (role === "CAREGIVER" && step === 3) {
+                  setStep(2);
+                } else {
+                  navigation.goBack();
+                }
+              }}
+              style={s.topBtn}
+            >
+              <Text style={s.topBtnText}>
+                {role === "CAREGIVER" && step === 3 ? "← Back" : "← Cancel"}
+              </Text>
+            </Pressable>
 
-        <Text style={s.sectionTitle}>Experience</Text>
-        <Stepper label="Years of Caregiving Experience" value={yearsExp} onChange={setYearsExp} />
-        <Stepper label="Total Patients Handled" value={patientsHandled} onChange={setPatientsHandled} />
-        <ToggleRow label="Dementia Care Experience" value={dementiaExp} onChange={setDementiaExp} />
+            <Text style={s.topTitle}>Welcome back!</Text>
 
-        <Text style={s.sectionTitle}>Specializations</Text>
-        <Chips options={SPECIALIZATIONS} selected={specs}
-          onToggle={v => setSpecs(toggle(specs, v))} />
+            <Pressable onPress={handleLogout} style={s.topBtn}>
+              <Text style={[s.topBtnText, s.logoutColor]}>Log out</Text>
+            </Pressable>
+          </View>
 
-        <Text style={s.sectionTitle}>Languages Spoken</Text>
-        <Chips options={LANGUAGES} selected={langsSpoken}
-          onToggle={v => setLangsSpoken(toggle(langsSpoken, v))} />
+          <ScrollView
+            contentContainerStyle={s.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <StepIndicator current={step} total={totalSteps} labels={stepLabels} />
 
-        <Text style={s.sectionTitle}>Available For</Text>
-        <Chips options={AVAILABILITY} selected={availTypes}
-          onToggle={v => setAvailTypes(toggle(availTypes, v))} />
+            {/* Profile Avatar (Step 2 Only) */}
+            {step === 2 && (
+              <View style={s.avatarContainer}>
+                <Pressable onPress={pickPhoto} style={s.avatarTouchable}>
+                  {photoUri ? (
+                    <Image source={{ uri: photoUri }} style={s.avatarImage} />
+                  ) : (
+                    <View style={s.avatarPlaceholder}>
+                      <Text style={s.avatarInitials}>
+                        {name ? name.substring(0, 2).toUpperCase() : "?"}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Badge Camera icon */}
+                  <View style={s.cameraBadge}>
+                    <Text style={s.cameraIcon}>📷</Text>
+                  </View>
+                </Pressable>
+                <Text style={s.avatarTip}>
+                  Please make sure that your profile picture is a photo of yourself *
+                </Text>
+              </View>
+            )}
 
-        <Text style={s.sectionTitle}>Location & Transport</Text>
-        <Stepper label="Service Radius (km)" value={radiusKm} onChange={setRadiusKm} />
-        <Dropdown label="Transportation Mode" value={transport} options={TRANSPORT} onSelect={setTransport} />
+            {/* White Rounded Form Box (matches reference image) */}
+            <View style={s.card}>
+              {step === 2 && (
+                <>
+                  {/* Basic Fields */}
+                  <UnderlineInput
+                    label="Full Name"
+                    value={name}
+                    onChangeText={setName}
+                    error={hasErrors("name")}
+                  />
 
-        <Text style={s.sectionTitle}>Charges</Text>
-        <FInput label="Hourly Rate (e.g. â‚¹300/hr)" value={hourlyRate} onChangeText={setHourlyRate} />
-        <FInput label="Daily Rate (e.g. â‚¹2000/day)" value={dailyRate} onChangeText={setDailyRate} />
+                  <Pressable onPress={() => setShowDob(true)}>
+                    <View pointerEvents="none">
+                      <UnderlineInput
+                        label="Date of Birth"
+                        value={dob}
+                        onChangeText={() => {}}
+                        placeholder="Date of Birth"
+                        error={hasErrors("dob")}
+                      />
+                    </View>
+                  </Pressable>
 
-        <Text style={s.sectionTitle}>About Me</Text>
-        <FInput label="Short bio â€” introduce yourself to patients..." value={aboutMe} onChangeText={setAboutMe} multiline />
+                  {showDob && (
+                    <DateTimePicker
+                      value={dobDate ?? new Date(1990, 0, 1)}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      maximumDate={new Date()}
+                      onChange={(event, date) => {
+                        setShowDob(false);
+                        if (date) {
+                          setDobDate(date);
+                          setDob(formatDob(date));
+                        }
+                      }}
+                    />
+                  )}
 
-        <Text style={s.sectionTitle}>Emergency Settings</Text>
-        <ToggleRow label="Emergency Response Availability"
-          sub="You can be contacted for patient emergencies"
-          value={emergencyResp} onChange={setEmergencyResp} />
-        <ToggleRow label="Can Assist Nearby Patients"
-          sub="Available to help patients in your area during emergencies"
-          value={canAssist} onChange={setCanAssist} />
+                  <DropdownPicker
+                    label="Gender"
+                    value={gender}
+                    options={GENDERS}
+                    onSelect={setGender}
+                    error={hasErrors("gender")}
+                  />
 
-        {submitError && <View style={s.errBox}><Text style={s.errBoxText}>âš  {submitError}</Text></View>}
+                  <DropdownPicker
+                    label="Preferred Language"
+                    value={language}
+                    options={PREF_LANGUAGES}
+                    onSelect={setLanguage}
+                  />
 
-        <Pressable style={({ pressed }) => [s.cta, (pressed || submitting) && s.ctaPressed]}
-          onPress={() => void handleFinish()} disabled={submitting}>
-          {submitting
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={s.ctaText}>Complete Profile</Text>}
-        </Pressable>
-        <Pressable onPress={() => void handleFinish()} style={s.skipBtn}>
-          <Text style={s.skipText}>Skip for now</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+                  <UnderlineInput
+                    label="City"
+                    value={city}
+                    onChangeText={setCity}
+                    error={hasErrors("city")}
+                    rightElement={
+                      <Pressable
+                        onPress={detectLocation}
+                        disabled={locLoading}
+                        style={s.locDetectBtn}
+                      >
+                        {locLoading ? (
+                          <ActivityIndicator size="small" color={C.primary} />
+                        ) : (
+                          <Text style={s.locDetectText}>📍 Locate</Text>
+                        )}
+                      </Pressable>
+                    }
+                  />
+
+                  {/* Patient Emergency Details */}
+                  {role === "PATIENT" && (
+                    <>
+                      <View style={s.divider} />
+                      <Text style={s.sectionHeader}>Emergency Contact</Text>
+
+                      <UnderlineInput
+                        label="Contact Person Name"
+                        value={emergencyName}
+                        onChangeText={setEmergencyName}
+                        error={hasErrors("emergencyName")}
+                      />
+
+                      <UnderlineInput
+                        label="Contact Phone Number"
+                        value={emergencyPhone}
+                        onChangeText={setEmergencyPhone}
+                        keyboardType="phone-pad"
+                        error={hasErrors("emergencyPhone")}
+                      />
+                    </>
+                  )}
+
+                  {/* Caregiver Bio */}
+                  {role === "CAREGIVER" && (
+                    <>
+                      <View style={s.divider} />
+                      <UnderlineInput
+                        label="About Me (Short Bio)"
+                        value={bio}
+                        onChangeText={setBio}
+                        multiline
+                      />
+                    </>
+                  )}
+
+                  {/* Opt-in Newsletter */}
+                  <Pressable
+                    onPress={() => setOptInNews(!optInNews)}
+                    style={s.checkboxRow}
+                  >
+                    <View style={[s.checkbox, optInNews && s.checkboxChecked]}>
+                      {optInNews && <Text style={s.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={s.checkboxLabel}>
+                      Be the first to know about new features, community news, and
+                      events. Opt in to receive occasional emails from Carefully.
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+
+              {step === 3 && role === "CAREGIVER" && (
+                <>
+                  {/* Professional details */}
+                  <Text style={s.sectionHeader}>Professional Information</Text>
+
+                  <StepperRow
+                    label="Years of Experience"
+                    value={yearsExp}
+                    onChange={setYearsExp}
+                  />
+
+                  <StepperRow
+                    label="Max Patient Capacity"
+                    value={maxPatients}
+                    onChange={setMaxPatients}
+                  />
+
+                  <StepperRow
+                    label="Service Radius (km)"
+                    value={radiusKm}
+                    onChange={setRadiusKm}
+                  />
+
+                  <View style={s.chipGroup}>
+                    <Text style={s.chipGroupTitle}>Specializations</Text>
+                    <SelectionChips
+                      options={SPECIALIZATIONS}
+                      selected={specs}
+                      onToggle={(v) => setSpecs(toggleList(specs, v))}
+                    />
+                  </View>
+
+                  <View style={s.chipGroup}>
+                    <Text style={s.chipGroupTitle}>Languages Spoken</Text>
+                    <SelectionChips
+                      options={LANGUAGES}
+                      selected={langsSpoken}
+                      onToggle={(v) => setLangsSpoken(toggleList(langsSpoken, v))}
+                    />
+                  </View>
+
+                  <View style={s.chipGroup}>
+                    <Text style={s.chipGroupTitle}>Availability Types</Text>
+                    <SelectionChips
+                      options={AVAILABILITY}
+                      selected={availTypes}
+                      onToggle={(v) => setAvailTypes(toggleList(availTypes, v))}
+                    />
+                  </View>
+
+                  <UnderlineInput
+                    label="Hourly Rate (INR)"
+                    value={hourlyRate}
+                    onChangeText={setHourlyRate}
+                    keyboardType="numeric"
+                  />
+
+                  <UnderlineInput
+                    label="Daily Rate (INR)"
+                    value={dailyRate}
+                    onChangeText={setDailyRate}
+                    keyboardType="numeric"
+                  />
+
+                  <View style={s.toggleRow}>
+                    <View style={s.toggleTextWrap}>
+                      <Text style={s.toggleLabel}>Discoverable Profile</Text>
+                      <Text style={s.toggleSub}>
+                        Allow new patients to search and invite you
+                      </Text>
+                    </View>
+                    <Switch
+                      value={isDiscoverable}
+                      onValueChange={setIsDiscoverable}
+                      trackColor={{ false: C.borderMid, true: C.primary }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* App language selector (matches reference design) */}
+            <Pressable style={s.langBar}>
+              <Text style={s.langIcon}>🌐</Text>
+              <Text style={s.langLabel}>App language: English</Text>
+              <Text style={s.langChevron}>›</Text>
+            </Pressable>
+
+            {submitError && (
+              <View style={s.errorBox}>
+                <Text style={s.errorText}>{submitError}</Text>
+              </View>
+            )}
+
+            {/* Pill next button (matches highlight style in bottom right) */}
+            <View style={s.ctaContainer}>
+              <Pressable
+                onPress={handleNext}
+                disabled={submitting}
+                style={({ pressed }) => [
+                  s.pillBtn,
+                  pressed && s.pillBtnPressed,
+                  submitting && s.pillBtnDisabled,
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={s.pillBtnText}>
+                    {role === "CAREGIVER" && step === 2
+                      ? "Next: professional info ›"
+                      : "Next: complete setup ›"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </>
+      )}
+    </ScreenContainer>
   );
 }
 
-// â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Step Indicator Styles ────────────────────────────────────────────────────
+const si = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    marginVertical: 20,
+    paddingHorizontal: 8,
+  },
+  item: { alignItems: "center", gap: 6, width: 72 },
+  circle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: C.borderMid,
+    backgroundColor: '#F9FAFB',
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleActive: {
+    borderColor: C.primary,
+    backgroundColor: C.primary,
+  },
+  circleDone: {
+    borderColor: C.primary,
+    backgroundColor: C.primary,
+  },
+  check: { fontFamily: F.bold, fontSize: 14, color: "#FFFFFF" },
+  num: { fontFamily: F.bold, fontSize: 14, color: C.textMuted },
+  numActive: { color: "#FFFFFF" },
+  numMuted: { color: C.textMuted },
+  label: {
+    fontFamily: F.regular,
+    fontSize: 10,
+    color: C.textMuted,
+    textAlign: "center",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  labelActive: { color: C.primary, fontFamily: F.semiBold },
+  labelDone: { color: C.primary },
+  dash: {
+    flex: 1,
+    height: 2,
+    backgroundColor: C.border,
+    marginTop: 17,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: C.borderMid,
+  },
+  dashDone: { borderColor: C.primary, backgroundColor: C.primary },
+});
+
+// ─── Underline Input Styles ──────────────────────────────────────────────────
+const ui = StyleSheet.create({
+  container: { marginBottom: 16 },
+  wrapper: { borderBottomWidth: 1.5, borderColor: C.borderMid, paddingVertical: 4 },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  label: {
+    fontFamily: F.regular,
+    fontSize: 11,
+    color: C.textSecondary,
+    marginBottom: 2,
+    textTransform: "capitalize",
+  },
+  labelVisible: { opacity: 1 },
+  labelHidden: { opacity: 0 },
+  labelFocused: { color: C.primary },
+  labelError: { color: C.error },
+  input: {
+    flex: 1,
+    fontFamily: F.regular,
+    fontSize: 16,
+    color: C.textPrimary,
+    padding: 0,
+    minHeight: 32,
+  },
+  inputMultiline: {
+    minHeight: 64,
+    textAlignVertical: "top",
+  },
+  inputFocused: {
+    color: "#000000",
+  },
+  inputError: {},
+});
+
+// ─── Dropdown Picker Styles ──────────────────────────────────────────────────
+const dp = StyleSheet.create({
+  container: { marginBottom: 16 },
+  wrapper: { borderBottomWidth: 1.5, borderColor: C.borderMid, paddingVertical: 4 },
+  label: {
+    fontFamily: F.regular,
+    fontSize: 11,
+    color: C.textSecondary,
+    marginBottom: 2,
+    opacity: 0,
+  },
+  labelVisible: { opacity: 1 },
+  labelError: { color: C.error },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  valueText: { fontFamily: F.regular, fontSize: 16, color: C.textPrimary },
+  valuePlaceholder: { color: C.textMuted },
+  chevron: { fontSize: 11, color: C.textSecondary },
+  dropdown: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    marginTop: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 3,
+    maxHeight: 180,
+    overflow: "scroll",
+  },
+  item: { padding: 12, borderBottomWidth: 0.5, borderBottomColor: C.bg },
+  itemSelected: { backgroundColor: C.primaryLight },
+  itemText: { fontFamily: F.regular, fontSize: 14, color: C.textBody },
+  itemTextSelected: { color: C.primary, fontFamily: F.semiBold },
+});
+
+// ─── Chip Styles ─────────────────────────────────────────────────────────────
+const ch = StyleSheet.create({
+  container: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.borderMid,
+    backgroundColor: C.surface,
+  },
+  chipActive: {
+    borderColor: C.primary,
+    backgroundColor: C.primaryLight,
+  },
+  chipText: { fontFamily: F.regular, fontSize: 13, color: C.textSecondary },
+  chipTextActive: { color: C.primary, fontFamily: F.semiBold },
+});
+
+// ─── Stepper Styles ──────────────────────────────────────────────────────────
+const st = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.bg,
+  },
+  label: { fontFamily: F.regular, fontSize: 15, color: C.textBody },
+  controls: { flexDirection: "row", alignItems: "center", gap: 16 },
+  button: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonText: { fontSize: 18, fontFamily: F.bold, color: C.textSecondary },
+  value: { fontFamily: F.bold, fontSize: 16, color: C.textPrimary, minWidth: 20, textAlign: "center" },
+});
+
+// ─── Main Screen Styles ───────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: C.bg },
-  scroll:{ paddingHorizontal: 22, paddingTop: 20, paddingBottom: 48 },
+  root: { flex: 1, backgroundColor: C.surface },
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    height: 48,
+  },
+  topBtn: { paddingVertical: 6, paddingHorizontal: 4 },
+  topBtnText: { fontFamily: F.medium, fontSize: 14, color: C.textSecondary },
+  logoutColor: { color: C.error },
+  topTitle: { fontFamily: F.bold, fontSize: 16, color: C.textPrimary },
 
-  // Step bar
-  stepBar:  { flexDirection:'row', alignItems:'center', justifyContent:'center', marginBottom: 28 },
-  stepItem: { alignItems:'center', gap: 4 },
-  stepLine: { flex:1, height:2, backgroundColor:'#D1FAE5', marginHorizontal: 8, marginBottom: 16 },
-  stepCircle:{ width:32, height:32, borderRadius:16, backgroundColor: C.primary, alignItems:'center', justifyContent:'center' },
-  stepDone:  { backgroundColor: C.primary },
-  stepInactive:{ backgroundColor:'#E5E7EB' },
-  stepNum:   { fontFamily: F.bold, fontSize:14, color:'#fff' },
-  stepNumInactive:{ color:'#9CA3AF' },
-  stepCheck: { fontFamily: F.bold, fontSize:14, color:'#fff' },
-  stepLabel: { fontFamily: F.regular, fontSize:11, color: C.textSecondary, textAlign:'center', width:64 },
-  stepLabelActive:{ fontFamily: F.bold, color: C.primary },
+  scroll: { paddingHorizontal: 20, paddingBottom: 48 },
 
-  // Avatar
-  avatarWrap:       { alignSelf:'center', marginBottom:20, position:'relative' },
-  avatarPlaceholder:{ width:90, height:90, borderRadius:45, backgroundColor:'#E5E7EB', alignItems:'center', justifyContent:'center' },
-  avatarImg:        { width:90, height:90, borderRadius:45 },
-  avatarIcon:       { fontSize:40 },
-  avatarPlus:       { position:'absolute', bottom:0, right:0, width:26, height:26, borderRadius:13, backgroundColor: C.primary, alignItems:'center', justifyContent:'center', borderWidth:2, borderColor:'#fff' },
-  avatarPlusText:   { color:'#fff', fontSize:16, fontFamily: F.bold, lineHeight:20 },
+  // Avatar Picker styles matching reference image
+  avatarContainer: { alignItems: "center", marginVertical: 16 },
+  avatarTouchable: { position: "relative", width: 100, height: 100 },
+  avatarImage: { width: 100, height: 100, borderRadius: 50 },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: C.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: { fontFamily: F.bold, fontSize: 32, color: C.textMuted },
+  cameraBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: C.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: C.surface,
+  },
+  cameraIcon: { fontSize: 14 },
+  avatarTip: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textSecondary,
+    textAlign: "center",
+    maxWidth: 240,
+    marginTop: 12,
+    lineHeight: 16,
+  },
 
-  heading:   { fontFamily: F.extraBold, fontSize:24, color: C.textPrimary, textAlign:'center', marginBottom:4 },
-  subheading:{ fontFamily: F.regular, fontSize:14, color: C.textSecondary, textAlign:'center', marginBottom:24 },
+  // Rounded Card containing fields
+  card: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
 
-  // Floating-label input
-  fWrap:  { borderWidth:1.5, borderColor: C.border, borderRadius:14, paddingHorizontal:14, paddingTop:8, paddingBottom:8, marginBottom:14, minHeight:52, justifyContent:'center' },
-  fError: { borderColor: C.error },
-  fLabel: { fontFamily: F.regular, fontSize:11, color: C.primary, marginBottom:2 },
-  fInput: { fontFamily: F.regular, fontSize:15, color: C.textPrimary, padding:0, minHeight:28 },
-  fRow:   { flexDirection:'row', alignItems:'center' },
-  chevron:{ fontSize:13, color: C.textSecondary, marginLeft:6 },
-  calIcon:{ fontSize:18, marginLeft:6 },
+  divider: { height: 1, backgroundColor: C.border, marginVertical: 20 },
+  sectionHeader: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.textPrimary,
+    marginBottom: 16,
+  },
 
-  pickerWrap:{ borderRadius:12, backgroundColor: C.surface, borderWidth:1, borderColor: C.border, marginTop:-8, marginBottom:8, overflow:'hidden' },
+  // Locate button styling
+  locDetectBtn: {
+    backgroundColor: C.primaryLight,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  locDetectText: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: C.primary,
+  },
 
-  ddBox:    { borderWidth:1.5, borderColor: C.border, borderRadius:14, backgroundColor: C.surface, paddingVertical:4, marginTop:-10, marginBottom:14, zIndex:100 },
-  ddItem:   { paddingVertical:11, paddingHorizontal:16 },
-  ddItemOn: { backgroundColor: C.primaryLight },
-  ddText:   { fontFamily: F.regular, fontSize:15, color: C.textPrimary },
-  ddTextOn: { fontFamily: F.bold, color: C.primary },
+  // Checkbox field matching the reference image layout
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 18,
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: C.borderMid,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.surface,
+  },
+  checkboxChecked: {
+    borderColor: C.primary,
+    backgroundColor: C.primary,
+  },
+  checkmark: { color: C.surface, fontSize: 13, fontFamily: F.bold },
+  checkboxLabel: {
+    flex: 1,
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textBody,
+    lineHeight: 17,
+  },
 
-  errText:{ fontFamily: F.regular, fontSize:12, color: C.error, marginTop:-10, marginBottom:8, marginLeft:4 },
-  errBox: { borderRadius:10, backgroundColor:'#FEF2F2', borderWidth:1, borderColor:'#FECACA', padding:12, marginBottom:12 },
-  errBoxText:{ fontFamily: F.semiBold, fontSize:13, color:'#DC2626' },
+  // App language selector bar (matches reference design)
+  langBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.02,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  langIcon: { fontSize: 18, marginRight: 12 },
+  langLabel: { flex: 1, fontFamily: F.regular, fontSize: 14, color: C.textBody },
+  langChevron: { fontSize: 16, color: C.textMuted },
 
-  cta:       { height:52, borderRadius:26, backgroundColor: C.primary, alignItems:'center', justifyContent:'center', marginTop:12, shadowColor: C.primary, shadowOpacity:0.3, shadowOffset:{width:0,height:6}, shadowRadius:12, elevation:6 },
-  ctaPressed:{ opacity:0.88, transform:[{scale:0.98}] },
-  ctaText:   { fontFamily: F.bold, fontSize:17, color:'#fff' },
-  skipBtn:   { alignItems:'center', marginTop:14, paddingVertical:6 },
-  skipText:  { fontFamily: F.regular, fontSize:14, color: C.textMuted },
+  // Chip options group
+  chipGroup: { marginVertical: 12 },
+  chipGroupTitle: { fontFamily: F.medium, fontSize: 14, color: C.textBody },
 
-  // Section title
-  sectionTitle:{ fontFamily: F.bold, fontSize:13, color: C.textLabel ?? C.textSecondary, letterSpacing:0.8, textTransform:'uppercase', marginTop:20, marginBottom:10 },
+  // Switch Toggle Row
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: C.bg,
+  },
+  toggleTextWrap: { flex: 1, marginRight: 8 },
+  toggleLabel: { fontFamily: F.medium, fontSize: 15, color: C.textBody },
+  toggleSub: { fontFamily: F.regular, fontSize: 12, color: C.textSecondary, marginTop: 2 },
 
-  // Chips
-  chips:   { flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:4 },
-  chip:    { paddingHorizontal:14, paddingVertical:8, borderRadius:20, borderWidth:1.5, borderColor: C.border, backgroundColor: C.surface },
-  chipOn:  { backgroundColor: C.primary, borderColor: C.primary },
-  chipText:{ fontFamily: F.medium ?? F.regular, fontSize:13, color: C.textSecondary },
-  chipTextOn:{ color:'#fff' },
+  // Next pill button matching the reference styling (primary theme color)
+  ctaContainer: { alignItems: "flex-end", marginTop: 8 },
+  pillBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.primary,
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    borderRadius: 26,
+    shadowColor: C.primary,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  pillBtnDisabled: { backgroundColor: C.borderMid, shadowOpacity: 0 },
+  pillBtnPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
+  pillBtnText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.primaryText,
+  },
 
-  // Toggle
-  toggleRow:  { flexDirection:'row', alignItems:'center', paddingVertical:12, borderBottomWidth:1, borderBottomColor: C.border + '40' },
-  toggleLabel:{ fontFamily: F.semiBold, fontSize:14, color: C.textPrimary },
-  toggleSub:  { fontFamily: F.regular, fontSize:12, color: C.textSecondary, marginTop:2 },
-
-  // Stepper
-  stepperRow: { flexDirection:'row', alignItems:'center', paddingVertical:10, borderBottomWidth:1, borderBottomColor: C.border + '40', marginBottom:2 },
-  stepperLabel:{ flex:1, fontFamily: F.regular, fontSize:14, color: C.textPrimary },
-  stepperCtrl: { flexDirection:'row', alignItems:'center', gap:12 },
-  stepperBtn:  { width:32, height:32, borderRadius:16, backgroundColor: C.primaryLight ?? '#D1FAE5', alignItems:'center', justifyContent:'center' },
-  stepperBtnText:{ fontFamily: F.bold, fontSize:18, color: C.primary, lineHeight:22 },
-  stepperVal:  { fontFamily: F.bold, fontSize:16, color: C.textPrimary, minWidth:28, textAlign:'center' },
+  // Error Alert box
+  errorBox: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: { fontFamily: F.medium, fontSize: 13, color: C.error, textAlign: "center" },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,9 +11,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useSignIn, useSignUp, useOAuth } from '@clerk/clerk-expo';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { getAuth, signInWithPhoneNumber, signOut, type FirebaseAuthTypes } from '@react-native-firebase/auth';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -21,23 +19,20 @@ import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
-
-WebBrowser.maybeCompleteAuthSession();
+import { getMe } from '../../services/userService';
+import { setFirebaseTokenResolver } from '../../services/apiClient';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'PhoneAuthScreen'>;
 
 const countries = [
   { code: '+91', flag: '🇮🇳', name: 'India' },
-  { code: '+1', flag: '🇺🇸', name: 'United States / Canada' },
+  { code: '+1',  flag: '🇺🇸', name: 'United States / Canada' },
   { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
 ];
 
-export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
-  const { signIn, isLoaded: isSignInLoaded, setActive } = useSignIn();
-  const { signUp, isLoaded: isSignUpLoaded } = useSignUp();
-  const { startOAuthFlow } = useOAuth({ strategy: 'oauth_google' });
+export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
+  const mode = route.params?.mode ?? 'signin';
 
-  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [countryModalVisible, setCountryModalVisible] = useState(false);
 
@@ -47,6 +42,9 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   const [showErrors,  setShowErrors]  = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [authError,   setAuthError]   = useState<string | null>(null);
+
+  // Stores the Firebase confirmation result after OTP is sent
+  const confirmationRef = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
 
   // Focus states for input styling
   const [isPhoneFocused, setIsPhoneFocused] = useState(false);
@@ -62,50 +60,24 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    if (!isSignInLoaded || !isSignUpLoaded || !signIn || !signUp) {
-      setAuthError('Auth services are initializing. Please wait.');
-      return;
-    }
-
     setLoading(true);
     const formattedPhone = `${selectedCountry.code}${sanitizedPhone}`;
 
     try {
-      if (activeTab === 'signin') {
-        const result = await signIn.create({
-          identifier: formattedPhone,
-        });
-
-        const firstFactor = result.supportedFirstFactors?.find(
-          (factor: any) => factor.strategy === 'phone_code'
-        );
-
-        if (!firstFactor) {
-          throw new Error('SMS verification not supported for this number.');
-        }
-
-        await signIn.prepareFirstFactor({
-          strategy: 'phone_code',
-          phoneNumberId: (firstFactor as any).phoneNumberId,
-        });
-
-        setCodeSent(true);
-        setShowErrors(false);
-      } else {
-        await signUp.create({
-          phoneNumber: formattedPhone,
-        });
-        await signUp.preparePhoneNumberVerification({ strategy: 'phone_code' });
-        setCodeSent(true);
-        setShowErrors(false);
-      }
+      // Firebase Native Phone Auth — sends SMS with OTP.
+      const confirmation = await signInWithPhoneNumber(getAuth(), formattedPhone);
+      confirmationRef.current = confirmation;
+      setCodeSent(true);
+      setShowErrors(false);
     } catch (err: any) {
-      console.error('[Clerk Auth Error]', err);
-      let userMsg = err.errors?.[0]?.message || 'Failed to send OTP.';
-      if (err.errors?.[0]?.code === 'form_identifier_not_found') {
-        userMsg = 'No account exists with this phone number. Please sign up instead.';
-      } else if (err.errors?.[0]?.code === 'form_identifier_exists') {
-        userMsg = 'An account already exists with this phone number. Please sign in instead.';
+      console.error('[Firebase Phone Auth Error]', err);
+      let userMsg = 'Failed to send OTP. Please try again.';
+      if (err.code === 'auth/invalid-phone-number') {
+        userMsg = 'Invalid phone number format. Please check and try again.';
+      } else if (err.code === 'auth/too-many-requests') {
+        userMsg = 'Too many attempts. Please wait a moment and try again.';
+      } else if (err.message) {
+        userMsg = err.message;
       }
       setAuthError(userMsg);
     } finally {
@@ -121,55 +93,63 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    if (!signIn || !signUp) {
-      setAuthError('Auth services are initializing. Please wait.');
+    if (!confirmationRef.current) {
+      setAuthError('Session expired. Please go back and request a new code.');
       return;
     }
 
     setLoading(true);
 
     try {
-      if (activeTab === 'signup') {
-        const completeSignUp = await signUp.attemptPhoneNumberVerification({
-          code: otp,
-        });
-        if (completeSignUp.status === 'complete') {
-          await setActive({ session: completeSignUp.createdSessionId });
-        } else {
-          setAuthError('Sign up verification incomplete. Please try again.');
-        }
-      } else {
-        const completeSignIn = await signIn.attemptFirstFactor({
-          strategy: 'phone_code',
-          code: otp,
-        });
-        if (completeSignIn.status === 'complete') {
-          await setActive({ session: completeSignIn.createdSessionId });
-        } else {
-          setAuthError('Sign in verification incomplete. Please try again.');
-        }
-      }
-    } catch (err: any) {
-      console.error('[Clerk Verification Error]', err);
-      setAuthError(err.errors?.[0]?.message || 'Invalid code. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Step 1: Confirm OTP — creates the Firebase session
+      const credential = await confirmationRef.current.confirm(otp);
+      const fbUser = credential?.user;
 
-  const handleGoogleAuth = async () => {
-    setLoading(true);
-    setAuthError(null);
-    try {
-      const { createdSessionId, setActive: setOAuthActive } = await startOAuthFlow({
-        redirectUrl: AuthSession.makeRedirectUri({ scheme: 'surestep' })
-      });
-      if (createdSessionId && setOAuthActive) {
-        await setOAuthActive({ session: createdSessionId });
+      if (!fbUser) {
+        setAuthError('Verification failed. Please try again.');
+        return;
+      }
+
+      // Step 2: Wire up token resolver immediately
+      setFirebaseTokenResolver(() => fbUser.getIdToken());
+
+      if (mode === 'signup') {
+        // Sign-up: OTP is confirmed. Firebase session is live.
+        // Navigate directly to RoleSelectionScreen — don't wait for onAuthStateChanged.
+        // RoleNavigator will also react to the session change, but the direct nav is faster.
+        navigation.navigate('RoleSelectionScreen');
+
+      } else {
+        // Sign-in: check if user exists in DB
+        try {
+          await getMe();
+          // Found — AuthContext.onAuthStateChanged will fire and set status = 'authenticated'
+          // RoleNavigator handles the navigation automatically
+        } catch (err: any) {
+          if (err.response?.status === 404) {
+            // Clean 404: this phone has never signed up
+            await signOut(getAuth());
+            setOtp('');
+            setCodeSent(false);
+            setAuthError('No account found for this number. Please create an account.');
+          } else {
+            // Network/server error — sign them out and show a useful message
+            await signOut(getAuth());
+            setOtp('');
+            setCodeSent(false);
+            setAuthError('Could not connect to the server. Please check your connection and try again.');
+          }
+        }
       }
     } catch (err: any) {
-      console.error('[Google OAuth Error]', err);
-      setAuthError(err.errors?.[0]?.message || err.message || 'Google authentication failed.');
+      console.error('[Firebase OTP Verification Error]', err);
+      let userMsg = 'Invalid code. Please try again.';
+      if (err.code === 'auth/invalid-verification-code') {
+        userMsg = 'Incorrect verification code. Please check and try again.';
+      } else if (err.code === 'auth/code-expired') {
+        userMsg = 'Code has expired. Please go back and request a new one.';
+      }
+      setAuthError(userMsg);
     } finally {
       setLoading(false);
     }
@@ -184,8 +164,13 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
       setCodeSent(false);
       setOtp('');
       setAuthError(null);
+      confirmationRef.current = null;
     } else {
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('WelcomeScreen');
+      }
     }
   };
 
@@ -204,17 +189,17 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
               style={styles.gradient}
             />
 
-            <ScrollView 
+            <ScrollView
               contentContainerStyle={[
                 styles.scrollContent,
                 {
                   paddingHorizontal: theme.spacing.lg,
                   paddingTop: theme.spacing.md,
                 }
-              ]} 
+              ]}
               keyboardShouldPersistTaps="handled"
             >
-              
+
               {/* TOP HEADER / BACK BUTTON */}
               <View style={styles.headerRow}>
                 <Pressable onPress={handleBack} style={styles.backButton}>
@@ -245,91 +230,25 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={[styles.brandTitle, { color: theme.colors.textPrimary }]}>
                 {codeSent
                   ? 'Enter verification code'
-                  : activeTab === 'signin'
-                    ? 'Sign in to SureStep'
-                    : 'Create your account'}
+                  : mode === 'signup' ? 'Create your account' : 'Sign in to SureStep'}
               </Text>
               <Text style={[styles.brandSubtitle, { color: theme.colors.textSecondary }]}>
                 {codeSent
                   ? `Enter the 6-digit code sent to ${selectedCountry.code} ${phoneNumber}`
-                  : activeTab === 'signin'
-                    ? 'Welcome back! Enter your phone to continue'
-                    : 'Enter your phone number to get started'}
+                  : mode === 'signup'
+                    ? 'Enter your phone number to get started'
+                    : 'Enter your phone number to receive a verification code'}
               </Text>
 
               {/* FORM AREA */}
               <View style={styles.formSection}>
-                {/* SIGNIN / SIGNUP SWITCHER (OUTSIDE CARD CONTAINER) */}
-                {!codeSent && (
-                  <View style={styles.folderTabRow}>
-                    <Pressable
-                      style={[
-                        styles.folderTab,
-                        activeTab === 'signin'
-                          ? {
-                              backgroundColor: theme.colors.surface,
-                              borderColor: theme.colors.borderSubtle,
-                              borderBottomColor: theme.colors.surface,
-                            }
-                          : {
-                              backgroundColor: 'transparent',
-                              borderColor: 'transparent',
-                            }
-                      ]}
-                      onPress={() => {
-                        setActiveTab('signin');
-                        setAuthError(null);
-                      }}
-                    >
-                      <Text style={[
-                        styles.folderTabText,
-                        activeTab === 'signin'
-                          ? { color: theme.colors.textPrimary, fontFamily: F.bold }
-                          : { color: theme.colors.textSecondary, fontFamily: F.medium }
-                      ]}>
-                        Sign In
-                      </Text>
-                    </Pressable>
 
-                    <Pressable
-                      style={[
-                        styles.folderTab,
-                        activeTab === 'signup'
-                          ? {
-                              backgroundColor: theme.colors.surface,
-                              borderColor: theme.colors.borderSubtle,
-                              borderBottomColor: theme.colors.surface,
-                            }
-                          : {
-                              backgroundColor: 'transparent',
-                              borderColor: 'transparent',
-                            }
-                      ]}
-                      onPress={() => {
-                        setActiveTab('signup');
-                        setAuthError(null);
-                      }}
-                    >
-                      <Text style={[
-                        styles.folderTabText,
-                        activeTab === 'signup'
-                          ? { color: theme.colors.textPrimary, fontFamily: F.bold }
-                          : { color: theme.colors.textSecondary, fontFamily: F.medium }
-                      ]}>
-                        Sign Up
-                      </Text>
-                    </Pressable>
-                  </View>
-                )}
-
-                {/* THE SEAMLESS FORM BUBBLE CARD */}
+                {/* THE FORM BUBBLE CARD */}
                 <View style={[
                   styles.formCard,
                   {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.borderSubtle,
-                    borderTopLeftRadius: !codeSent && activeTab === 'signin' ? 0 : 20,
-                    borderTopRightRadius: !codeSent && activeTab === 'signup' ? 0 : 20,
                   }
                 ]}>
                   {!codeSent ? (
@@ -411,7 +330,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
                           <>
-                            <Text style={styles.loginText}>Continue</Text>
+                            <Text style={styles.loginText}>Send Code</Text>
                             <Text style={styles.buttonArrow}>▸</Text>
                           </>
                         )}
@@ -447,6 +366,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           onFocus={() => setIsOtpFocused(true)}
                           onBlur={() => setIsOtpFocused(false)}
                           onChangeText={(t) => { setOtp(t); setAuthError(null); }}
+                          autoFocus
                         />
                       </View>
                       {otpInvalid && <Text style={[styles.errorText, { color: theme.colors.error }]}>OTP must be exactly 6 digits.</Text>}
@@ -476,7 +396,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
                           <>
-                            <Text style={styles.loginText}>Continue</Text>
+                            <Text style={styles.loginText}>Verify & Continue</Text>
                             <Text style={styles.buttonArrow}>▸</Text>
                           </>
                         )}
@@ -485,48 +405,21 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                   )}
                 </View>
 
-                {/* DIVIDER, GOOGLE BUTTON & TERMS (rendered outside the bubble) */}
+                {/* TERMS */}
                 {!codeSent && (
-                  <>
-                    {/* DIVIDER */}
-                    <View style={styles.dividerRow}>
-                      <View style={[styles.dividerLine, { backgroundColor: theme.colors.borderSubtle }]} />
-                      <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>or</Text>
-                      <View style={[styles.dividerLine, { backgroundColor: theme.colors.borderSubtle }]} />
-                    </View>
-
-                    {/* GOOGLE BUTTON */}
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.googleButton,
-                        {
-                          borderColor: theme.colors.borderSubtle,
-                          backgroundColor: theme.colors.surface
-                        },
-                        pressed && { opacity: 0.8 }
-                      ]}
-                      onPress={() => void handleGoogleAuth()}
-                      disabled={loading}
-                    >
-                      <Text style={styles.googleIconText}>G</Text>
-                      <Text style={[styles.googleText, { color: theme.colors.textPrimary }]}>Google</Text>
-                    </Pressable>
-
-                    {/* TERMS AND CONDITIONS */}
-                    <Text style={[styles.secondaryText, { color: theme.colors.textSecondary, marginTop: 24 }]}>
-                      By signing up or signing in, you agree to our{"\n"}
-                      <Text style={[styles.textWithLink, { color: theme.colors.accent }]}>Terms and Conditions</Text>
-                      {" and "}
-                      <Text style={[styles.textWithLink, { color: theme.colors.accent }]}>Privacy Policy</Text>
-                    </Text>
-                  </>
+                  <Text style={[styles.secondaryText, { color: theme.colors.textSecondary, marginTop: 24 }]}>
+                    By signing in, you agree to our{"\n"}
+                    <Text style={[styles.textWithLink, { color: theme.colors.accent }]}>Terms and Conditions</Text>
+                    {" and "}
+                    <Text style={[styles.textWithLink, { color: theme.colors.accent }]}>Privacy Policy</Text>
+                  </Text>
                 )}
               </View>
 
               {/* FOOTER */}
               <View style={[styles.footer, { borderTopColor: theme.colors.borderSubtle }]}>
                 <Text style={[styles.footerSecured, { color: theme.colors.textSecondary }]}>
-                  Secured by <Text style={[styles.clerkBold, { color: theme.colors.textPrimary }]}>clerk</Text>
+                  Secured by <Text style={[styles.firebaseBold, { color: theme.colors.textPrimary }]}>Firebase</Text>
                 </Text>
                 <View style={styles.footerLinks}>
                   <Text style={[styles.footerLink, { color: theme.colors.textSecondary }]}>Help</Text>
@@ -609,10 +502,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backButtonText: {
-    fontSize: 24,
-    lineHeight: 28,
-  },
   logoContainer: {
     alignItems: 'center',
     marginBottom: 24,
@@ -653,24 +542,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
     marginBottom: 20,
-  },
-  folderTabRow: {
-    flexDirection: 'row',
-    marginBottom: -1,
-    zIndex: 2,
-    width: '100%',
-  },
-  folderTab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderWidth: 1,
-  },
-  folderTabText: {
-    fontSize: 15,
   },
   phoneInputRow: {
     flexDirection: 'row',
@@ -773,38 +644,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 18,
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
-    paddingHorizontal: 12,
-    fontFamily: F.medium,
-  },
-  googleButton: {
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  googleIconText: {
-    fontFamily: F.bold,
-    fontSize: 18,
-    color: '#4285F4',
-  },
-  googleText: {
-    fontFamily: F.bold,
-    fontSize: 15,
-  },
   secondaryText: {
     fontFamily: F.medium,
     fontSize: 12,
@@ -826,7 +665,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: F.regular,
   },
-  clerkBold: {
+  firebaseBold: {
     fontFamily: F.bold,
   },
   footerLinks: {

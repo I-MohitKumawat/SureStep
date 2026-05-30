@@ -1,14 +1,14 @@
-# SureStep — Clerk Auth & Profile Implementation: Backend Task Flow
+# SureStep — Firebase Auth & Profile Implementation: Backend Task Flow
 
 > This document is your **single source of truth** for the backend implementation.
 > It is based on two sources:
 > - `docs/SureStep_TDD_FullVision.docx` — the full product specification (API contract, schemas, routes)
-> - `AI_GUIDE.md` — the learning approach and Clerk migration strategy
+> - `AI_GUIDE.md` — the learning approach and Firebase migration strategy
 >
 > **⚠️ Important conflict resolved:** The TDD was written with a custom OTP + JWT session system.
-> The `AI_GUIDE.md` decision is to **replace that with Clerk** as the auth provider.
+> The decision is to **replace that with Firebase Auth** as the auth provider.
 > This means `otp_requests` and `auth_sessions` tables are **removed** (you already did this ✅).
-> The TDD's `/auth/otp/*` and `/auth/refresh` routes are **replaced** by Clerk on the frontend.
+> The TDD's `/auth/otp/*` and `/auth/refresh` routes are **replaced** by Firebase Auth on the frontend.
 > Everything else in the TDD (routes, schemas, response shapes) stays exactly the same.
 
 ---
@@ -21,7 +21,7 @@ You have already updated your schema. Here is what your `users` table must now l
 ```sql
 CREATE TABLE users (
   id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_id            VARCHAR(255)  NOT NULL UNIQUE,   -- ✅ Added. Links Clerk identity to our DB.
+  firebase_uid        VARCHAR(255)  NOT NULL UNIQUE,   -- ✅ Added. Links Firebase identity to our DB.
   phone               VARCHAR(20)   NOT NULL UNIQUE,   -- E.164 format: +919876543210
   name                VARCHAR(100)  NOT NULL,
   date_of_birth       DATE,
@@ -74,7 +74,7 @@ or on failure:
 {
   "success": false,
   "data": null,
-  "error": { "code": "USER_NOT_FOUND", "message": "No user found with that clerk_id" }
+  "error": { "code": "USER_NOT_FOUND", "message": "No user found with that firebase_uid" }
 }
 ```
 
@@ -86,39 +86,40 @@ In development: `http://localhost:3000/api/v1`
 ## ✅ Phase 0: Database Preparation — COMPLETE ✅
 
 You have already:
-- [x] Added `clerk_id VARCHAR(255) NOT NULL UNIQUE` to the `users` table
-- [x] Added `CREATE INDEX idx_users_clerk_id ON users (clerk_id);`
-- [x] Removed `otp_requests` table (Clerk handles OTPs now)
-- [x] Removed `auth_sessions` table (Clerk handles sessions now)
+- [x] Added `firebase_uid VARCHAR(255) NOT NULL UNIQUE` to the `users` table
+- [x] Added `CREATE INDEX idx_users_firebase_uid ON users (firebase_uid);`
+- [x] Removed `otp_requests` table (Firebase handles OTPs now)
+- [x] Removed `auth_sessions` table (Firebase handles sessions now)
 
 ---
 
-## 🔐 Phase 1: Setup Clerk Backend SDK & Middleware
+## 🔐 Phase 1: Setup Firebase Admin SDK & Middleware
 
 > **Install this in your `backend/` folder, not the root of the project!**
-> The install previously failed because `npm install @clerk/backend` was run from the root `/c/dev/surestep`.
 > Navigate into `backend/` first.
 
 ### Your Tasks:
 1. **Install the SDK** in `backend/`:
    ```bash
    cd backend
-   npm install @clerk/backend
+   npm install firebase-admin
    ```
 2. **Add to `backend/.env`:**
    ```env
-   CLERK_SECRET_KEY=sk_test_...
+   FIREBASE_PROJECT_ID=your-project-id
+   FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...
+   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
    DATABASE_URL=postgresql://user:password@localhost:5432/surestep
    PORT=3000
    NODE_ENV=development
    ```
 3. **Create the file:** `backend/shared/middleware/authenticate.ts`
-   - This is the "scanning machine" (from our analogy) that reads the passport Clerk gave the user.
+   - This is the "scanning machine" that reads the passport Firebase gave the user.
    - It must:
      - Extract the `Authorization: Bearer <token>` header
-     - Verify the token using `@clerk/backend`'s `verifyToken()` function
+     - Verify the token using `firebase-admin`'s `verifyIdToken()` function
      - If no token or invalid → return `401 Unauthorized`
-     - If valid → look up the user in `users` table by `clerk_id`
+     - If valid → look up the user in `users` table by `firebase_uid`
      - If user not found → return `404` with error code `USER_NOT_PROVISIONED`
      - If found → attach user to `req.user` and call `next()`
 
@@ -128,7 +129,7 @@ You have already:
 
 > **TDD Route:** `POST /api/v1/auth/provision` *(This replaces the TDD's OTP verify route)*
 
-When a user signs up via Clerk on the frontend, they exist in Clerk's system but **not in our PostgreSQL database yet**. The frontend must call this endpoint once after first sign-in.
+When a user signs up via Firebase on the frontend, they exist in Firebase's system but **not in our PostgreSQL database yet**. The frontend must call this endpoint once after first sign-in.
 
 ### Your Tasks:
 1. **Create:** `backend/modules/auth/auth.router.ts`
@@ -136,9 +137,9 @@ When a user signs up via Clerk on the frontend, they exist in Clerk's system but
 3. **Create:** `backend/modules/auth/auth.service.ts`
 
 **The route:** `POST /api/v1/auth/provision`
-- Uses the `authenticate` middleware (which verifies the Clerk token)
-- Frontend must send in the body: `{ phone, name, role }` — the basic info Clerk doesn't store in our DB
-- The service checks: does a `users` row with this `clerk_id` already exist?
+- Uses the `authenticate` middleware (which verifies the Firebase token)
+- Frontend must send in the body: `{ phone, name, role }` — the basic info Firebase doesn't store in our DB
+- The service checks: does a `users` row with this `firebase_uid` already exist?
   - **Yes** → return existing user (idempotent — safe to call multiple times)
   - **No** → `INSERT` a new row into `users`, then `INSERT` a row into `user_roles`
 - Returns the full user object in the TDD response envelope
@@ -162,7 +163,7 @@ When a user signs up via Clerk on the frontend, they exist in Clerk's system but
 **Route 2:** `PATCH /api/v1/users/me`
 - Uses `authenticate` middleware
 - Allowed editable fields (from TDD): `name`, `preferred_language`, `city`, `date_of_birth`
-- `phone` and `clerk_id` are **NOT** editable via this route
+- `phone` and `firebase_uid` are **NOT** editable via this route
 
 **Route 3:** `PUT /api/v1/profiles/patient` (for the patient profile form)
 - Updates their row in `patient_profiles` table
@@ -188,13 +189,13 @@ app.use('/api/v1/profiles', profilesRouter);
 
 ## 🔌 Phase 5: Frontend Integration
 
-After all backend routes are manually tested with Postman:
+After all backend routes are manually tested:
 
-1. Install Clerk Expo SDK in the React Native `app/` folder
-2. Wrap the app in `<ClerkProvider>`
-3. Build `<SignIn />` and `<SignUp />` screens using Clerk's components
+1. Install Firebase Auth client SDK in the React Native folder
+2. Configure Firebase in the mobile app
+3. Build SignIn and SignUp screens using Firebase Auth Phone verification
 4. Create an API utility in `app/api/client.ts` that:
-   - Gets the token: `const token = await getToken()`
+   - Gets the token: `const token = await user.getIdToken()`
    - Attaches it: `Authorization: Bearer ${token}`
 5. Call `POST /api/v1/auth/provision` right after first sign-in
 6. Build Profile screens that call `GET /api/v1/users/me` and `PATCH /api/v1/users/me`
@@ -218,13 +219,13 @@ backend/modules/auth/
 
 | TDD Says | What We Do Instead | Why |
 |---|---|---|
-| `POST /auth/otp/request` | ❌ Not implementing | Clerk handles OTPs on the frontend |
-| `POST /auth/otp/verify` | ❌ Not implementing | Clerk handles verification |
-| `POST /auth/refresh` | ❌ Not implementing | Clerk handles token refresh |
-| `otp_requests` table | ❌ Removed | Clerk's responsibility |
-| `auth_sessions` table | ❌ Removed | Clerk's responsibility |
+| `POST /auth/otp/request` | ❌ Not implementing | Firebase handles OTPs on the frontend |
+| `POST /auth/otp/verify` | ❌ Not implementing | Firebase handles verification |
+| `POST /auth/refresh` | ❌ Not implementing | Firebase handles token refresh |
+| `otp_requests` table | ❌ Removed | Firebase's responsibility |
+| `auth_sessions` table | ❌ Removed | Firebase's responsibility |
 | `GET /users/me` | ✅ Keep exactly as TDD says | Same route, same response |
 | `PATCH /users/me` | ✅ Keep exactly as TDD says | Same route, same response |
 | `PUT /profiles/patient` | ✅ Keep exactly as TDD says | Same route, same response |
 | `PUT /profiles/caregiver` | ✅ Keep exactly as TDD says | Same route, same response |
-| Bearer JWT in header | ✅ Keep — now it's Clerk's JWT | Same mechanism, different issuer |
+| Bearer JWT in header | ✅ Keep — now it's Firebase's ID Token | Same mechanism, different issuer |

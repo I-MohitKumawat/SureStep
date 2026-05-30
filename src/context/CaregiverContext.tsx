@@ -14,7 +14,7 @@ type CaregiverContextValue = {
   confirmedCaregiver:    CaregiverListing | null;
   loading:               boolean;
   setConfirmedCaregiver: (c: CaregiverListing | null, patientPhone: string, patientName?: string) => Promise<void>;
-  reloadCaregiver:       (patientPhone: string) => Promise<void>;
+  reloadCaregiver:       (patientPhone: string, force?: boolean) => Promise<void>;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -30,23 +30,31 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
   /**
    * Sync context state with latest DB record.
    */
-  const reloadCaregiver = useCallback(async (patientPhone: string) => {
-    if (!patientPhone) {
-      setConfirmedCaregiverState(null);
-      return;
-    }
+  const reloadCaregiver = useCallback(
+    async (patientPhone: string, force = false) => {
+      if (!patientPhone) {
+        setConfirmedCaregiverState(null);
+        return;
+      }
 
-    setLoading(true);
-    try {
-      const caregiver = await fetchConfirmedCaregiver(patientPhone);
-      setConfirmedCaregiverState(caregiver);
-    } catch (error) {
-      console.warn('[CaregiverContext] reloadCaregiver failed:', error);
-      setConfirmedCaregiverState(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      // If we already have the caregiver, skip API fetch unless forced
+      if (confirmedCaregiver && !force) {
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const caregiver = await fetchConfirmedCaregiver(patientPhone);
+        setConfirmedCaregiverState(caregiver);
+      } catch (error) {
+        console.warn('[CaregiverContext] reloadCaregiver failed:', error);
+        setConfirmedCaregiverState(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [confirmedCaregiver],
+  );
 
   /**
    * Confirm or remove a caregiver link.

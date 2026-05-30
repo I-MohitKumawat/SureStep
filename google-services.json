@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "637637928685",
+    "project_id": "sure-step-de38f",
+    "storage_bucket": "sure-step-de38f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:637637928685:android:31bb1d7e58878de19f8ee4",
+        "android_client_info": {
+          "package_name": "com.anonymous.surestep"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBm6Xr8lpFcogjdIMpNdAZaDldeHfSpekE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

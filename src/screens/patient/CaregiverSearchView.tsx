@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
+import { searchCaregivers } from '../../services/relationshipService';
 
 export type CaregiverListing = {
   id: string; name: string; specialty: string; patients: number;
@@ -73,17 +74,37 @@ export const CaregiverSearchView: React.FC<Props> = ({ onSelect }) => {
   const [error,      setError]      = useState<string | null>(null);
 
   React.useEffect(() => {
-    void (async () => {
-      setLoading(true); setError(null);
+    let active = true;
+    
+    const fetchListings = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        // REMOVED: Supabase migration to Express/PostgreSQL
-        console.warn('[CaregiverSearchView] Search: Supabase removed, returning empty array');
-        setCaregivers([]);
-        setLoading(false);
-      } catch { setError('Network error. Check your connection.'); }
-      setLoading(false);
-    })();
-  }, []);
+        const results = await searchCaregivers(query);
+        if (active) {
+          setCaregivers(results);
+        }
+      } catch (err: any) {
+        if (active) {
+          console.warn('[CaregiverSearchView] Search failed:', err);
+          setError('Failed to fetch caregivers. Please try again.');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      void fetchListings();
+    }, 300); // 300ms debounce
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   const filtered = caregivers.filter(c => {
     const q = query.toLowerCase();

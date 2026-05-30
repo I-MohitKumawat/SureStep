@@ -1,207 +1,292 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+/**
+ * SureStep — src/screens/auth/RoleSelectionScreen.tsx
+ * Step 1 of the onboarding wizard.
+ * Patient: 2 steps total  (this = Step 1, Profile = Step 2)
+ * Caregiver: 3 steps total (this = Step 1, Basic Info = Step 2, Professional = Step 3)
+ */
+import React, { useState } from 'react';
+import {
+  Pressable, ScrollView, StyleSheet, Text, View,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'RoleSelectionScreen'>;
 
+// ─── Step Indicator ──────────────────────────────────────────────────────────
+function StepIndicator({
+  current, total, labels,
+}: { current: number; total: number; labels: string[] }) {
+  return (
+    <View style={si.wrap}>
+      {Array.from({ length: total }, (_, i) => {
+        const idx    = i + 1;
+        const done   = idx < current;
+        const active = idx === current;
+        return (
+          <React.Fragment key={idx}>
+            <View style={si.item}>
+              <View style={[si.circle, done && si.circleDone, active && si.circleActive]}>
+                {done
+                  ? <Text style={si.check}>✓</Text>
+                  : <Text style={[si.num, active && si.numActive, !active && !done && si.numMuted]}>
+                      {idx}
+                    </Text>
+                }
+              </View>
+              <Text style={[si.label, active && si.labelActive, done && si.labelDone]}>
+                {labels[i]}
+              </Text>
+            </View>
+            {i < total - 1 && (
+              <View style={[si.dash, done && si.dashDone]} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Role Card ───────────────────────────────────────────────────────────────
+function RoleCard({
+  emoji, title, description, selected, onPress,
+}: {
+  emoji: string; title: string; description: string; selected: boolean; onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        rc.card,
+        selected && rc.cardSelected,
+        pressed && rc.cardPressed,
+      ]}
+    >
+      <View style={[rc.bubble, selected && rc.bubbleSelected]}>
+        <Text style={rc.emoji}>{emoji}</Text>
+      </View>
+
+      <View style={rc.textWrap}>
+        <Text style={[rc.title, selected && rc.titleSelected]}>{title}</Text>
+        <Text style={rc.desc}>{description}</Text>
+      </View>
+
+      <View style={[rc.radio, selected && rc.radioSelected]}>
+        {selected && <View style={rc.radioInner} />}
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
 export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
-  const [selectedRole, setSelectedRole] = React.useState<'CAREGIVER' | 'PATIENT' | null>(null);
+  const { firebaseUser } = useAuth();
+  const [selectedRole, setSelectedRole] = useState<'CAREGIVER' | 'PATIENT' | null>(null);
+
+  const totalSteps  = selectedRole === 'CAREGIVER' ? 3 : 2;
+  const stepLabels  = selectedRole === 'CAREGIVER'
+    ? ['Your Role', 'Basic Info', 'Professional']
+    : ['Your Role', 'Profile Info'];
 
   const proceed = () => {
     if (!selectedRole) return;
     navigation.navigate('ProfileSetupScreen', { role: selectedRole });
   };
 
+  const phoneDisplay = firebaseUser?.phoneNumber ?? '';
+
   return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.container}>
-      {/* Teal angled accent at bottom */}
-      <View pointerEvents="none" style={styles.bottomShapeWrap}>
-        <View style={styles.bottomShape} />
-      </View>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={s.screen}>
+      {() => (
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={s.header}>
+            <Text style={s.headerTitle}>Welcome to SureStep</Text>
+            {phoneDisplay ? (
+              <Text style={s.headerSub}>{phoneDisplay}</Text>
+            ) : null}
+          </View>
 
-      <View style={styles.content}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </Pressable>
+          {/* Step indicator */}
+          <StepIndicator
+            current={1}
+            total={totalSteps}
+            labels={stepLabels}
+          />
 
-        {/* Logo */}
-        <View style={styles.logoBox}>
-          <Text style={styles.logoIcon}>👣</Text>
-        </View>
-        <Text style={styles.brand}>SURE STEP</Text>
+          {/* Hero */}
+          <View style={s.hero}>
+            <Text style={s.heroTitle}>Who are you?</Text>
+            <Text style={s.heroSub}>
+              Select your profile type to get started.
+            </Text>
+          </View>
 
-        <Text style={styles.title}>Who are you?</Text>
-        <Text style={styles.subtitle}>Select your role to continue.</Text>
+          {/* Role cards */}
+          <View style={s.cards}>
+            <RoleCard
+              emoji="👵"
+              title="I'm a Patient"
+              description="Track daily routines and stay connected."
+              selected={selectedRole === 'PATIENT'}
+              onPress={() => setSelectedRole('PATIENT')}
+            />
+            <RoleCard
+              emoji="👩‍⚕️"
+              title="I'm a Caregiver"
+              description="Manage patients and monitor safety."
+              selected={selectedRole === 'CAREGIVER'}
+              onPress={() => setSelectedRole('CAREGIVER')}
+            />
+          </View>
 
-        <View style={styles.roleCards}>
+          {/* CTA */}
           <Pressable
-            style={({ pressed }) => [
-              styles.roleCard,
-              selectedRole === 'CAREGIVER' && styles.roleCardSelected,
-              pressed && styles.roleCardPressed,
-            ]}
-            onPress={() => setSelectedRole('CAREGIVER')}
-          >
-            <Text style={styles.roleEmoji}>👩‍⚕️ </Text>
-            <View style={styles.roleTextWrap}>
-              <Text style={[styles.roleTitle, selectedRole === 'CAREGIVER' && styles.roleTitleSelected]}>
-                Caregiver
-              </Text>
-              <Text style={styles.roleDesc}>Monitor and manage patient care</Text>
-            </View>
-            <View style={[styles.radioOuter, selectedRole === 'CAREGIVER' && styles.radioOuterSelected]}>
-              {selectedRole === 'CAREGIVER' && <View style={styles.radioInner} />}
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.roleCard,
-              selectedRole === 'PATIENT' && styles.roleCardSelected,
-              pressed && styles.roleCardPressed,
-            ]}
-            onPress={() => setSelectedRole('PATIENT')}
-          >
-            <Text style={styles.roleEmoji}>👵</Text>
-            <View style={styles.roleTextWrap}>
-              <Text style={[styles.roleTitle, selectedRole === 'PATIENT' && styles.roleTitleSelected]}>
-                Patient
-              </Text>
-              <Text style={styles.roleDesc}>Track your daily routine</Text>
-            </View>
-            <View style={[styles.radioOuter, selectedRole === 'PATIENT' && styles.radioOuterSelected]}>
-              {selectedRole === 'PATIENT' && <View style={styles.radioInner} />}
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.proceedButton,
-              !selectedRole && styles.proceedButtonDisabled,
-              pressed && selectedRole ? styles.proceedButtonPressed : null,
-            ]}
             onPress={proceed}
             disabled={!selectedRole}
+            style={({ pressed }) => [
+              s.cta,
+              !selectedRole && s.ctaDisabled,
+              pressed && selectedRole && s.ctaPressed,
+            ]}
           >
-            <Text style={styles.proceedText}>Continue</Text>
+            <Text style={s.ctaText}>
+              {selectedRole
+                ? `Next: ${selectedRole === 'PATIENT' ? 'profile info' : 'basic info'}  ›`
+                : 'Select a role to continue'}
+            </Text>
           </Pressable>
-        </View>
-      </View>
+
+          {/* Back link */}
+          <Pressable
+            onPress={() => navigation.navigate('WelcomeScreen')}
+            style={s.backBtn}
+          >
+            <Text style={s.backText}>← Back to Welcome</Text>
+          </Pressable>
+        </ScrollView>
+      )}
     </ScreenContainer>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+// ─── Step Indicator Styles ────────────────────────────────────────────────────
+const si = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginVertical: 24,
+    paddingHorizontal: 8,
+  },
+  item: { alignItems: 'center', gap: 6, width: 72 },
 
-  bottomShapeWrap: {
-    position: 'absolute',
-    left: 0, right: 0, bottom: 0,
-    height: 220,
-    overflow: 'hidden',
-  },
-  bottomShape: {
-    position: 'absolute',
-    left: -40, right: -40, bottom: -80,
-    height: 220,
-    transform: [{ rotate: '-7deg' }],
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    backgroundColor: C.primaryLight,
-  },
-
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginTop: 16,
-    marginBottom: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-  },
-  backButtonText: {
-    fontFamily: F.semiBold,
-    fontSize: 15,
-    color: C.textSecondary,
-  },
-
-  logoBox: {
-    marginTop: 12,
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: C.primaryLight,
+  circle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: C.borderMid,
+    backgroundColor: '#F9FAFB',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
   },
-  logoIcon: { fontSize: 30 },
-  brand: {
-    fontFamily: F.extraBold,
-    fontSize: 15,
-    color: C.textPrimary,
-    letterSpacing: 2.8,
-    marginBottom: 32,
+  circleActive: {
+    borderColor: C.primary,
+    backgroundColor: C.primary,
+  },
+  circleDone: {
+    borderColor: C.primary,
+    backgroundColor: C.primary,
   },
 
-  title: {
-    fontFamily: F.bold,
-    fontSize: 26,
-    color: C.textPrimary,
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  subtitle: {
+  check:     { fontFamily: F.bold, fontSize: 14, color: '#fff' },
+  num:       { fontFamily: F.bold, fontSize: 14, color: C.textMuted },
+  numActive: { color: '#fff' },
+  numMuted:  { color: C.textMuted },
+
+  label: {
     fontFamily: F.regular,
-    fontSize: 14,
-    color: C.textSecondary,
+    fontSize: 10,
+    color: C.textMuted,
     textAlign: 'center',
-    marginBottom: 28,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
+  labelActive: { color: C.primary, fontFamily: F.semiBold },
+  labelDone:   { color: C.primary },
 
-  roleCards: { width: '100%', maxWidth: 400, gap: 14 },
+  dash: {
+    flex: 1,
+    height: 2,
+    backgroundColor: C.border,
+    marginTop: 17,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: C.borderMid,
+  },
+  dashDone: { borderColor: C.primary, backgroundColor: C.primary },
+});
 
-  roleCard: {
+// ─── Role Card Styles ─────────────────────────────────────────────────────────
+const rc = StyleSheet.create({
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: C.surface,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1.5,
     borderColor: C.border,
     gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
-  roleCardSelected: {
+  cardSelected: {
     borderColor: C.primary,
-    backgroundColor: C.primaryLight,
+    backgroundColor: '#F0FBF8',
   },
-  roleCardPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  cardPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
 
-  roleEmoji: { fontSize: 28 },
-  roleTextWrap: { flex: 1 },
-  roleTitle: {
-    fontFamily: F.bold,
-    fontSize: 17,
-    color: C.textPrimary,
+  bubble: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  roleTitleSelected: { color: C.primary },
-  roleDesc: {
+  bubbleSelected: { backgroundColor: C.primaryLight },
+  emoji: { fontSize: 26 },
+
+  textWrap: { flex: 1 },
+  title: {
+    fontFamily: F.bold,
+    fontSize: 16,
+    color: C.textPrimary,
+    marginBottom: 3,
+  },
+  titleSelected: { color: C.primary },
+  desc: {
     fontFamily: F.regular,
     fontSize: 13,
     color: C.textSecondary,
-    marginTop: 2,
+    lineHeight: 18,
   },
 
-  radioOuter: {
+  radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -210,31 +295,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOuterSelected: { borderColor: C.primary },
+  radioSelected: { borderColor: C.primary },
   radioInner: {
     width: 11,
     height: 11,
     borderRadius: 6,
     backgroundColor: C.primary,
   },
+});
 
-  proceedButton: {
-    marginTop: 8,
+// ─── Screen Styles ────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.surface },
+  scroll: { paddingHorizontal: 24, paddingBottom: 48 },
+
+  header: { paddingTop: 16, marginBottom: 4 },
+  headerTitle: {
+    fontFamily: F.extraBold,
+    fontSize: 22,
+    color: C.textPrimary,
+  },
+  headerSub: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textSecondary,
+    marginTop: 2,
+  },
+
+  hero: { alignItems: 'center', marginVertical: 20 },
+  heroTitle: {
+    fontFamily: F.extraBold,
+    fontSize: 26,
+    color: C.textPrimary,
+    marginBottom: 8,
+  },
+  heroSub: {
+    fontFamily: F.regular,
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+
+  cards: { gap: 14, marginBottom: 32 },
+
+  cta: {
+    height: 56,
+    borderRadius: 28,
     backgroundColor: C.primary,
-    borderRadius: 14,
-    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: C.primary,
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
+    shadowRadius: 14,
     elevation: 6,
+    marginBottom: 16,
   },
-  proceedButtonDisabled: { opacity: 0.45, shadowOpacity: 0 },
-  proceedButtonPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
-  proceedText: {
+  ctaDisabled: { backgroundColor: C.borderMid, shadowOpacity: 0 },
+  ctaPressed:  { opacity: 0.88, transform: [{ scale: 0.98 }] },
+  ctaText: {
     fontFamily: F.bold,
-    fontSize: 17,
+    fontSize: 16,
     color: C.primaryText,
+    letterSpacing: 0.3,
   },
+
+  backBtn: { alignItems: 'center', paddingVertical: 8 },
+  backText: { fontFamily: F.regular, fontSize: 14, color: C.textMuted },
 });

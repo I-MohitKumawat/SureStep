@@ -11,7 +11,7 @@
 1. [Project Philosophy](#1-project-philosophy)
 2. [Teaching Methodology](#2-teaching-methodology)
 3. [Implementation Workflow](#3-implementation-workflow)
-4. [Auth Architecture Plan (Clerk)](#4-auth-architecture-plan-clerk)
+4. [Auth Architecture Plan (Firebase)](#4-auth-architecture-plan-firebase)
 5. [Debugging Workflow](#5-debugging-workflow)
 6. [Explanation Standards](#6-explanation-standards)
 7. [Backend Learning Goals](#7-backend-learning-goals)
@@ -120,7 +120,7 @@ Client (React Native)
   → HTTP Request
     → Express Server
       → CORS Middleware
-        → Auth Middleware (Clerk token verification)
+        → Auth Middleware (Firebase token verification)
           → Validation Middleware (Zod schema check)
             → Route Handler
               → Service Layer
@@ -161,14 +161,14 @@ Before writing a handler, map every place it can fail:
 
 ---
 
-## 4. Auth Architecture Plan (Clerk)
+## 4. Auth Architecture Plan (Firebase)
 
 ### Overview
 
-This project uses **Clerk** as the authentication provider. Clerk handles:
+This project uses **Firebase Auth** as the authentication provider. Firebase handles:
 - User sign-up, sign-in, session management on the **frontend**
-- Issues a **JWT (session token)** that the frontend sends with every API request
-- The **backend verifies this token** using Clerk's public key — it does NOT issue its own JWTs
+- Issues a **Firebase ID Token (JWT)** that the frontend sends with every API request
+- The **backend verifies this token** using the Firebase Admin SDK — it does NOT issue its own JWTs
 
 This is a critical distinction. Understand it fully before implementing.
 
@@ -176,62 +176,62 @@ This is a critical distinction. Understand it fully before implementing.
 
 | Responsibility | Owner |
 |---|---|
-| User registration / sign-in UI | Clerk (frontend SDK) |
-| Session token issuance | Clerk |
-| Token verification on API requests | Our backend (using `@clerk/backend`) |
+| User registration / sign-in UI | Firebase (frontend SDK) |
+| Session token issuance | Firebase |
+| Token verification on API requests | Our backend (using `firebase-admin`) |
 | Role assignment (PATIENT / CAREGIVER / etc.) | Our database (`user_roles` table) |
 | Profile data (name, photo, DOB, etc.) | Our database (`users`, `patient_profiles`, `caregiver_profiles`) |
-| Linking Clerk identity to our DB record | `clerk_id` foreign key on `users` table |
+| Linking Firebase identity to our DB record | `firebase_uid` foreign key on `users` table |
 
 ### The Identity Bridge
 
-When a user first authenticates through Clerk and hits our backend for the first time, the backend must:
+When a user first authenticates through Firebase and hits our backend for the first time, the backend must:
 
-1. Extract the Clerk user ID from the verified token (`sub` claim, e.g., `user_abc123`)
-2. Check if a `users` row already exists with that `clerk_id`
+1. Extract the Firebase UID from the verified token (`uid` claim, e.g., `abc123XYZ`)
+2. Check if a `users` row already exists with that `firebase_uid`
 3. If not → create a new `users` row (this is called **user provisioning**)
 4. Return the internal user record to the frontend
 
-This provisioning step is the bridge between Clerk's identity system and our database's identity system.
+This provisioning step is the bridge between Firebase's identity system and our database's identity system.
 
 ### Auth Flow (Full)
 
 ```
 [React Native App]
-  1. User signs in via Clerk's <SignIn /> component
-  2. Clerk issues a session token (JWT)
-  3. App stores token in Clerk's secure session
+  1. User signs in via Firebase Auth (e.g., Phone OTP)
+  2. Firebase issues an ID token (JWT)
+  3. App stores/manages session in secure storage
 
 [API Request]
-  4. App calls getToken() from Clerk SDK
+  4. App retrieves the ID token from Firebase Client SDK
   5. App attaches token in Authorization header:
-     Authorization: Bearer <clerk_jwt>
+     Authorization: Bearer <firebase_jwt>
 
 [Express Backend]
   6. Request hits CORS middleware
   7. Request hits Auth Middleware:
      a. Extracts Bearer token from header
-     b. Calls Clerk's verifyToken() with the token
-     c. Gets back decoded payload: { sub: 'user_abc', ... }
-     d. Looks up user in our DB by clerk_id
+     b. Calls Firebase Admin's verifyIdToken() with the token
+     c. Gets back decoded payload: { uid: 'abc123XYZ', ... }
+     d. Looks up user in our DB by firebase_uid
      e. Attaches our internal user object to req.user
   8. Route handler executes with req.user available
   9. Response sent back
 
 [On Token Expiry]
-  10. Clerk SDK automatically refreshes the session token
+  10. Firebase Client SDK automatically refreshes the ID token
   11. No action needed from our backend
 ```
 
 ### Auth Middleware Responsibilities
 
-The auth middleware (`backend/shared/middleware/auth.ts`) must:
+The auth middleware (`backend/shared/middleware/authenticate.ts`) must:
 
 - Extract the `Authorization: Bearer <token>` header
 - Return `401 Unauthorized` if the header is missing or malformed
-- Call Clerk's `verifyToken()` function
+- Call Firebase Admin's `verifyIdToken()` function
 - Return `401` if the token is invalid or expired
-- Look up `req.user` from our `users` table using `clerk_id`
+- Look up `req.user` from our `users` table using `firebase_uid`
 - Return `404` with a specific error code if the user is not provisioned yet (first-time user)
 - Attach `req.user` to the Express request object for downstream use
 
@@ -250,7 +250,7 @@ A separate middleware for role enforcement (`backend/shared/middleware/requireRo
 router
   .route('/patients/:patientId/routines')
   .get(
-    authenticate,              // verify Clerk token, populate req.user
+    authenticate,              // verify Firebase token, populate req.user
     requireRole(['CAREGIVER']), // only caregivers can call this
     validateParams(schema),    // validate :patientId is a valid UUID
     routineController.list     // handler
@@ -277,17 +277,17 @@ When a user updates their profile:
 
 [Frontend]
   Updates local state with returned user object
-  Clerk profile fields (name, photo) can optionally be synced back to Clerk
+  Firebase profile fields can optionally be synced back to Firebase
 ```
 
-### Database Schema Additions Required for Clerk
+### Database Schema Additions Required for Firebase Auth
 
-The existing `users` table needs a `clerk_id` column added:
+The existing `users` table needs a `firebase_uid` column added:
 
 ```sql
--- Migration: Add Clerk identity column to users table
-ALTER TABLE users ADD COLUMN clerk_id VARCHAR(255) UNIQUE;
-CREATE INDEX idx_users_clerk_id ON users (clerk_id);
+-- Migration: Add Firebase identity column to users table
+ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(255) UNIQUE;
+CREATE INDEX idx_users_firebase_uid ON users (firebase_uid);
 ```
 
 > **AI must explain this migration and what it means before writing it with the developer.**
@@ -312,7 +312,7 @@ When something breaks, AI assistants must follow this order:
 
 | Error | What It Means | Where to Look |
 |---|---|---|
-| `401 Unauthorized` | Token missing, malformed, or expired | Auth middleware, Clerk token |
+| `401 Unauthorized` | Token missing, malformed, or expired | Auth middleware, Firebase token |
 | `403 Forbidden` | Token is valid, but role is not permitted | Role middleware |
 | `404 Not Found` | Resource doesn't exist in DB | Service layer query |
 | `409 Conflict` | Unique constraint violation | DB schema, e.g., duplicate phone |
@@ -356,7 +356,7 @@ An explanation is **not** a comment in the code. An explanation is a prose descr
 | Concept | Required Explanation |
 |---|---|
 | Middleware | What it intercepts, what it adds to `req`, when it calls `next()` vs returning early |
-| JWT / Clerk Token | What it contains, how it's signed, how we verify it without a secret |
+| JWT / Firebase ID Token | What it contains, how it's signed, how we verify it without a secret |
 | Database Transaction | Why atomicity matters, what happens on partial failure |
 | Zod Schema | Why we validate at the boundary, what happens if we skip it |
 | Express Router | How it differs from the main `app`, how routes are scoped |
@@ -397,9 +397,9 @@ By the end of implementing the auth system, the developer must be able to:
 
 - [ ] Explain what a JWT is, what its three parts are, and how it's verified
 - [ ] Explain the difference between authentication and authorization
-- [ ] Explain what Clerk does and what our backend does in the auth flow
+- [ ] Explain what Firebase does and what our backend does in the auth flow
 - [ ] Explain why we never store raw tokens or passwords
-- [ ] Explain what a `clerk_id` is and why we need it in our `users` table
+- [ ] Explain what a `firebase_uid` is and why we need it in our `users` table
 - [ ] Implement a `requireRole` middleware from scratch
 
 ### Database Concepts
@@ -407,7 +407,7 @@ By the end of implementing the auth system, the developer must be able to:
 - [ ] Write basic SQL SELECT, INSERT, UPDATE queries using the `pg` library
 - [ ] Explain what a foreign key constraint is and why it matters
 - [ ] Explain what a database transaction is and when to use one
-- [ ] Explain what an index is and why `idx_users_clerk_id` needs one
+- [ ] Explain what an index is and why `idx_users_firebase_uid` needs one
 - [ ] Read and understand the `users`, `user_roles`, and `patient_profiles` schemas
 
 ### API Design Concepts
@@ -430,8 +430,8 @@ By the end of implementing the auth system, the developer must be able to:
 ### What the Frontend (React Native) Owns
 
 - All UI rendering, screen navigation, form state
-- Calling Clerk SDK for sign-in, sign-up, sign-out
-- Getting the session token from Clerk: `await getToken()`
+- Calling Firebase Client SDK for sign-in, sign-up, sign-out
+- Getting the ID token from Firebase: `await user.getIdToken()`
 - Sending the token on every API request via the `Authorization` header
 - Storing nothing security-sensitive in AsyncStorage (no tokens, no passwords)
 - Handling auth state changes (logged in, logged out, session expired)
@@ -467,9 +467,9 @@ Before any auth can be implemented, the following must be in place and understoo
 - [ ] **0.1** — Understand the existing `backend/server.ts` file. Explain every line.
 - [ ] **0.2** — Set up the database connection using the `pg` library in `backend/db/config.ts`
 - [ ] **0.3** — Run existing schema migrations manually. Understand each table.
-- [ ] **0.4** — Add `clerk_id` column migration to the `users` table
-- [ ] **0.5** — Install and configure the Clerk backend SDK (`@clerk/backend`)
-- [ ] **0.6** — Set up environment variables: `DATABASE_URL`, `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`
+- [ ] **0.4** — Add `firebase_uid` column migration to the `users` table
+- [ ] **0.5** — Install and configure the Firebase Admin SDK (`firebase-admin`)
+- [ ] **0.6** — Set up environment variables: `DATABASE_URL`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
 
 > **Do not proceed to Phase 1 until the developer can explain the DB connection pool and what `pg.Pool` does.**
 
@@ -477,15 +477,15 @@ Before any auth can be implemented, the following must be in place and understoo
 
 ### Phase 1: Auth Middleware
 
-**Goal:** Protect any route by verifying a Clerk token and loading the user from the database.
+**Goal:** Protect any route by verifying a Firebase token and loading the user from the database.
 
 - [ ] **1.1** — Explain what middleware is in Express. Diagram the middleware chain.
-- [ ] **1.2** — Explain what a Clerk session token (JWT) contains. Show the decoded payload structure.
+- [ ] **1.2** — Explain what a Firebase ID token (JWT) contains. Show the decoded payload structure.
 - [ ] **1.3** — Implement `backend/shared/middleware/authenticate.ts`:
   - Extract `Authorization: Bearer <token>` header
-  - Call `verifyToken()` from Clerk SDK
+  - Call `verifyIdToken()` from Firebase Admin SDK
   - Handle invalid/missing token → `401`
-  - Look up user in `users` table by `clerk_id`
+  - Look up user in `users` table by `firebase_uid`
   - Handle first-time user (not provisioned) → specific error code
   - Attach user to `req.user`
 - [ ] **1.4** — Extend the Express `Request` type to include `req.user`
@@ -498,16 +498,16 @@ Before any auth can be implemented, the following must be in place and understoo
 
 ### Phase 2: User Provisioning
 
-**Goal:** When a Clerk-authenticated user hits our API for the first time, create their record in our database.
+**Goal:** When a Firebase-authenticated user hits our API for the first time, create their record in our database.
 
 - [ ] **2.1** — Explain why we need a provisioning step. What happens without it?
 - [ ] **2.2** — Design the `POST /api/auth/provision` endpoint (or handle inline in auth middleware)
-- [ ] **2.3** — Implement `UserService.provision(clerkId, clerkUserData)`:
-  - Check if user exists by `clerk_id`
+- [ ] **2.3** — Implement `UserService.provision(firebaseUid, firebaseUserData)`:
+  - Check if user exists by `firebase_uid`
   - If exists → return existing user
   - If not → `INSERT` into `users` table, then `INSERT` into `user_roles` table
 - [ ] **2.4** — Understand the `user_roles` table — why is role stored separately from `users`?
-- [ ] **2.5** — Test: sign in with Clerk on the frontend, hit the provision endpoint, verify the DB row
+- [ ] **2.5** — Test: sign in with Firebase on the frontend, hit the provision endpoint, verify the DB row
 
 ---
 
@@ -557,11 +557,11 @@ Before any auth can be implemented, the following must be in place and understoo
 
 **Goal:** Connect the React Native app to the protected backend.
 
-- [ ] **6.1** — Create an API utility in `app/api/` that automatically attaches the Clerk token to every request
+- [ ] **6.1** — Create an API utility in `app/api/` that automatically attaches the Firebase ID token to every request
 - [ ] **6.2** — Handle `401` responses globally (token expired → prompt re-login)
-- [ ] **6.3** — Handle the provisioning flow: after Clerk sign-in, call the provision endpoint before navigating to the main app
+- [ ] **6.3** — Handle the provisioning flow: after Firebase sign-in, call the provision endpoint before navigating to the main app
 - [ ] **6.4** — Build the profile management screen that calls `GET /api/users/me` and `PATCH /api/users/me`
-- [ ] **6.5** — Test the full flow: sign in with Clerk → provision → load profile → edit profile → verify in DB
+- [ ] **6.5** — Test the full flow: sign in with Firebase → provision → load profile → edit profile → verify in DB
 
 ---
 
@@ -643,7 +643,7 @@ backend/
 │   └── seeds/                   ← Test data seeders
 ├── shared/
 │   ├── middleware/
-│   │   ├── authenticate.ts      ← Clerk token verification + req.user
+│   │   ├── authenticate.ts      ← Firebase token verification + req.user
 │   │   ├── requireRole.ts       ← Role-based access control
 │   │   └── validate.ts          ← Zod request validation
 │   ├── errors/                  ← Custom error classes (AppError, AuthError, etc.)
@@ -665,7 +665,7 @@ backend/
 
 | Table | Purpose | Key Columns |
 |---|---|---|
-| `users` | Core identity record | `id` (UUID), `clerk_id` (to be added), `phone`, `name` |
+| `users` | Core identity record | `id` (UUID), `firebase_uid` (to be added), `phone`, `name` |
 | `user_roles` | Role assignment per user | `user_id`, `role_type` (PATIENT/CAREGIVER/FAMILY/DOCTOR), `is_active` |
 | `patient_profiles` | Patient-specific extended data | `user_id` FK, diagnosis, medications, geofence preferences |
 | `caregiver_profiles` | Caregiver-specific extended data | `user_id` FK, bio, experience, rates, verification status |
@@ -680,9 +680,10 @@ backend/
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/surestep
 
-# Clerk
-CLERK_SECRET_KEY=sk_test_...
-CLERK_PUBLISHABLE_KEY=pk_test_...
+# Firebase Auth
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
 
 # Server
 PORT=3000

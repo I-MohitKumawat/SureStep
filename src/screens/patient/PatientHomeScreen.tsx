@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -31,7 +31,7 @@ type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 type Task = { id: string; title: string; time: string; icon?: string; state: ActionState };
 
 
-// â”€â”€â”€ Task meta: derive icon, hint, duration from task title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Task meta: derive icon, hint, duration from task title ------------------
 type TaskMeta = { emoji: string; hint: string; duration: string; detail: string; tip: string };
 
 function getTaskMeta(title: string): TaskMeta {
@@ -39,7 +39,7 @@ function getTaskMeta(title: string): TaskMeta {
 
   if (t.includes('med') || t.includes('pill') || t.includes('tablet')) {
     return {
-      emoji: 'ðŸ’Š',
+      emoji: '💊',
       hint: 'Before breakfast',
       duration: '5 mins',
       detail: 'Morning Medication',
@@ -79,7 +79,7 @@ function getTaskMeta(title: string): TaskMeta {
       hint: 'Rest time',
       duration: '60 mins',
       detail: 'Rest / Nap Time',
-      tip: 'Lie down in a comfortable, quiet room. A short nap of 20â€“30 minutes can boost alertness without affecting night sleep. Avoid napping after 3 PM if you have difficulty sleeping at night.',
+      tip: 'Lie down in a comfortable, quiet room. A short nap of 20–30 minutes can boost alertness without affecting night sleep. Avoid napping after 3 PM if you have difficulty sleeping at night.',
     };
   }
   if (t.includes('blood') || t.includes('bp') || t.includes('pressure') || t.includes('sugar') || t.includes('glucose')) {
@@ -113,7 +113,7 @@ const actionSpecs: Array<{ key: Exclude<ActionState, null>; icon: string; label?
   { key: 'unsure', icon: 'â”' },
 ];
 
-// â”€â”€â”€ Activity Tab Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Activity Tab Content -----------------------------------------------------
 // Navigates immediately to the new enhanced PatientActivities hub.
 // Renders a brief loading view while the navigation fires.
 const ActivityTabContent = ({ onNavigate }: { onNavigate: () => void }) => {
@@ -123,13 +123,13 @@ const ActivityTabContent = ({ onNavigate }: { onNavigate: () => void }) => {
   }, []);
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: 32, marginBottom: 12 }}>ðŸ§©</Text>
-      <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textSecondary }}>Opening Activitiesâ€¦</Text>
+      <Text style={{ fontSize: 32, marginBottom: 12 }}>🧩</Text>
+      <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textSecondary }}>Opening Activities…</Text>
     </View>
   );
 };
 
-// â”€â”€â”€ Caregiver Profile Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Caregiver Profile Modal --------------------------------------------------
 const CaregiverProfileModal = ({
   visible,
   caregiver,
@@ -146,7 +146,7 @@ const CaregiverProfileModal = ({
         <Pressable style={styles.profileSheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.detailHeader}>
             <Pressable onPress={onClose} style={styles.detailCloseBtn}>
-              <Text style={styles.detailCloseText}>âœ•</Text>
+              <Text style={styles.detailCloseText}>✕</Text>
             </Pressable>
           </View>
 
@@ -186,7 +186,7 @@ const CaregiverProfileModal = ({
   );
 };
 
-// â”€â”€â”€ Task Detail Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Task Detail Modal --------------------------------------------------------
 const TaskDetailModal = ({
   visible, task, onClose,
 }: {
@@ -202,7 +202,7 @@ const TaskDetailModal = ({
         <Pressable style={styles.detailSheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.detailHeader}>
             <Pressable onPress={onClose} style={styles.detailCloseBtn}>
-              <Text style={styles.detailCloseText}>âœ•</Text>
+              <Text style={styles.detailCloseText}>✕</Text>
             </Pressable>
           </View>
 
@@ -239,7 +239,7 @@ const TaskDetailModal = ({
   );
 };
 
-// â”€â”€â”€ Action Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Action Button ------------------------------------------------------------
 const ActionButton = ({
   label, icon, selected, state, onPress,
 }: {
@@ -267,7 +267,7 @@ const ActionButton = ({
   </Pressable>
 );
 
-// â”€â”€â”€ Routine Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Routine Card -------------------------------------------------------------
 const RoutineCard = ({
   task, onStateChange, onHelp,
 }: {
@@ -285,7 +285,7 @@ const RoutineCard = ({
         </View>
         <View style={styles.routineTextWrap}>
           <Text style={styles.routineTaskTitle}>{task.title}</Text>
-          <Text style={styles.routineTaskMeta}>{task.time} Â· {meta.hint}</Text>
+          <Text style={styles.routineTaskMeta}>{task.time} · {meta.hint}</Text>
         </View>
       </View>
       <View style={styles.actionsRow}>
@@ -308,7 +308,7 @@ const RoutineCard = ({
   );
 };
 
-// â”€â”€â”€ Bottom Tab Icon components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Bottom Tab Icon components -----------------------------------------------
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
   Home: ({ active }) => <IconHome size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
@@ -317,7 +317,7 @@ const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
   Search: ({ active }) => <IconSearch size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
-// â”€â”€â”€ Completed Tasks Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Completed Tasks Modal ----------------------------------------------------
 const CompletedTasksModal = ({
   visible, tasks, onClose, onUndo,
 }: {
@@ -332,7 +332,7 @@ const CompletedTasksModal = ({
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Completed Tasks</Text>
           <Pressable onPress={onClose} style={styles.modalCloseBtn}>
-            <Text style={styles.modalCloseText}>âœ•</Text>
+            <Text style={styles.modalCloseText}>✕</Text>
           </Pressable>
         </View>
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -349,14 +349,14 @@ const CompletedTasksModal = ({
                     </View>
                     <View style={styles.routineTextWrap}>
                       <Text style={styles.routineTaskTitle}>{task.title}</Text>
-                      <Text style={styles.routineTaskMeta}>{task.time} Â· Completed âœ“</Text>
+                      <Text style={styles.routineTaskMeta}>{task.time} · Completed âœ“</Text>
                     </View>
                     <Pressable
                       onPress={() => onUndo(task.id)}
                       style={({ pressed }) => [styles.undoBtn, pressed && { opacity: 0.7 }]}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <Text style={styles.undoBtnText}>â†© Undo</Text>
+                      <Text style={styles.undoBtnText}>↩ Undo</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -369,7 +369,46 @@ const CompletedTasksModal = ({
   </Modal>
 );
 
-// â”€â”€â”€ Main Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Unlinked Caregiver Warning Modal ──────────────────────────────
+const UnlinkedCaregiverModal = ({
+  visible,
+  onClose,
+  onSearch,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSearch: () => void;
+}) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={styles.alertOverlay}>
+      <View style={styles.alertCard}>
+        <View style={styles.alertIconWrap}>
+          <Text style={styles.alertIcon}>🤝</Text>
+        </View>
+        <Text style={styles.alertTitle}>Find a Caregiver</Text>
+        <Text style={styles.alertMessage}>
+          You don't have a confirmed caregiver linked yet. Would you like to search for an experienced caregiver nearby?
+        </Text>
+        <View style={styles.alertBtnRow}>
+          <Pressable
+            style={({ pressed }) => [styles.alertCancelBtn, pressed && styles.alertBtnPressed]}
+            onPress={onClose}
+          >
+            <Text style={styles.alertCancelText}>Later</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.alertConfirmBtn, pressed && styles.alertBtnPressed]}
+            onPress={onSearch}
+          >
+            <Text style={styles.alertConfirmText}>Search Nearby</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+// --- Main Screen --------------------------------------------------------------
 export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const { status, user } = useAuth();
   const { tasks, updateTaskStatus } = useTasks();
@@ -379,6 +418,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const [currentDateTime] = useState(new Date());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
   const [helpTask, setHelpTask] = useState<Task | null>(null);
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -386,7 +426,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // ── Caregiver search sub-view state ─────────────────────
   const [searchSubView, setSearchSubView] = useState<'list' | 'detail' | null>(null);
   const [viewingCaregiver, setViewingCaregiver] = useState<CaregiverListing | null>(null);
-  const { confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver } = useCaregiver();
+  const { confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver, loading } = useCaregiver();
 
   // Patient phone comes from auth — no AsyncStorage needed
   const patientId = status === 'authenticated' ? user?.id : null;
@@ -417,7 +457,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // Name comes from user object
   const displayName = user?.name ?? 'You';
 
-  // â”€â”€ Location publishing â€” write pings to Supabase so caregivers can see us â”€â”€
+  // -- Location publishing â€” write pings to Supabase so caregivers can see us --
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
   const [locationStatus, setLocationStatus] = React.useState<'idle' | 'sharing' | 'error' | 'denied'>('idle');
 
@@ -477,11 +517,22 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 
-  // Load confirmed caregiver from Supabase on mount (via caregiverContext)
+  // Load confirmed caregiver on mount
   React.useEffect(() => {
     if (patientId) void reloadCaregiver(patientId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
+
+  const hasAlertedRef = useRef(false);
+
+  React.useEffect(() => {
+    if (!loading && patientId) {
+      if (!confirmedCaregiver && !hasAlertedRef.current) {
+        hasAlertedRef.current = true;
+        setShowWarningModal(true);
+      }
+    }
+  }, [loading, confirmedCaregiver, patientId]);
 
   const nextActionableIndex = useMemo(() => {
     const len = patientTasks.length;
@@ -507,7 +558,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
     [patientTasks],
   );
 
-  // â”€â”€ Single-click advance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Single-click advance -------------------------------------------------
   // We track a local "pending index" rather than relying on stale patientTasks.
   // When Done or Skip is tapped we immediately step to the next undone index
   // using the CURRENT patientTasks list plus the just-applied state change.
@@ -536,14 +587,14 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
     }, 0); // 0ms â€” executed after React flushes the state update
   }, [routineTask, patientTasks, updateTaskStatus]);
 
-  // â”€â”€ Undo: restore task to pending and move currentIndex to its time position â”€
+  // -- Undo: restore task to pending and move currentIndex to its time position -
   const openHelp = useCallback((task: Task) => setHelpTask(task), []);
   const closeHelp = useCallback(() => setHelpTask(null), []);
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
 
-      {/* â”€â”€ Family tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* -- Family tab ---------------------------------------------------- */}
       {activeTab === 'Family' ? (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
@@ -574,12 +625,12 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         </ScrollView>
 
-      /* â”€â”€ Activity tab â€” navigate to the Activity Hub screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+      /* -- Activity tab â€” navigate to the Activity Hub screen ----------- */
       ) : activeTab === 'Activity' ? (
         <ActivityTabContent onNavigate={() => navigation.navigate('PatientActivitiesScreen')} />
 
       ) : activeTab === 'Search' && confirmedCaregiver ? (
-        // â”€â”€ Confirmed Caregiver Profile Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // -- Confirmed Caregiver Profile Card ---------------------------------
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
             <View>
@@ -650,7 +701,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* -- Header --------------------------------------------------- */}
           <View style={styles.headerCard}>
             <View>
               <Text style={styles.greetingOverline}>{getGreeting()},</Text>
@@ -673,7 +724,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* â”€â”€ Location sharing status pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* -- Location sharing status pill --------------------------- */}
           {locationStatus !== 'idle' && (
             <View style={[
               styles.locStatusPill,
@@ -687,14 +738,14 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
                 locationStatus === 'error'   && { color: '#991B1B' },
                 locationStatus === 'denied'  && { color: '#6B7280' },
               ]}>
-                {locationStatus === 'sharing' ? 'ðŸ“¡ Sharing location with caregiver' :
+                {locationStatus === 'sharing' ? '📡 Sharing location with caregiver' :
                  locationStatus === 'error'   ? 'âš ï¸ Location sharing failed â€” re-run supabase_geofence_schema.sql' :
-                                               'ðŸ”’ Location permission denied'}
+                                               '🔒 Location permission denied'}
               </Text>
             </View>
           )}
 
-          {/* â”€â”€ Your Routine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* -- Your Routine ---------------------------------------------- */}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Text style={styles.sectionTitleIcon}>ðŸ•</Text>
@@ -705,7 +756,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
               onPress={() => completedCount > 0 && setShowCompletedModal(true)}
             >
               <Text style={styles.progressPill}>
-                {allTasksDone ? 'All done! ðŸŽ‰' : `${completedCount} of ${patientTasks.length} completed`}
+                {allTasksDone ? 'All done! 🎉' : `${completedCount} of ${patientTasks.length} completed`}
               </Text>
             </Pressable>
           </View>
@@ -730,10 +781,19 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             task={helpTask}
             onClose={closeHelp}
           />
+          <UnlinkedCaregiverModal
+            visible={showWarningModal}
+            onClose={() => setShowWarningModal(false)}
+            onSearch={() => {
+              setShowWarningModal(false);
+              setActiveTab('Search');
+              setSearchSubView('list');
+            }}
+          />
         </ScrollView>
       )}
 
-      {/* â”€â”€ Bottom Nav: Left 2 | FAB center | Right 2 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* -- Bottom Nav: Left 2 | FAB center | Right 2 ---------------- */}
       <View style={styles.bottomBarBand}>
         {/* Left tabs */}
         <View style={styles.bottomBar}>
@@ -810,7 +870,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 };
 
-// â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Styles ------------------------------------------------------------------
 const styles = StyleSheet.create({
   screen: { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 110 },
@@ -893,7 +953,7 @@ const styles = StyleSheet.create({
   },
   helpCircleText: { fontFamily: F.bold, color: '#B45309', fontSize: 16 },
 
-  // â”€â”€ Overlay/sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Overlay/sheet ---------------------------------------------------------
   detailOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center', justifyContent: 'center',
@@ -937,7 +997,7 @@ const styles = StyleSheet.create({
   },
   detailDoneBtnText: { fontFamily: F.bold, fontSize: 16, color: C.primaryText },
 
-  // â”€â”€ Caregiver profile modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Caregiver profile modal ------------------------------------------------
   profileSheet: {
     width: '100%',
     backgroundColor: C.bg,
@@ -993,7 +1053,7 @@ const styles = StyleSheet.create({
   profileLabel: { fontFamily: F.bold, fontSize: 13, color: C.textMuted },
   profileValue: { fontFamily: F.medium, fontSize: 13, color: C.textPrimary },
 
-  // â”€â”€ Completed Tasks Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Completed Tasks Modal --------------------------------------------------
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -1004,7 +1064,7 @@ const styles = StyleSheet.create({
   modalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
   modalCloseText: { fontFamily: F.bold, fontSize: 15, color: C.textMuted },
 
-  // â”€â”€ Undo button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Undo button ------------------------------------------------------------
   undoBtn: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
     backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
@@ -1012,7 +1072,7 @@ const styles = StyleSheet.create({
   },
   undoBtnText: { fontFamily: F.bold, fontSize: 12, color: C.textMuted },
 
-  // â”€â”€ Bottom nav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Bottom nav -------------------------------------------------------------
   bottomBarBand: {
     position: 'absolute', left: 0, right: 0, bottom: 0, height: 76,
     backgroundColor: C.surface,
@@ -1068,4 +1128,89 @@ const styles = StyleSheet.create({
   },
   fabPressed: { transform: [{ scale: 0.95 }] },
   fabSymbol: { fontFamily: F.extraBold, color: C.primaryText, fontSize: 22 },
+
+  // Unlinked Caregiver custom dialog styles
+  alertOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  alertCard: {
+    backgroundColor: C.surface,
+    borderRadius: 24,
+    padding: 24,
+    width: '84%',
+    maxWidth: 320,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: C.borderMid,
+    shadowColor: '#000',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  alertIconWrap: {
+    backgroundColor: C.primaryLight,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  alertIcon: {
+    fontSize: 28,
+  },
+  alertTitle: {
+    fontFamily: F.bold,
+    fontSize: 18,
+    color: C.textPrimary,
+    marginBottom: 8,
+  },
+  alertMessage: {
+    fontFamily: F.regular,
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  alertBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  alertCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: C.borderMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.surface,
+  },
+  alertCancelText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.textSecondary,
+  },
+  alertConfirmBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primary,
+  },
+  alertConfirmText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  alertBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
 });

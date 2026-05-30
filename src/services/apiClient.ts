@@ -1,24 +1,20 @@
 /**
  * SureStep — src/services/apiClient.ts
- * Single Axios instance with JWT auto-injection and 401 refresh rotation.
+ * Single Axios instance with Firebase ID token auto-injection.
  * TDD Section 2.4 + Section 8.1.
  * NO screen or component imports axios directly — all calls go through this client.
  */
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 
-let _getClerkToken: (() => Promise<string | null>) | null = null;
+// Token resolver — set by AuthContext after Firebase signs in
+let _getFirebaseToken: (() => Promise<string | null>) | null = null;
 
-export const setClerkTokenResolver = (resolver: () => Promise<string | null>) => {
-  _getClerkToken = resolver;
+export const setFirebaseTokenResolver = (resolver: () => Promise<string | null>) => {
+  _getFirebaseToken = resolver;
 };
 
-// Deprecated: Kept temporarily for compilation compatibility until AuthContext is fully migrated.
-export const tokenStore = {
-  getAccessToken:    () => null as string | null,
-  getRefreshToken:   () => null as string | null,
-  setAccessToken:    (t: string | null) => {},
-  setRefreshToken:   (t: string | null) => {},
-  clearAll:          () => {},
+export const clearFirebaseTokenResolver = () => {
+  _getFirebaseToken = null;
 };
 
 // ─── Axios instance ────────────────────────────────────────────────────────────
@@ -28,16 +24,16 @@ const apiClient: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ─── Request interceptor: attach access token ─────────────────────────────────
+// ─── Request interceptor: attach Firebase ID token ─────────────────────────────
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  if (_getClerkToken && config.headers) {
+  if (_getFirebaseToken && config.headers) {
     try {
-      const token = await _getClerkToken();
+      const token = await _getFirebaseToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('[apiClient] Error resolving Clerk token:', error);
+      console.error('[apiClient] Error resolving Firebase token:', error);
     }
   }
   return config;

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,6 +42,15 @@ export const CaregiverDetailView: React.FC<Props> = ({
   onConfirm,
 }) => (
   <View style={d.root}>
+    {/* Navigation header */}
+    <View style={d.headerNav}>
+      <Pressable onPress={onBack} style={d.backBtn} hitSlop={15}>
+        <Text style={d.backText}>← Back</Text>
+      </Pressable>
+      <Text style={d.headerTitle}>Caregiver Details</Text>
+      <View style={{ width: 60 }} />
+    </View>
+
     <ScrollView
       contentContainerStyle={d.scroll}
       showsVerticalScrollIndicator={false}
@@ -49,11 +59,15 @@ export const CaregiverDetailView: React.FC<Props> = ({
       {/* Hero */}
       <View style={d.heroWrap}>
         <View style={[d.avatar, isConfirmed && d.avatarConfirmed]}>
-          <Text style={d.avatarEmoji}>{caregiver.emoji}</Text>
+          {caregiver.profile_photo_url ? (
+            <Image source={{ uri: caregiver.profile_photo_url }} style={d.avatarImage} />
+          ) : (
+            <Text style={d.avatarEmoji}>{caregiver.emoji || '👩‍⚕️'}</Text>
+          )}
         </View>
         {isConfirmed && (
           <View style={d.confirmedBadge}>
-            <Text style={d.confirmedBadgeText}>✓  Requested Caregiver</Text>
+            <Text style={d.confirmedBadgeText}>✓  Your Active Caregiver</Text>
           </View>
         )}
       </View>
@@ -79,12 +93,12 @@ export const CaregiverDetailView: React.FC<Props> = ({
 
       {/* Bio */}
       <Text style={d.sectionLabel}>ABOUT</Text>
-      <Text style={d.bio}>{caregiver.bio}</Text>
+      <Text style={d.bio}>{caregiver.bio || 'No description provided.'}</Text>
 
       <View style={d.divider} />
 
       {/* Details */}
-      <Text style={d.sectionLabel}>DETAILS</Text>
+      <Text style={d.sectionLabel}>PROFESSIONAL DETAILS</Text>
 
       <View style={d.infoRow}>
         <Text style={d.infoIcon}>🗓</Text>
@@ -97,10 +111,50 @@ export const CaregiverDetailView: React.FC<Props> = ({
       <View style={d.infoRow}>
         <Text style={d.infoIcon}>📍</Text>
         <View style={d.infoTextWrap}>
-          <Text style={d.infoLabel}>Location</Text>
-          <Text style={d.infoValue}>{caregiver.location}</Text>
+          <Text style={d.infoLabel}>Location / Radius</Text>
+          <Text style={d.infoValue}>
+            {caregiver.location} {caregiver.service_radius_km ? `(${caregiver.service_radius_km} km radius)` : ''}
+          </Text>
         </View>
       </View>
+
+      <View style={d.infoRow}>
+        <Text style={d.infoIcon}>💼</Text>
+        <View style={d.infoTextWrap}>
+          <Text style={d.infoLabel}>Experience</Text>
+          <Text style={d.infoValue}>
+            {caregiver.years_experience ? `${caregiver.years_experience} years of experience` : 'Not specified'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={d.infoRow}>
+        <Text style={d.infoIcon}>🗣</Text>
+        <View style={d.infoTextWrap}>
+          <Text style={d.infoLabel}>Languages Spoken</Text>
+          <Text style={d.infoValue}>
+            {caregiver.languages_spoken && caregiver.languages_spoken.length > 0
+              ? caregiver.languages_spoken.join(', ')
+              : 'English'}
+          </Text>
+        </View>
+      </View>
+
+      {caregiver.specializations && caregiver.specializations.length > 0 && (
+        <View style={d.infoRow}>
+          <Text style={d.infoIcon}>✨</Text>
+          <View style={d.infoTextWrap}>
+            <Text style={d.infoLabel}>Specialties</Text>
+            <View style={d.chipRow}>
+              {caregiver.specializations.map((spec) => (
+                <View key={spec} style={d.detailChip}>
+                  <Text style={d.detailChipText}>{spec}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Spacer: clears fixed button + bottom nav (80 + 76) */}
       <View style={{ height: 164 }} />
@@ -124,26 +178,44 @@ export const CaregiverDetailView: React.FC<Props> = ({
 const d = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
 
+  headerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    backgroundColor: C.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  headerTitle: {
+    fontFamily: F.bold,
+    fontSize: 18,
+    color: C.textPrimary,
+  },
+
   scroll: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
 
   backBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-    marginBottom: 18,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: C.primaryLight,
   },
   backText: {
-    fontFamily: F.semiBold,
-    fontSize: 15,
-    color: C.textSecondary,
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.primary,
   },
 
   heroWrap: {
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 20,
     gap: 10,
   },
   avatar: {
@@ -155,12 +227,18 @@ const d = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2.5,
     borderColor: C.border,
+    overflow: 'hidden',
   },
   avatarConfirmed: {
     borderColor: C.primary,
     borderWidth: 3,
   },
   avatarEmoji: { fontSize: 52 },
+  avatarImage: {
+    width: 106,
+    height: 106,
+    borderRadius: 53,
+  },
 
   confirmedBadge: {
     backgroundColor: C.primary,
@@ -177,17 +255,17 @@ const d = StyleSheet.create({
 
   name: {
     fontFamily: F.extraBold,
-    fontSize: 24,
+    fontSize: 26,
     color: C.textPrimary,
     textAlign: 'center',
     marginBottom: 4,
   },
   specialty: {
-    fontFamily: F.medium,
-    fontSize: 14,
-    color: C.textSecondary,
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.primary,
     textAlign: 'center',
-    marginBottom: 18,
+    marginBottom: 20,
   },
 
   statsRow: {
@@ -214,7 +292,7 @@ const d = StyleSheet.create({
     color: C.textBody,
   },
   pillText: {
-    fontFamily: F.medium,
+    fontFamily: F.bold,
     fontSize: 13,
     color: C.textBody,
   },
@@ -222,15 +300,15 @@ const d = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: C.border,
-    marginVertical: 18,
+    marginVertical: 20,
   },
 
   sectionLabel: {
     fontFamily: F.bold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 1.3,
     color: C.textMuted,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   bio: {
     fontFamily: F.regular,
@@ -243,7 +321,7 @@ const d = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 18,
   },
   infoIcon: { fontSize: 20, marginTop: 2 },
   infoTextWrap: { flex: 1 },
@@ -258,6 +336,24 @@ const d = StyleSheet.create({
     fontFamily: F.medium,
     fontSize: 14,
     color: C.textPrimary,
+  },
+
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  detailChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+  },
+  detailChipText: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: '#1D4ED8',
   },
 
   // Fixed confirm button — bottom: 76 clears the bottom nav bar

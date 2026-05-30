@@ -14,14 +14,16 @@
  * Font loading:
  *   - useInterFonts() blocks rendering until Inter is loaded.
  *   - AppLoading shows the splash screen while fonts are loading.
+ *
+ * Auth: Firebase Auth (via AuthContext → onAuthStateChanged).
+ *   No provider wrapper needed at this level — Firebase is initialized by the
+ *   singleton in src/config/firebase.ts, which AuthContext imports directly.
  */
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
-import { ClerkProvider } from '@clerk/clerk-expo';
-import * as SecureStore from 'expo-secure-store';
 
 import { ThemeProvider }        from './theme/ThemeContext';
 import { AuthProvider }         from './context/AuthContext';
@@ -30,32 +32,6 @@ import { NotificationProvider } from './context/NotificationContext';
 import { RoleNavigator }        from './navigation/RoleNavigator';
 import { useInterFonts }        from './theme/fonts';
 import { C } from './theme/colors';
-
-const tokenCache = {
-  async getToken(key: string) {
-    try {
-      const item = await SecureStore.getItemAsync(key);
-      return item;
-    } catch (error) {
-      console.error('SecureStore get item error: ', error);
-      await SecureStore.deleteItemAsync(key);
-      return null;
-    }
-  },
-  async saveToken(key: string, value: string) {
-    try {
-      return SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      return;
-    }
-  },
-};
-
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
-
-if (!publishableKey) {
-  console.warn('Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in environment variables.');
-}
 
 const AppShell: React.FC = () => {
   const fontsLoaded = useInterFonts();
@@ -71,21 +47,19 @@ const AppShell: React.FC = () => {
 
   return (
     <GestureHandlerRootView style={s.root}>
-      <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-        <ThemeProvider>
-          <AuthProvider>
-            <CaregiverProvider>
-              <NotificationProvider>
-                <SafeAreaProvider>
-                  <NavigationContainer>
-                    <RoleNavigator />
-                  </NavigationContainer>
-                </SafeAreaProvider>
-              </NotificationProvider>
-            </CaregiverProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </ClerkProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <CaregiverProvider>
+            <NotificationProvider>
+              <SafeAreaProvider>
+                <NavigationContainer>
+                  <RoleNavigator />
+                </NavigationContainer>
+              </SafeAreaProvider>
+            </NotificationProvider>
+          </CaregiverProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 };

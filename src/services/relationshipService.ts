@@ -99,3 +99,39 @@ export const subscribeToCaregiversLinks = (
     console.log(`[relationshipService] Unsubscribed from caregiver links for ${caregiverPhone}`);
   };
 };
+
+/**
+ * Search discoverable caregivers in the patient's city.
+ */
+export const searchCaregivers = async (query: string): Promise<CaregiverListing[]> => {
+  const { data } = await apiClient.get('/relationships/caregivers/search', {
+    params: { query },
+  });
+  
+  const rawListings = data.data?.caregivers || [];
+  
+  // Map backend database format to frontend CaregiverListing format
+  return rawListings.map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    specialty: row.specializations?.[0] || 'Caregiver',
+    patients: row.current_patient_count || 0,
+    rating: row.rating ? parseFloat(row.rating) : 5.0,
+    fee: row.hourly_rate_inr ? `₹${parseFloat(row.hourly_rate_inr).toFixed(0)}/hr` : 'Contact for rates',
+    emoji: '👩‍⚕️',
+    bio: row.bio || '',
+    availability: row.availability_types?.join(', ') || 'Contact for availability',
+    location: row.city || '',
+    profile_photo_url: row.photo_url,
+    years_experience: row.years_of_experience,
+    specializations: row.specializations,
+    availability_types: row.availability_types,
+    hourly_rate: row.hourly_rate_inr,
+    daily_rate: row.daily_rate_inr,
+    about_me: row.bio,
+    languages_spoken: row.languages_spoken,
+    service_radius_km: row.service_radius_km,
+    patients_handled: row.current_patient_count
+  }));
+};

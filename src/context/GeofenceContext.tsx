@@ -24,8 +24,8 @@ import {
   type Coords,
   type GeofenceZone,
   type BreachStatus,
-} from '../../app/utils/geofence';
-import { startBackgroundTracking, primeZonesCache } from '../../app/utils/locationTask';
+} from '../utils/geofenceUtils';
+import { startBackgroundTracking, primeZonesCache } from '../utils/locationTask';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

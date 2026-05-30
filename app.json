@@ -29,7 +29,9 @@
         "expo-task-manager"
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "android": {
       "permissions": [
@@ -54,7 +56,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
-      "googleServicesFile": "./android/app/google-services.json",
+      "googleServicesFile": "./google-services.json",
       "package": "com.anonymous.surestep"
     },
     "ios": {

@@ -18,11 +18,11 @@
 - **Frontend:** React Native (Expo) — TypeScript
 - **Backend:** Node.js + Express + TypeScript + PostgreSQL  
   ⚠️ **Backend is a separate repository.** No backend code lives here. The frontend consumes REST API endpoints and Socket.IO events from the Express backend.
-- **Auth:** Clerk (replacing legacy custom OTP/JWT system)
+- **Auth:** Firebase Auth (replacing legacy custom OTP/JWT system)
 - **Real-time:** Socket.IO (caregiver/family location + alert feed) — replacing legacy Supabase realtime
 - **Previous DB (deprecated):** Supabase — all direct Supabase client calls are being removed; data flows through the Express API instead.
 
-**The overall goal** is to complete full Clerk authentication, protect all backend routes, wire the frontend to the Express API, and build the complete feature set defined in `docs/surestep-frontend-tdd.js`.
+**The overall goal** is to complete full Firebase authentication, protect all backend routes, wire the frontend to the Express API, and build the complete feature set defined in `docs/surestep-frontend-tdd.js`.
 
 ---
 
@@ -53,14 +53,14 @@
 | Area | Blocker |
 |---|---|
 | `npx expo start` boot verification | Not yet run after fixing imports |
-| Clerk frontend SDK | Not integrated — `PhoneAuthScreen` still uses mock OTP `0000` |
+| Firebase frontend SDK | Not integrated — `PhoneAuthScreen` still uses mock OTP `0000` |
 | SecureStore token persistence | In-memory fallback only; `expo-secure-store` not yet wired |
 | API calls end-to-end | Services have correct signatures but not tested against live backend |
 | Socket.IO real-time | `socketClient.ts` ready; backend Socket.IO server setup is a separate repo concern |
 | Stub screens (18 screens) | Render "Coming soon" placeholder — no real data yet |
 | `app/` tree cleanup | Preserved as rollback safety net — delete after `expo start` confirms clean boot |
 | `packages/` cleanup | Old monorepo remnants — delete after boot confirmed |
-| Database `clerk_id` migration | Backend concern: `users` table needs `clerk_id TEXT UNIQUE` column |
+| Database `firebase_uid` migration | Backend concern: `users` table needs `firebase_uid VARCHAR(255) UNIQUE` column |
 
 ---
 
@@ -94,7 +94,7 @@ c:\dev\SureStep\                          ← project root
 │   ├── screens/
 │   │   ├── auth/                         ← 5 screens
 │   │   │   ├── WelcomeScreen.tsx
-│   │   │   ├── PhoneAuthScreen.tsx       ← mock OTP; awaiting Clerk replacement
+│   │   │   ├── PhoneAuthScreen.tsx       ← mock OTP; awaiting Firebase replacement
 │   │   │   ├── RoleSelectionScreen.tsx
 │   │   │   ├── ProfileSetupScreen.tsx    ← 2-step form (roles: CAREGIVER / PATIENT etc)
 │   │   │   └── InviteAcceptScreen.tsx    ← STUB
@@ -205,15 +205,13 @@ Watch the Metro bundler output for import resolution errors. Most likely remaini
 - `app/assets/icons/NavIcons.tsx` still referenced by navigators inside `src/` — may need to move to `src/assets/`
 - Any other stale `../app/...` import paths that tsc doesn't catch at compile time
 
-### Priority 2 — Clerk Frontend Integration
+### Priority 2 — Firebase Frontend Integration
 This is the primary pending feature. Steps to implement (teach concept before code):
 
-1. Install the SDK: `npx expo install @clerk/clerk-expo expo-secure-store`
-2. Wrap `AppShell.tsx` with `<ClerkProvider publishableKey={...}>` (outermost provider)
-3. Replace the mock OTP flow in `PhoneAuthScreen.tsx`:
-   - Use `useSignIn()` from `@clerk/clerk-expo` to trigger Clerk phone verification
-   - Replace the static `0000` check with real Clerk `attemptFirstFactor({ strategy: 'phone_code', code })`
-4. Wire `apiClient.ts` Axios interceptor to attach the Clerk session token as `Authorization: Bearer <jwt>` on every request
+1. Install the SDK: `npx expo install firebase expo-secure-store`
+2. Wrap `AppShell.tsx` with firebase configuration
+3. Replace the mock OTP flow in `PhoneAuthScreen.tsx` with Firebase Phone Auth
+4. Wire `apiClient.ts` Axios interceptor to attach the Firebase ID token as `Authorization: Bearer <jwt>` on every request
 
 ### Priority 3 — App Boot Assets
 Move `app/assets/icons/` → `src/assets/icons/` and update all navigator imports so the old `app/` folder can be safely deleted.
@@ -266,9 +264,9 @@ After `npx expo start` boots cleanly:
 1. Run `npx expo start` and capture the Metro bundler output
 2. Fix any asset import errors (most likely `NavIcons.tsx` path)
 3. Move `app/assets/` → `src/assets/` and update all imports
-4. Begin Clerk frontend integration as a teaching moment:
-   - Explain the Clerk React Native SDK architecture
-   - Walk through `ClerkProvider` → `useSignIn` → `attemptFirstFactor` step by step
+4. Begin Firebase frontend integration as a teaching moment:
+   - Explain the Firebase Client SDK architecture
+   - Walk through phone authentication step by step
    - Then implement together
 
 ---

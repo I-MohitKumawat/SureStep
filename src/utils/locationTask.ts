@@ -1,18 +1,10 @@
 /**
- * SureStep – Background Location Task
- *
- * Defines a TaskManager task that fires whenever expo-location emits a
- * position update in the background. This module MUST be imported at the
- * top-level entry point (index.js / App.tsx) so the task is registered
- * before the app is fully mounted.
- *
- * ──────────────────────────────────────────────────────────────────────────
  * IMPORTANT: Background tasks only work in a bare / dev-client build.
  *            They are silently ignored in Expo Go.
  * ──────────────────────────────────────────────────────────────────────────
  *
  * Usage:
- *   import './app/utils/locationTask';   // ← add to index.js
+ *   import './src/utils/locationTask';   // ← add to index.js
  *   Then call startBackgroundTracking() once the user grants permission.
  */
 
@@ -27,7 +19,7 @@ import {
   writeLocationPing,
   type Coords,
   type GeofenceZone,
-} from './geofence';
+} from './geofenceUtils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

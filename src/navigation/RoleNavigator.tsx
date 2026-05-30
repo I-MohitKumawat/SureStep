@@ -28,11 +28,11 @@ export const RoleNavigator: React.FC = () => {
     );
   }
 
-  if (status === 'unauthenticated') return <AuthNavigator />;
+  if (status === 'unauthenticated') return <AuthNavigator key="unauthenticated" />;
 
-  if (status === 'no_role') return <AuthNavigator initialRoute="RoleSelectionScreen" />;
+  if (status === 'no_role') return <AuthNavigator key="no_role" initialRoute="RoleSelectionScreen" />;
 
-  if (status === 'no_profile') return <AuthNavigator initialRoute="ProfileSetupScreen" />;
+  if (status === 'no_profile') return <AuthNavigator key="no_profile" initialRoute="ProfileSetupScreen" />;
 
   // status === 'authenticated'
   switch (user?.role) {
@@ -40,7 +40,7 @@ export const RoleNavigator: React.FC = () => {
     case 'CAREGIVER': return <CaregiverNavigator />;
     case 'FAMILY':    return <FamilyNavigator />;
     case 'DOCTOR':    return <DoctorNavigator />;
-    default:          return <AuthNavigator />;
+    default:          return <AuthNavigator key="default" />;
   }
 };
 

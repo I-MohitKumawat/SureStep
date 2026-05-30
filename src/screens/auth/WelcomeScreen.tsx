@@ -9,10 +9,16 @@ import { useTheme } from '../../theme/ThemeContext';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'WelcomeScreen'>;
 
 export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
+  const { status, firebaseUser, logout, loginDevMode } = useAuth();
+
+  // Mid-onboarding: Firebase session exists but DB profile not yet created
+  const isOnboarding = status === 'no_role' || status === 'no_profile';
+
   return (
     <ScreenContainer
       edges={['top', 'bottom', 'left', 'right']}
@@ -76,17 +82,61 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
 
           {/* SLANTED SURFACE */}
           <View style={styles.slantBg} />
-          <Pressable
-            onPress={() => navigation.navigate('PhoneAuthScreen')}
-            style={({ pressed }) => [
-              styles.ctaButton,
-              pressed && styles.ctaPressed,
-            ]}
-          >
-            <Text style={styles.ctaText}>
-              welcome
-            </Text>
-          </Pressable>
+
+          {isOnboarding ? (
+            // Mid-onboarding: user is Firebase-authenticated but hasn't finished DB setup
+            <>
+              <Pressable
+                onPress={() => status === 'no_role'
+                  ? navigation.navigate('RoleSelectionScreen')
+                  : navigation.navigate('ProfileSetupScreen', { role: (firebaseUser ? 'PATIENT' : 'PATIENT') as any })
+                }
+                style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
+              >
+                <Text style={styles.ctaText}>
+                  Continue as{' '}
+                  <Text style={{ fontFamily: F.extraBold }}>{firebaseUser?.phoneNumber ?? 'your number'}</Text>
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => logout()} style={styles.signOutLink}>
+                <Text style={styles.signOutLinkText}>Sign out / use a different number</Text>
+              </Pressable>
+            </>
+          ) : (
+            // Normal: show Sign In and Sign Up
+            <>
+              <Pressable
+                onPress={() => navigation.navigate('PhoneAuthScreen', { mode: 'signin' })}
+                style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
+              >
+                <Text style={styles.ctaText}>Sign In</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate('PhoneAuthScreen', { mode: 'signup' })}
+                style={({ pressed }) => [styles.ctaButtonOutline, pressed && styles.ctaPressed]}
+              >
+                <Text style={styles.ctaTextOutline}>Create Account</Text>
+              </Pressable>
+
+              <View style={styles.devContainer}>
+                <Text style={styles.devTitle}>🛠 DEVELOPER BYPASS OPTIONS</Text>
+                <View style={styles.devRow}>
+                  <Pressable
+                    onPress={() => void loginDevMode('PATIENT')}
+                    style={({ pressed }) => [styles.devBtn, pressed && styles.devBtnPressed]}
+                  >
+                    <Text style={styles.devBtnText}>Demo Patient</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void loginDevMode('CAREGIVER')}
+                    style={({ pressed }) => [styles.devBtn, pressed && styles.devBtnPressed]}
+                  >
+                    <Text style={styles.devBtnText}>Demo Caregiver</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </>
+          )}
 
         </View>
       </View>
@@ -281,6 +331,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  ctaButtonOutline: {
+    width: '100%',
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+
+  ctaTextOutline: {
+    fontFamily: F.bold,
+    fontSize: 18,
+    letterSpacing: 1.5,
+    color: C.primary,
+  },
+
     textWithLink: {
     color: C.primary,
     fontFamily: F.bold,
@@ -293,5 +361,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: C.textSecondary,
     textAlign: "center",
+  },
+
+  signOutLink: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  signOutLinkText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.primary,
+    textDecorationLine: 'underline',
+  },
+
+  devContainer: {
+    width: '100%',
+    marginTop: 18,
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  devTitle: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: C.textMuted,
+    letterSpacing: 1.0,
+    marginBottom: 8,
+  },
+  devRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+  },
+  devBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: C.surface,
+    borderWidth: 1.5,
+    borderColor: C.borderMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  devBtnPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  devBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: C.textPrimary,
   },
 });

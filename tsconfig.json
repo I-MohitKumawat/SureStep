@@ -16,24 +16,11 @@
     "noEmit": true,
     "isolatedModules": true,
     "baseUrl": ".",
-    "paths": {
-      "app/*": [
-        "app/*"
-      ],
-      "ui/*": [
-        "packages/ui/*"
-      ],
-      "core/*": [
-        "packages/core/*"
-      ]
-    }
+    "paths": {}
   },
   "include": [
     "App.tsx",
-    "src/**/*",
-    "app/**/*",
-    "packages/ui/**/*",
-    "packages/core/**/*"
+    "src/**/*"
   ],
   "extends": "expo/tsconfig.base.json"
 }

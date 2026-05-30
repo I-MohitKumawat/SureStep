@@ -29,7 +29,7 @@ import { F } from '../../theme/fonts';
 import { C } from '../../theme/colors';
 import {
   IconDashboard, IconBell, IconActivity,
-} from '../../../app/assets/icons/NavIcons';
+} from '../../assets/icons/NavIcons';
 import {
   checkBreach,
   fetchPatientGeofences,
@@ -39,7 +39,7 @@ import {
   DEFAULT_GEOFENCE,
   type Coords,
   type GeofenceZone,
-} from '../../../app/utils/geofence';
+} from '../../utils/geofenceUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientDetailScreen'>;
