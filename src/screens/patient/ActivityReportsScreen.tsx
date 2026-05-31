@@ -47,7 +47,7 @@ export const ActivityReportsScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={s.cardTitle}>Today</Text>
           {todaysSessions.length === 0 ? (
             <View style={s.emptyBox}>
-              <Text style={s.emptyIcon}>ðŸŒ±</Text>
+              <Text style={s.emptyIcon}>🌱</Text>
               <Text style={s.emptyText}>No activities done yet today.</Text>
               <Text style={s.emptyHint}>Tap an activity on the Activities screen to get started.</Text>
             </View>
@@ -62,7 +62,7 @@ export const ActivityReportsScreen: React.FC<Props> = ({ navigation }) => {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.sessionName}>{activity.title}</Text>
-                    <Text style={s.sessionMeta}>{activity.durationMin} min Â· Completed âœ“</Text>
+                    <Text style={s.sessionMeta}>{activity.durationMin} min · Completed âœ“</Text>
                   </View>
                 </View>
               );

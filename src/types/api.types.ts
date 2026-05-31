@@ -6,7 +6,7 @@
  */
 import type {
   UserRoleType, RelationshipType, RelationshipStatus,
-  TaskStatus, TaskRecurrenceType,
+  TaskStatus, TaskRecurrenceType, TaskCategory, TaskPriority,
   LocationState, SafetyState, RoutineState, EngagementState,
   ZoneType, BoundaryType,
   AlertType, AlertSeverity, AlertStatus,
@@ -35,22 +35,102 @@ export type User = {
 // ─── Tasks ───────────────────────────────────────────────────────────────────
 export type TaskStep = { order: number; text: string };
 
+/**
+ * Mirrors the `tasks` table — a single date-specific execution instance
+ * generated from a `routine_templates` row.
+ */
 export type Task = {
-  id:               string;
+  id:                  string;
+  patient_id:          string;
+  created_by:          string;         // caregiver user_id
+  template_id?:        string;         // FK → routine_templates.id
+  execution_time_id?:  string;         // FK → routine_execution_times.id
+  title:               string;
+  instructions_md?:    string;         // Markdown instructions shown to patient
+  caregiver_notes?:    string;         // Caregiver-only clinical notes (never shown to patient)
+  category:            TaskCategory;   // Structured category replaces raw emoji
+  priority:            TaskPriority;   // Drives alert escalation thresholds
+  icon_name?:          string;         // Feather/vector icon name or uploaded image URI
+  emoji?:              string;         // Legacy field — kept for backward compat during migration
+  voice_note_url?:     string;
+  scheduled_timestamp: string;         // ISO datetime: date + scheduled execution time combined
+  duration_minutes?:   number;
+  recurrence:          TaskRecurrenceType;
+  status:              TaskStatus;
+  client_action_id?:   string;         // Idempotency key for offline sync (UUID v4)
+  completed_at?:       string;
+  completed_by?:       string;         // user_id of whoever marked it done
+  updated_by?:         string;         // user_id of whoever last modified
+};
+
+/**
+ * Mirrors the `routine_templates` table — the recurring care plan definition.
+ * Generates daily `tasks` rows via a background cron job.
+ */
+export type RoutineTemplate = {
+  id:                 string;
+  patient_id:         string;
+  created_by:         string;
+  title:              string;
+  instructions_md?:   string;          // Markdown care instructions
+  caregiver_notes?:   string;          // Caregiver-only clinical notes
+  category:           TaskCategory;
+  priority:           TaskPriority;
+  icon_name?:         string;
+  start_date:         string;          // ISO date
+  end_date?:          string;          // ISO date — null for indefinite routines
+  recurrence_pattern: RoutineRecurrencePattern;
+  completion_window:  string;          // e.g. '01:00:00' — grace period before overdue
+  is_active:          boolean;
+  created_at:         string;
+  updated_at:         string;
+  execution_times?:   RoutineExecutionTime[];   // Eager-loaded when requested
+  attachments?:       RoutineAttachment[];      // Eager-loaded when requested
+};
+
+/** JSONB recurrence_pattern shape stored inside routine_templates. */
+export type RoutineRecurrencePattern = {
+  type:         TaskRecurrenceType;
+  days?:        number[];  // 0=Sun … 6=Sat (for SPECIFIC_WEEKDAYS)
+  interval?:    number;    // For EVERY_X_DAYS
+  day_of_month?: number;   // For MONTHLY
+};
+
+/**
+ * Mirrors the `routine_execution_times` table.
+ * One template → many execution times (e.g. 08:00, 14:00, 20:00 for medication).
+ */
+export type RoutineExecutionTime = {
+  id:             string;
+  template_id:    string;
+  scheduled_time: string;  // HH:MM:SS
+  created_at:     string;
+};
+
+/**
+ * Mirrors the `routine_attachments` table.
+ * Holds image, PDF, video, or audio resources attached to a routine.
+ */
+export type RoutineAttachment = {
+  id:           string;
+  template_id:  string;
+  file_url:     string;
+  file_type:    string;    // MIME type e.g. 'image/jpeg', 'application/pdf', 'video/mp4'
+  display_name?: string;
+  created_at:   string;
+};
+
+/**
+ * Mirrors the `daily_adherence_snapshots` table.
+ * Precomputed nightly summary for fast dashboard rendering.
+ */
+export type DailyAdherenceSnapshot = {
   patient_id:       string;
-  created_by:       string;       // caregiver user_id
-  title:            string;
-  patient_hint?:    string;       // simplified text shown to patient
-  steps:            TaskStep[];
-  emoji?:           string;
-  voice_note_url?:  string;
-  scheduled_time:   string;       // HH:MM
-  scheduled_date:   string;       // ISO date
-  duration_minutes: number;
-  is_critical:      boolean;
-  recurrence:       TaskRecurrenceType;
-  status:           TaskStatus;
-  completed_at?:    string;
+  target_date:      string;   // ISO date
+  total_scheduled:  number;
+  total_completed:  number;
+  total_missed:     number;
+  score_percentage: number;   // 0.00 – 100.00
 };
 
 // ─── Patient State (Awareness Engine) ────────────────────────────────────────

@@ -276,20 +276,13 @@ const sh = StyleSheet.create({
 
 // ─── Main Screen ───────────────────────────────────────────────────────────────────
 
-export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
+export const PatientActivitiesView: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [seeAll, setSeeAll] = useState<ActivityCategory | null>(null);
-  const { confirmedCaregiver } = useCaregiver();
 
   const go = (a: Activity) => navigation.navigate('ActivityDetailScreen', { activityId: a.id });
-  const navTo = (tab: Tab) => {
-    if (tab === 'Home')     navigation.navigate('PatientHomeScreen');
-    if (tab === 'Family')   navigation.navigate('PatientHomeScreen', { initialTab: 'Family' });
-    if (tab === 'Activity') navigation.navigate('PatientHomeScreen', { initialTab: 'Activity' });
-    if (tab === 'Search')   navigation.navigate('PatientHomeScreen', { initialTab: 'Search' });
-  };
 
   return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={s.screen}>
+    <View style={{ flex: 1, backgroundColor: '#F7F8FC' }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
         {/* Header */}
@@ -311,6 +304,23 @@ export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
       </ScrollView>
 
       <SeeAllSheet category={seeAll} visible={seeAll !== null} onClose={() => setSeeAll(null)} onPress={go} />
+    </View>
+  );
+};
+
+export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
+  const { confirmedCaregiver } = useCaregiver();
+
+  const navTo = (tab: Tab) => {
+    if (tab === 'Home')     navigation.navigate('PatientHomeScreen');
+    if (tab === 'Family')   navigation.navigate('PatientHomeScreen', { initialTab: 'Family' });
+    if (tab === 'Activity') navigation.navigate('PatientHomeScreen', { initialTab: 'Activity' });
+    if (tab === 'Search')   navigation.navigate('PatientHomeScreen', { initialTab: 'Search' });
+  };
+
+  return (
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={s.screen}>
+      <PatientActivitiesView navigation={navigation} />
 
       {/* Bottom nav */}
       <View style={s.nav}>

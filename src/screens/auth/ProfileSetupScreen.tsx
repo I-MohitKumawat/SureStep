@@ -497,7 +497,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
           gender: draft.gender,
           city: draft.city,
           preferred_language: language === "Hindi" ? "hi" : "en",
-          photo_url: photoUri ? "https://surestep.app/mock-avatar.png" : undefined,
+          photo_url: photoUri || undefined,
         });
       } catch (updateErr) {
         console.warn("[ProfileSetup] updateMe failed:", updateErr);

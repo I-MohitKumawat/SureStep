@@ -1,3 +1,6 @@
+Current Geofencing Implementation:
+When a patient's device sends a location ping with coordinates, speed, and battery status to the backend, the database records the ping and triggers an asynchronous evaluation. The system calculates the distance from the patient's current location to their active geofence zones using the Haversine formula. If the patient is inside any active zone, the state is marked as SAFE. If they are within 80 percent of the boundary of a zone, the state is marked as APPROACHING. If they are outside all active zones, the state is marked as BREACH, creating a deduplicated geofence alert. If the patient remains in a BREACH state, is stationary, and has no user activity for over 10 minutes, the safety state escalates to CRITICAL. These computed states are stored in the patient_states table for immediate access by caregivers and family.
+
 * If a patient exits a defined safe zone like home, clinic, or neighborhood boundaries, all registered caregivers immediately receive an alert with the patient’s live location, movement direction, and last known timestamp.
 
 * When the system detects that one caregiver is geographically closest to the patient during a wandering event, that caregiver receives a priority notification like: “You are closest to John right now. He may need assistance.”

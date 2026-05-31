@@ -18,6 +18,7 @@ export type CaregiverListing = {
   profile_photo_url?: string | null;
   years_experience?: number;
   specializations?: string[];
+  status?: 'PENDING' | 'CONFIRMED' | 'SUSPENDED' | 'ENDED';
   availability_types?: string[];
   hourly_rate?: string;
   daily_rate?: string;

@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { getAuth, signInWithPhoneNumber, signOut, type FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { getAuth, signInWithPhoneNumber, signOut, getIdToken, type FirebaseAuthTypes } from '@react-native-firebase/auth';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -111,7 +111,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
       }
 
       // Step 2: Wire up token resolver immediately
-      setFirebaseTokenResolver(() => fbUser.getIdToken());
+      setFirebaseTokenResolver(() => getIdToken(fbUser));
 
       if (mode === 'signup') {
         // Sign-up: OTP is confirmed. Firebase session is live.

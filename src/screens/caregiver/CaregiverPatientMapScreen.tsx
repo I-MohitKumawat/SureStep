@@ -1,5 +1,5 @@
 /**
- * GeofenceMapScreen  (v3 â€” full UX overhaul)
+ * GeofenceMapScreen  (v3 — full UX overhaul)
  *
  * What's new over v2:
  *  - Reads PATIENT location from Supabase Realtime (not caregiver's own GPS)
@@ -59,32 +59,32 @@ type StateConfig = {
 function getStateConfig(status: BreachStatus['status'], ageS: number): StateConfig {
   if (ageS > 120) return {
     bg: '#1F2937', border: '#374151', dot: '#6B7280',
-    emoji: 'ðŸ“µ', title: 'No Signal',
-    subtitle: `Location lost Â· last seen ${Math.floor(ageS / 60)} min ago`,
+    emoji: '📵', title: 'No Signal',
+    subtitle: `Location lost · last seen ${Math.floor(ageS / 60)} min ago`,
     titleColor: '#D1D5DB',
   };
   switch (status) {
     case 'safe': return {
       bg: '#ECFDF5', border: '#10B981', dot: '#10B981',
-      emoji: 'ðŸ ', title: 'Safe at Home',
+      emoji: '🏠', title: 'Safe at Home',
       subtitle: 'Patient is inside the safe zone',
       titleColor: '#065F46',
     };
     case 'approaching': return {
       bg: '#FFFBEB', border: '#F59E0B', dot: '#F59E0B',
-      emoji: 'ðŸš¶', title: 'Moving Nearby',
+      emoji: '🚶', title: 'Moving Nearby',
       subtitle: 'Patient is close to the zone boundary',
       titleColor: '#92400E',
     };
     case 'breach': return {
       bg: '#FEF2F2', border: '#EF4444', dot: '#EF4444',
-      emoji: 'âš ï¸', title: 'Outside Safe Area',
+      emoji: '⚠️', title: 'Outside Safe Area',
       subtitle: 'Patient has left the safe zone',
       titleColor: '#991B1B',
     };
     default: return {
       bg: C.surface, border: C.border, dot: C.textMuted,
-      emoji: 'ðŸ“¡', title: 'Locating Patientâ€¦',
+      emoji: '📡', title: 'Locating Patient...',
       subtitle: 'Acquiring GPS signal',
       titleColor: C.textSecondary,
     };
@@ -92,7 +92,7 @@ function getStateConfig(status: BreachStatus['status'], ageS: number): StateConf
 }
 
 function formatAge(ageS: number): string {
-  if (ageS < 5)  return 'Live Â· just now';
+  if (ageS < 5)  return 'Live · just now';
   if (ageS < 60) return `Updated ${ageS}s ago`;
   return `Updated ${Math.floor(ageS / 60)}m ago`;
 }
@@ -230,7 +230,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
 
   // â”€â”€ Auto-log breach (deduplicated) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
-    // Don't log breach if the zone is a fallback (non-real UUID) â€” tables may not exist yet
+    // Don't log breach if the zone is a fallback (non-real UUID) — tables may not exist yet
     const realZoneId = breachStatus.status === 'breach' &&
       breachStatus.zone?.id && !breachStatus.zone.id.startsWith('fallback-')
         ? breachStatus.zone.id
@@ -299,7 +299,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
           onPress={() => setShowHistory(!showHistory)}
           style={styles.historyBtn}
         >
-          <Text style={styles.historyBtnText}>ðŸ“‹</Text>
+          <Text style={styles.historyBtnText}>📋</Text>
           {history.filter(h => !h.acknowledgedAt).length > 0 && (
             <View style={styles.historyBadge}>
               <Text style={styles.historyBadgeText}>
@@ -341,7 +341,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 />
                 <Marker coordinate={zone.center} anchor={{ x: 0.5, y: 0.5 }}>
                   <View style={styles.zoneLabel}>
-                    <Text style={styles.zoneLabelText}>ðŸ  {zone.label}</Text>
+                    <Text style={styles.zoneLabelText}>🏠 {zone.label}</Text>
                   </View>
                 </Marker>
               </React.Fragment>
@@ -368,12 +368,12 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
               />
             )}
 
-            {/* Patient marker â€” emoji for reliable cross-platform rendering */}
+            {/* Patient marker — emoji for reliable cross-platform rendering */}
             {coords && (
               <Marker coordinate={coords} title={patientName} description={distLabel}>
                 <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                   <Text style={[styles.patientMarkerEmoji, { color: markerColor }]}>
-                    {breachStatus.status === 'breach' ? 'âš ï¸' : 'ðŸ§'}
+                    {breachStatus.status === 'breach' ? '⚠️' : '🧠'}
                   </Text>
                   <Text style={styles.patientMarkerLabel} numberOfLines={1}>
                     {(patientName ?? '').split(' ')[0]}
@@ -425,12 +425,12 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 ) : history.map((alert) => (
                   <View key={alert.id} style={styles.historyRow}>
                     <Text style={styles.historyRowIcon}>
-                      {alert.breachType === 'exit' ? 'ðŸ”´' : 'ðŸŸ¢'}
+                      {alert.breachType === 'exit' ? '🔴' : '🟢'}
                     </Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.historyRowLabel}>
                         {alert.breachType === 'exit'
-                          ? `Left safe zone${alert.distanceM ? ` Â· ${Math.round(alert.distanceM)}m away` : ''}`
+                          ? `Left safe zone${alert.distanceM ? ` · ${Math.round(alert.distanceM)}m away` : ''}`
                           : 'Returned to safe zone'}
                       </Text>
                       <Text style={styles.historyRowTime}>{formatBreachTime(alert.createdAt)}</Text>
@@ -465,7 +465,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
               <View style={styles.zonePills}>
                 {zones.filter((z) => z.isActive).map((z) => (
                   <View key={z.id} style={styles.zonePill}>
-                    <Text style={styles.zonePillText}>ðŸ  {z.label} Â· {z.radiusM}m</Text>
+                    <Text style={styles.zonePillText}>🏠 {z.label} · {z.radiusM}m</Text>
                   </View>
                 ))}
                 {zones.length === 0 && (
@@ -480,7 +480,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 onPress={guideToPatient}
                 style={({ pressed }) => [styles.guideBtn, pressed && { opacity: 0.8 }]}
               >
-                <Text style={styles.guideBtnText}>ðŸ—º Guide Me to {patientName}</Text>
+                <Text style={styles.guideBtnText}>🗺️ Guide Me to {patientName}</Text>
               </Pressable>
             )}
 

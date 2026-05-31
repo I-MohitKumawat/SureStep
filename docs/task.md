@@ -35,3 +35,11 @@ Migrate from Clerk to custom SMS OTP auth (for production scaling):
   - Swap Clerk hooks/providers on frontend for local secure-store JWT handling.
   - Build Express routes/controllers on backend for code generation and verification.
   - Integrate local Indian SMS gateway (e.g. MSG91, Fast2SMS) for cheaper SMS delivery.
+
+GPS accuracy-aware geofence decisions
+Geofence debounce/hysteresis
+Notification escalation reliability
+Device health monitoring
+Caregiver acknowledgement workflow
+GPS spoofing detection
+Multi-geofence priority rules

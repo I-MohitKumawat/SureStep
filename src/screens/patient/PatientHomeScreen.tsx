@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Alert, Image } from 'react-native';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useIsFocused } from '@react-navigation/native';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { useTasks } from '../../hooks/useTasks';
@@ -18,6 +19,7 @@ import {
 import { CaregiverSearchView } from './CaregiverSearchView';
 import type { CaregiverListing } from './CaregiverSearchView';
 import { CaregiverDetailView } from './CaregiverDetailView';
+import { PatientActivitiesView } from './PatientActivitiesScreen';
 import { useAuth } from '../../hooks/useAuth';
 import { useCaregiver } from '../../hooks/useCaregiver';
 import { AiFab } from '../../components/shared/AiAssistantFab';
@@ -28,7 +30,15 @@ type Props = NativeStackScreenProps<PatientStackParams, 'PatientHomeScreen'>;
 type ActionState = 'done' | 'missed' | 'unsure' | null;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 
-type Task = { id: string; title: string; time: string; icon?: string; state: ActionState };
+type Task = {
+  id: string;
+  title: string;
+  time: string;
+  icon?: string;
+  state: ActionState;
+  instructionsMd?: string;
+  description?: string;
+};
 
 
 // --- Task meta: derive icon, hint, duration from task title ------------------
@@ -43,12 +53,12 @@ function getTaskMeta(title: string): TaskMeta {
       hint: 'Before breakfast',
       duration: '5 mins',
       detail: 'Morning Medication',
-      tip: 'Take 1 tablet of Amlodipine 5mg with a full glass of water. Always take at the same time each day. Do not skip doses â€” if you miss one, take it as soon as you remember unless it\'s almost time for the next dose.',
+      tip: 'Take 1 tablet of Amlodipine 5mg with a full glass of water. Always take at the same time each day. Do not skip doses — if you miss one, take it as soon as you remember unless it\'s almost time for the next dose.',
     };
   }
   if (t.includes('breakfast') || t.includes('meal') || t.includes('food') || t.includes('eat')) {
     return {
-      emoji: 'ðŸ½ï¸',
+      emoji: '🥣',
       hint: 'After medication',
       duration: '20 mins',
       detail: 'Healthy Breakfast',
@@ -57,7 +67,7 @@ function getTaskMeta(title: string): TaskMeta {
   }
   if (t.includes('walk') || t.includes('exercise') || t.includes('jog') || t.includes('step')) {
     return {
-      emoji: 'ðŸš¶',
+      emoji: '🚶',
       hint: 'Morning exercise',
       duration: '30 mins',
       detail: 'Daily Walk',
@@ -66,7 +76,7 @@ function getTaskMeta(title: string): TaskMeta {
   }
   if (t.includes('water') || t.includes('drink') || t.includes('hydrat')) {
     return {
-      emoji: 'ðŸ’§',
+      emoji: '💧',
       hint: 'Stay hydrated',
       duration: '2 mins',
       detail: 'Hydration Check',
@@ -75,7 +85,7 @@ function getTaskMeta(title: string): TaskMeta {
   }
   if (t.includes('sleep') || t.includes('nap') || t.includes('rest')) {
     return {
-      emoji: 'ðŸ˜´',
+      emoji: '💤',
       hint: 'Rest time',
       duration: '60 mins',
       detail: 'Rest / Nap Time',
@@ -84,7 +94,7 @@ function getTaskMeta(title: string): TaskMeta {
   }
   if (t.includes('blood') || t.includes('bp') || t.includes('pressure') || t.includes('sugar') || t.includes('glucose')) {
     return {
-      emoji: 'ðŸ©º',
+      emoji: '🩺',
       hint: 'Health check',
       duration: '5 mins',
       detail: 'Health Monitoring',
@@ -94,7 +104,7 @@ function getTaskMeta(title: string): TaskMeta {
 
   // Default fallback
   return {
-    emoji: 'ðŸ“‹',
+    emoji: '📋',
     hint: 'Daily task',
     duration: '15 mins',
     detail: title,
@@ -109,25 +119,11 @@ const statusColors: Record<'done' | 'unsure' | 'missed', string> = {
 };
 
 const actionSpecs: Array<{ key: Exclude<ActionState, null>; icon: string; label?: string }> = [
-  { key: 'done', icon: 'ðŸ‘', label: 'Done' },
-  { key: 'unsure', icon: 'â”' },
+  { key: 'done', icon: '👍', label: 'Done' },
+  { key: 'unsure', icon: '❓' },
 ];
 
-// --- Activity Tab Content -----------------------------------------------------
-// Navigates immediately to the new enhanced PatientActivities hub.
-// Renders a brief loading view while the navigation fires.
-const ActivityTabContent = ({ onNavigate }: { onNavigate: () => void }) => {
-  React.useEffect(() => {
-    onNavigate();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: 32, marginBottom: 12 }}>🧩</Text>
-      <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textSecondary }}>Opening Activities…</Text>
-    </View>
-  );
-};
+
 
 // --- Caregiver Profile Modal --------------------------------------------------
 const CaregiverProfileModal = ({
@@ -187,7 +183,8 @@ const CaregiverProfileModal = ({
 };
 
 // --- Task Detail Modal --------------------------------------------------------
-const TaskDetailModal = ({
+const TaskDetailModal = () => null;
+const _unused_TaskDetailModal = ({
   visible, task, onClose,
 }: {
   visible: boolean;
@@ -213,10 +210,10 @@ const TaskDetailModal = ({
           <Text style={styles.detailTitle}>{meta.detail}</Text>
           <View style={styles.detailMetaRow}>
             <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>ðŸ• {task.time}</Text>
+              <Text style={styles.detailPillText}>🕒 {task.time}</Text>
             </View>
             <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>â± {meta.duration}</Text>
+              <Text style={styles.detailPillText}>⏳ {meta.duration}</Text>
             </View>
             <View style={styles.detailPill}>
               <Text style={styles.detailPillText}>{meta.hint}</Text>
@@ -239,70 +236,64 @@ const TaskDetailModal = ({
   );
 };
 
-// --- Action Button ------------------------------------------------------------
-const ActionButton = ({
-  label, icon, selected, state, onPress,
-}: {
-  label?: string; icon: string; selected: boolean;
-  state: Exclude<ActionState, null>; onPress: () => void;
-}) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.actionButton,
-      {
-        backgroundColor: selected ? statusColors[state] : state === 'unsure' ? C.unsureBg : C.skipBg,
-      },
-      pressed && { transform: [{ scale: 0.96 }] },
-    ]}
-  >
-    <Text style={styles.actionIcon}>{icon}</Text>
-    {label
-      ? <Text style={[
-        styles.actionText,
-        selected && state === 'done' ? styles.actionTextDone : null,
-      ]}>{label}</Text>
-      : null
-    }
-  </Pressable>
-);
-
 // --- Routine Card -------------------------------------------------------------
 const RoutineCard = ({
-  task, onStateChange, onHelp,
+  task,
+  onUpdateStatus,
+  onViewInstructions,
 }: {
   task: Task;
-  onStateChange: (id: string, s: Exclude<ActionState, null>) => void;
-  onHelp: (task: Task) => void;
+  onUpdateStatus: (taskId: string, status: 'done' | 'unsure' | 'pending') => void;
+  onViewInstructions: (task: Task) => void;
 }) => {
   const meta = getTaskMeta(task.title);
   const displayEmoji = task.icon ?? meta.emoji;
+  const isDone = task.state === 'done';
+  const isUnsure = task.state === 'unsure';
+
   return (
-    <View style={styles.mainRoutineCard}>
+    <View style={[styles.mainRoutineCard, isDone && { borderColor: '#86EFAC', backgroundColor: '#F9FBF9' }]}>
       <View style={styles.routineTop}>
         <View style={styles.routineIconWrap}>
           <Text style={styles.routineIcon}>{displayEmoji}</Text>
         </View>
         <View style={styles.routineTextWrap}>
-          <Text style={styles.routineTaskTitle}>{task.title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={[styles.routineTaskTitle, isDone && { textDecorationLine: 'line-through', color: C.textMuted }]}>{task.title}</Text>
+            {isDone && (
+              <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+                <Text style={{ color: '#166534', fontSize: 10, fontFamily: F.bold }}>DONE</Text>
+              </View>
+            )}
+            {isUnsure && (
+              <View style={[styles.statusBadge, { backgroundColor: '#FFEDD5', borderColor: '#FDBA74' }]}>
+                <Text style={{ color: '#9A3412', fontSize: 10, fontFamily: F.bold }}>UNSURE</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.routineTaskMeta}>{task.time} · {meta.hint}</Text>
         </View>
       </View>
-      <View style={styles.actionsRow}>
-        {actionSpecs.map((spec) => (
-          <ActionButton
-            key={spec.key}
-            icon={spec.icon}
-            label={spec.label}
-            state={spec.key}
-            selected={task.state === spec.key}
-            onPress={() =>
-              spec.key === 'unsure'
-                ? onHelp(task)
-                : onStateChange(task.id, spec.key)
-            }
-          />
-        ))}
+
+      {/* Patient actions: Done and Instructions */}
+      <View style={styles.cardActionsRow}>
+        <Pressable
+          style={[styles.cardActionBtn, isDone && styles.cardActionBtnDone]}
+          onPress={() => onUpdateStatus(task.id, isDone ? 'pending' : 'done')}
+        >
+          <Text style={[styles.cardActionBtnText, isDone && { color: C.primary }]}>
+            {isDone ? '✓ Completed' : 'Mark Completed'}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.cardActionBtn}
+          onPress={() => onViewInstructions(task)}
+        >
+          <Text style={styles.cardActionBtnText}>
+            📋 Instructions
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -318,7 +309,8 @@ const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
 };
 
 // --- Completed Tasks Modal ----------------------------------------------------
-const CompletedTasksModal = ({
+const CompletedTasksModal = () => null;
+const _unused_CompletedTasksModal = ({
   visible, tasks, onClose, onUndo,
 }: {
   visible: boolean;
@@ -349,7 +341,7 @@ const CompletedTasksModal = ({
                     </View>
                     <View style={styles.routineTextWrap}>
                       <Text style={styles.routineTaskTitle}>{task.title}</Text>
-                      <Text style={styles.routineTaskMeta}>{task.time} · Completed âœ“</Text>
+                      <Text style={styles.routineTaskMeta}>{task.time} · Completed ✓</Text>
                     </View>
                     <Pressable
                       onPress={() => onUndo(task.id)}
@@ -408,10 +400,120 @@ const UnlinkedCaregiverModal = ({
   </Modal>
 );
 
+// --- Visual Instructions Modal -----------------------------------------------
+const TaskInstructionsModal = ({
+  visible, task, onClose,
+}: {
+  visible: boolean;
+  task: Task | null;
+  onClose: () => void;
+}) => {
+  if (!task) return null;
+  const meta = getTaskMeta(task.title);
+  const displayEmoji = task.icon ?? meta.emoji;
+
+  const renderSteps = (instructionsMd: string | undefined) => {
+    if (!instructionsMd) {
+      return <Text style={styles.noStepsText}>No visual steps configured by caregiver.</Text>;
+    }
+    let steps: Array<{ text: string; photo_url?: string }> = [];
+    try {
+      if (instructionsMd.trim().startsWith('[')) {
+        steps = JSON.parse(instructionsMd);
+      } else {
+        steps = [{ text: instructionsMd }];
+      }
+    } catch {
+      steps = [{ text: instructionsMd }];
+    }
+
+    if (steps.length === 0 || (steps.length === 1 && !steps[0].text && !steps[0].photo_url)) {
+      return <Text style={styles.noStepsText}>No visual steps configured by caregiver.</Text>;
+    }
+
+    return (
+      <View style={styles.stepsContainer}>
+        {steps.map((step, idx) => (
+          <View key={idx} style={styles.stepRow}>
+            <View style={styles.stepNumberCircle}>
+              <Text style={styles.stepNumberText}>{idx + 1}</Text>
+            </View>
+            <View style={styles.stepContent}>
+              {!!step.text && <Text style={styles.stepText}>{step.text}</Text>}
+              {!!step.photo_url && (
+                <Image
+                  source={{ uri: step.photo_url }}
+                  style={styles.stepPhoto}
+                  resizeMode="cover"
+                />
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.detailOverlay} onPress={onClose}>
+        <Pressable
+          style={[styles.detailSheet, { maxHeight: '85%', paddingBottom: 0 }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {/* Fixed header */}
+          <View style={styles.detailHeader}>
+            <Pressable style={styles.detailCloseBtn} onPress={onClose}>
+              <Text style={styles.detailCloseText}>✕</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.detailIllustration}>
+            <Text style={styles.detailEmoji}>{displayEmoji}</Text>
+          </View>
+
+          <Text style={styles.detailTitle}>{task.title}</Text>
+
+          <View style={styles.detailMetaRow}>
+            <View style={styles.detailPill}>
+              <Text style={styles.detailPillText}>{task.time}</Text>
+            </View>
+          </View>
+
+          <View style={styles.detailDivider} />
+
+          <Text style={styles.detailInstructionLabel}>VISUAL INSTRUCTION STEPS</Text>
+
+          {/* Scrollable steps — grows to fill remaining sheet space */}
+          <ScrollView
+            style={{ flex: 1, paddingHorizontal: 20 }}
+            contentContainerStyle={{ paddingBottom: 16 }}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+          >
+            {renderSteps(task.instructionsMd)}
+          </ScrollView>
+
+          {/* Fixed footer button */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24 }}>
+            <Pressable
+              style={({ pressed }) => [styles.detailDoneBtn, { marginHorizontal: 0 }, pressed && { opacity: 0.85 }]}
+              onPress={onClose}
+            >
+              <Text style={styles.detailDoneBtnText}>Got it</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
+
 // --- Main Screen --------------------------------------------------------------
 export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const { status, user } = useAuth();
-  const { tasks, updateTaskStatus } = useTasks();
+  const { tasks, loadTasksForPatient, updateTaskStatus } = useTasks();
+  const isFocused = useIsFocused();
   // Accept initialTab from route params (from Games/Activities/Family screens)
   const initialTab = (route.params as any)?.initialTab as BottomTab | undefined;
   const [activeTab, setActiveTab] = useState<BottomTab>(initialTab ?? 'Home');
@@ -420,6 +522,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [helpTask, setHelpTask] = useState<Task | null>(null);
+  const [viewingInstructionsTask, setViewingInstructionsTask] = useState<Task | null>(null);
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -431,6 +534,17 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // Patient phone comes from auth — no AsyncStorage needed
   const patientId = status === 'authenticated' ? user?.id : null;
 
+  useEffect(() => {
+    if (!patientId || !isFocused) return;
+    void loadTasksForPatient(patientId);
+    // Poll for updates every 10s — frequent enough to stay fresh,
+    // but gives the optimistic update enough time to persist before the next fetch.
+    const interval = setInterval(() => {
+      void loadTasksForPatient(patientId);
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [patientId, isFocused, loadTasksForPatient]);
+
   // Raw tasks from context, filtered strictly to this patient
   const patientTasks: Task[] = useMemo(
     () => patientId
@@ -438,9 +552,22 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           id: t.id, title: t.title, time: t.time,
           icon: t.icon,
           state: t.status === 'pending' ? null : (t.status as ActionState),
+          instructionsMd: t.instructionsMd,
+          description: t.description,
         }))
       : [],
     [tasks, patientId],
+  );
+
+  const handleUpdateTaskStatus = useCallback(
+    async (taskId: string, newStatus: 'done' | 'unsure' | 'pending') => {
+      try {
+        await updateTaskStatus(taskId, newStatus);
+      } catch (err) {
+        console.warn('Failed to update task status:', err);
+      }
+    },
+    [updateTaskStatus],
   );
 
   const formattedDate = currentDateTime.toLocaleDateString('en-US', {
@@ -457,7 +584,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // Name comes from user object
   const displayName = user?.name ?? 'You';
 
-  // -- Location publishing â€” write pings to Supabase so caregivers can see us --
+  // -- Location publishing — write pings to Supabase so caregivers can see us --
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
   const [locationStatus, setLocationStatus] = React.useState<'idle' | 'sharing' | 'error' | 'denied'>('idle');
 
@@ -547,49 +674,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
     return start;
   }, [patientTasks, currentIndex]);
 
-  const routineTask = useMemo(
-    () => patientTasks[nextActionableIndex] ?? patientTasks[0],
-    [patientTasks, nextActionableIndex],
-  );
-  const completedTasks = useMemo(() => patientTasks.filter((t) => t.state === 'done'), [patientTasks]);
-  const completedCount = completedTasks.length;
-  const allTasksDone = useMemo(
-    () => patientTasks.length > 0 && patientTasks.every((t) => t.state === 'done'),
-    [patientTasks],
-  );
 
-  // -- Single-click advance -------------------------------------------------
-  // We track a local "pending index" rather than relying on stale patientTasks.
-  // When Done or Skip is tapped we immediately step to the next undone index
-  // using the CURRENT patientTasks list plus the just-applied state change.
-  const updateTask = useCallback((taskId: string, state: Exclude<ActionState, null>) => {
-    void updateTaskStatus(taskId, state as TaskStatus);
-
-    // Only advance if it's the current card AND it's a conclusive action
-    if (taskId !== routineTask?.id) return;
-    if (state !== 'done') return;
-
-    // Build synthetic updated list to find the next undone index immediately
-    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-    advanceTimerRef.current = setTimeout(() => {
-      setCurrentIndex((prevIdx) => {
-        // Look for next undone task after prevIdx (wrap-inclusive)
-        const len = patientTasks.length;
-        for (let step = 1; step < len; step++) {
-          const idx = (prevIdx + step) % len;
-          const t = patientTasks[idx];
-          // Skip already-done/missed tasks (including the one we just acted on)
-          if (t && t.state !== 'done' && t.state !== 'missed' && t.id !== taskId) return idx;
-        }
-        // Nothing left â€” stay at current
-        return prevIdx;
-      });
-    }, 0); // 0ms â€” executed after React flushes the state update
-  }, [routineTask, patientTasks, updateTaskStatus]);
-
-  // -- Undo: restore task to pending and move currentIndex to its time position -
-  const openHelp = useCallback((task: Task) => setHelpTask(task), []);
-  const closeHelp = useCallback(() => setHelpTask(null), []);
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
@@ -603,20 +688,36 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={[styles.greetingName, { fontSize: 26 }]}>My Care Team</Text>
             </View>
           </View>
-          {confirmedCaregiver ? (
+          {confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? (
             <View style={styles.mainRoutineCard}>
               <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>YOUR CAREGIVER</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                <Text style={{ fontSize: 36 }}>{confirmedCaregiver.emoji || 'ðŸ§‘â€âš•ï¸'}</Text>
+                <Text style={{ fontSize: 36 }}>{confirmedCaregiver.emoji || '👩‍⚕️'}</Text>
                 <View>
                   <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
                   <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
                 </View>
               </View>
             </View>
+          ) : confirmedCaregiver && confirmedCaregiver.status === 'PENDING' ? (
+            <View style={styles.mainRoutineCard}>
+              <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>PENDING REQUEST</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 }}>
+                <Text style={{ fontSize: 36 }}>⏳</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
+                  <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
+                </View>
+              </View>
+              <View style={{ backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 10, padding: 12 }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: '#92400E', lineHeight: 18 }}>
+                  Waiting for caregiver to accept your request. We'll update your dashboard as soon as they confirm!
+                </Text>
+              </View>
+            </View>
           ) : (
             <View style={[styles.mainRoutineCard, { alignItems: 'center', paddingVertical: 32 }]}>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>ðŸ‘¨â€ðŸ‘©â€ðŸ‘§</Text>
+              <Text style={{ fontSize: 40, marginBottom: 12 }}>👨‍👩‍👧</Text>
               <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textPrimary, textAlign: 'center', marginBottom: 6 }}>No caregiver linked yet</Text>
               <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, textAlign: 'center' }}>
                 Go to the Search tab to find and link a caregiver.
@@ -625,11 +726,11 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         </ScrollView>
 
-      /* -- Activity tab â€” navigate to the Activity Hub screen ----------- */
+      /* -- Activity tab — render activities list inline ----------- */
       ) : activeTab === 'Activity' ? (
-        <ActivityTabContent onNavigate={() => navigation.navigate('PatientActivitiesScreen')} />
+        <PatientActivitiesView navigation={navigation} />
 
-      ) : activeTab === 'Search' && confirmedCaregiver ? (
+      ) : activeTab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? (
         // -- Confirmed Caregiver Profile Card ---------------------------------
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
@@ -639,21 +740,21 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={styles.greetingDate}>{confirmedCaregiver.specialty}</Text>
             </View>
             <View style={[styles.caregiverTile, { backgroundColor: '#e8f5e9' }]}>
-              <Text style={styles.caregiverIcon}>{confirmedCaregiver.emoji || 'ðŸ§‘â€âš•ï¸'}</Text>
+              <Text style={styles.caregiverIcon}>{confirmedCaregiver.emoji || '🧑‍⚕️'}</Text>
             </View>
           </View>
 
           <View style={[styles.mainRoutineCard, { marginBottom: 12 }]}>
             <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>CONTACT DETAILS</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 18, marginRight: 10 }}>ðŸ“ž</Text>
+              <Text style={{ fontSize: 18, marginRight: 10 }}>📞</Text>
               <View>
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.textSecondary }}>Phone Number</Text>
                 <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.textPrimary }}>{confirmedCaregiver.id || 'Not available'}</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, marginRight: 10 }}>ðŸ“</Text>
+              <Text style={{ fontSize: 18, marginRight: 10 }}>📍</Text>
               <View>
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.textSecondary }}>Location</Text>
                 <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.textPrimary }}>{confirmedCaregiver.location || 'Bangalore, India'}</Text>
@@ -671,10 +772,14 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
       ) : activeTab === 'Search' && searchSubView === 'detail' && viewingCaregiver ? (
         <CaregiverDetailView
           caregiver={viewingCaregiver}
-          isConfirmed={confirmedCaregiver?.id === viewingCaregiver.id}
+          linkStatus={
+            confirmedCaregiver?.id === viewingCaregiver.id
+              ? (confirmedCaregiver.status || 'PENDING')
+              : null
+          }
           onBack={() => {
-            if (confirmedCaregiver) {
-              // Already confirmed â€” back goes to Home, not the search list
+            if (confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED') {
+              // Already requested/confirmed — back goes to Home, not the search list
               setActiveTab('Home');
               setSearchSubView(null);
               setViewingCaregiver(null);
@@ -686,10 +791,10 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           onConfirm={async (c) => {
             // Pass patient name so it's written to Supabase at confirm time
             await setConfirmedCaregiver(c, patientId ?? '', displayName);
-            // Dismiss entire search flow â€” return to Home
-            setActiveTab('Home');
-            setSearchSubView(null);
-            setViewingCaregiver(null);
+            // Stay on the same detail screen and reload caregiver status
+            if (patientId) {
+              await reloadCaregiver(patientId, true);
+            }
           }}
         />
       ) : activeTab === 'Search' ? (
@@ -708,7 +813,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={styles.greetingName}>{displayName}</Text>
               <Text style={styles.greetingDate}>{formattedDate}</Text>
             </View>
-            {confirmedCaregiver && (
+            {confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' && (
               <Pressable
                 onPress={() => {
                   setViewingCaregiver(confirmedCaregiver);
@@ -739,7 +844,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
                 locationStatus === 'denied'  && { color: '#6B7280' },
               ]}>
                 {locationStatus === 'sharing' ? '📡 Sharing location with caregiver' :
-                 locationStatus === 'error'   ? 'âš ï¸ Location sharing failed â€” re-run supabase_geofence_schema.sql' :
+                 locationStatus === 'error'   ? '⚠️ Location sharing failed — re-run supabase_geofence_schema.sql' :
                                                '🔒 Location permission denied'}
               </Text>
             </View>
@@ -748,39 +853,27 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           {/* -- Your Routine ---------------------------------------------- */}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitleIcon}>ðŸ•</Text>
+              <Text style={styles.sectionTitleIcon}>🕒</Text>
               <Text style={styles.sectionTitle}>Your Routine</Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [styles.progressPillWrap, pressed && { opacity: 0.75 }]}
-              onPress={() => completedCount > 0 && setShowCompletedModal(true)}
-            >
-              <Text style={styles.progressPill}>
-                {allTasksDone ? 'All done! 🎉' : `${completedCount} of ${patientTasks.length} completed`}
-              </Text>
-            </Pressable>
           </View>
 
           {patientTasks.length > 0 ? (
-            <>
-              <RoutineCard task={routineTask} onStateChange={updateTask} onHelp={openHelp} />
-            </>
+            <View style={{ gap: 12, marginBottom: 20 }}>
+              {patientTasks.map((task) => (
+                <RoutineCard
+                  key={task.id}
+                  task={task}
+                  onUpdateStatus={handleUpdateTaskStatus}
+                  onViewInstructions={setViewingInstructionsTask}
+                />
+              ))}
+            </View>
           ) : (
             <Text style={styles.emptyText}>No tasks assigned yet.</Text>
           )}
 
           {/* Modals rendered inside ScrollView so they're always present */}
-          <CompletedTasksModal
-            visible={showCompletedModal}
-            tasks={completedTasks}
-            onClose={() => setShowCompletedModal(false)}
-            onUndo={(id) => void updateTaskStatus(id, 'pending')}
-          />
-          <TaskDetailModal
-            visible={helpTask !== null}
-            task={helpTask}
-            onClose={closeHelp}
-          />
           <UnlinkedCaregiverModal
             visible={showWarningModal}
             onClose={() => setShowWarningModal(false)}
@@ -789,6 +882,11 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
               setActiveTab('Search');
               setSearchSubView('list');
             }}
+          />
+          <TaskInstructionsModal
+            visible={viewingInstructionsTask !== null}
+            task={viewingInstructionsTask}
+            onClose={() => setViewingInstructionsTask(null)}
           />
         </ScrollView>
       )}
@@ -803,7 +901,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             return (
               <Pressable
                 key={tab}
-                onPress={() => setActiveTab(tab)}  // inline â€” no navigation.navigate()
+                onPress={() => setActiveTab(tab)}  // inline — no navigation.navigate()
                 style={styles.bottomTab}
               >
                 <View style={styles.bottomTabIconWrap}>
@@ -826,21 +924,21 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent =
-              tab === 'Search' && confirmedCaregiver
+              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED'
                 ? IconProfile
                 : TAB_ICON_COMPONENTS[tab];
             const label =
               tab === 'Search'
-                ? confirmedCaregiver ? 'Caregiver Profile' : 'Search'
+                ? (confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? 'Caregiver Profile' : 'Search')
                 : tab;
             return (
               <Pressable
                 key={tab}
                 onPress={() => {
-                  // All tabs render inline â€” no navigation.navigate()
+                  // All tabs render inline — no navigation.navigate()
                   setActiveTab(tab);
                   if (tab === 'Search') {
-                    if (confirmedCaregiver) {
+                    if (confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED') {
                       setViewingCaregiver(confirmedCaregiver);
                       setSearchSubView('detail');
                     } else {
@@ -962,6 +1060,7 @@ const styles = StyleSheet.create({
   detailSheet: {
     width: '100%', backgroundColor: C.bg,
     borderRadius: 28, paddingBottom: 28,
+    flexDirection: 'column',
     shadowColor: '#000', shadowOpacity: 0.2, shadowOffset: { width: 0, height: 8 }, shadowRadius: 24, elevation: 20,
   },
   detailHeader: {
@@ -1212,5 +1311,86 @@ const styles = StyleSheet.create({
   alertBtnPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  cardActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  cardActionBtnDone: {
+    backgroundColor: '#E6F4EA',
+    borderColor: '#86EFAC',
+  },
+  cardActionBtnUnsure: {
+    backgroundColor: '#FFEDD5',
+    borderColor: '#FDBA74',
+  },
+  cardActionBtnText: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: C.textSecondary,
+  },
+  noStepsText: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textMuted,
+    fontStyle: 'italic',
+  },
+  stepsContainer: {
+    gap: 12,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  stepNumberCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  stepNumberText: {
+    fontFamily: F.extraBold,
+    fontSize: 10,
+    color: C.textSecondary,
+  },
+  stepContent: {
+    flex: 1,
+    gap: 8,
+  },
+  stepText: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: C.textPrimary,
+    lineHeight: 18,
+  },
+  stepPhoto: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
   },
 });

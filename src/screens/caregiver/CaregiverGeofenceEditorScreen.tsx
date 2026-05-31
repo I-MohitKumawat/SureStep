@@ -1,5 +1,5 @@
 /**
- * GeofenceEditorScreen  (v3 â€” full UX overhaul)
+ * GeofenceEditorScreen  (v3 — full UX overhaul)
  *
  * Improvements over v2:
  *  - Opens centred on the patient's LAST KNOWN LOCATION (not hardcoded Bangalore)
@@ -47,13 +47,13 @@ const RADIUS_MAX  = 2000;
 const RADIUS_STEPS = [50, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000];
 
 const ZONE_PRESETS = [
-  { label: 'Home',      icon: 'ðŸ ' },
-  { label: 'Clinic',    icon: 'ðŸ¥' },
-  { label: 'Park',      icon: 'ðŸŒ³' },
-  { label: 'Pharmacy',  icon: 'ðŸ’Š' },
-  { label: 'Temple',    icon: 'ðŸ›•' },
-  { label: 'Market',    icon: 'ðŸ›’' },
-  { label: 'Other',     icon: 'ðŸ“' },
+  { label: 'Home',      icon: '🏠' },
+  { label: 'Clinic',    icon: '🏥' },
+  { label: 'Park',      icon: '🌳' },
+  { label: 'Pharmacy',  icon: '💊' },
+  { label: 'Temple',    icon: '🛕' },
+  { label: 'Market',    icon: '🛒' },
+  { label: 'Other',     icon: '📍' },
 ];
 
 const DEFAULT_CENTER: Coords = { latitude: 12.9716, longitude: 77.5946 };
@@ -102,10 +102,10 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
     // 2. Try patient's last known location first
     void fetchLatestPatientLocation(patientId).then(async (loc: Coords | null) => {
       if (loc) {
-        // Patient has published pings â€” center there
+        // Patient has published pings — center there
         setCenter({ latitude: loc.latitude, longitude: loc.longitude });
       } else if (!safeExistingZone) {
-        // No patient pings yet â€” fall back to caregiver's own GPS
+        // No patient pings yet — fall back to caregiver's own GPS
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -113,7 +113,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
             setCenter({ latitude: own.coords.latitude, longitude: own.coords.longitude });
           }
         } catch {
-          // permission denied â€” keep DEFAULT_CENTER
+          // permission denied — keep DEFAULT_CENTER
         }
       }
     });
@@ -197,7 +197,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
               setAllZones((prev) => prev.filter((z) => z.id !== zoneId));
               if (safeExistingZone?.id === zoneId) navigation.goBack();
             } else {
-              setError('Delete failed â€” check Supabase connection');
+              setError('Delete failed — check Supabase connection');
             }
             setDeleting(null);
           },
@@ -242,7 +242,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
         >
           {locLoading
             ? <ActivityIndicator size="small" color={C.primary} />
-            : <Text style={styles.myLocText}>ðŸ“ Me</Text>
+            : <Text style={styles.myLocText}>📍 Me</Text>
           }
         </Pressable>
       </View>
@@ -281,13 +281,13 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
             />
           ))}
 
-        {/* Draggable centre marker â€” simple emoji for cross-platform compatibility */}
+        {/* Draggable centre marker — simple emoji for cross-platform compatibility */}
         <Marker
           coordinate={center}
           draggable
           onDragEnd={(e) => setCenter(e.nativeEvent.coordinate)}
         >
-          <Text style={styles.dragPinEmoji}>ðŸ“</Text>
+          <Text style={styles.dragPinEmoji}>📍</Text>
         </Marker>
       </MapView>
 
@@ -306,7 +306,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
             onPress={() => setBoundaryType('soft')}
             style={[styles.boundaryBtn, boundaryType === 'soft' && styles.boundaryBtnSoft]}
           >
-            <Text style={styles.boundaryIcon}>ðŸ””</Text>
+            <Text style={styles.boundaryIcon}>🔔</Text>
             <View style={{ flex: 1 }}>
               <Text style={[styles.boundaryLabel, boundaryType === 'soft' && { color: '#065F46' }]}>
                 Soft Boundary
@@ -319,7 +319,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
             onPress={() => setBoundaryType('hard')}
             style={[styles.boundaryBtn, boundaryType === 'hard' && styles.boundaryBtnHard]}
           >
-            <Text style={styles.boundaryIcon}>ðŸš¨</Text>
+            <Text style={styles.boundaryIcon}>🚨</Text>
             <View style={{ flex: 1 }}>
               <Text style={[styles.boundaryLabel, boundaryType === 'hard' && { color: '#991B1B' }]}>
                 Hard Boundary
@@ -333,7 +333,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
         {/* Drag hint */}
         <View style={styles.hintRow}>
           <Text style={styles.hintText}>
-            ðŸ“ Drag the pin to position the zone centre Â· Expand radius below
+            📍 Drag the pin to position the zone centre · Expand radius below
           </Text>
         </View>
 
@@ -400,7 +400,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
 
         {/* Coords */}
         <Text style={styles.coordsLabel}>
-          ðŸ“Œ {center.latitude.toFixed(5)}, {center.longitude.toFixed(5)}
+          📌 {center.latitude.toFixed(5)}, {center.longitude.toFixed(5)}
         </Text>
 
         {/* Error */}
@@ -428,7 +428,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
             <Text style={styles.existingSectionTitle}>EXISTING SAFE ZONES</Text>
             {allZones.map((z) => {
               const preset = ZONE_PRESETS.find((p) => p.label === z.label);
-              const icon = preset?.icon ?? 'ðŸ“';
+              const icon = preset?.icon ?? '📍';
               const isEditing = z.id === safeExistingZone?.id;
               return (
                 <View key={z.id} style={[styles.existingCard, isEditing && styles.existingCardActive]}>
@@ -436,7 +436,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
                   <View style={styles.existingCardBody}>
                     <Text style={styles.existingCardLabel}>{z.label}</Text>
                     <Text style={styles.existingCardMeta}>
-                      âŠ™ {z.radiusM}m Â· {z.center.latitude.toFixed(4)}, {z.center.longitude.toFixed(4)}
+                      âŠ™ {z.radiusM}m · {z.center.latitude.toFixed(4)}, {z.center.longitude.toFixed(4)}
                     </Text>
                   </View>
                   <View style={styles.existingCardActions}>
@@ -459,7 +459,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
                     >
                       {deleting === z.id
                         ? <ActivityIndicator size="small" color="#DC2626" />
-                        : <Text style={styles.existingDeleteBtnText}>ðŸ—‘</Text>
+                        : <Text style={styles.existingDeleteBtnText}>🗑️</Text>
                       }
                     </Pressable>
                   </View>

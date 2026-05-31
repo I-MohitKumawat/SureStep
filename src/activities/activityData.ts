@@ -60,7 +60,7 @@ export interface PlayerProfile {
 export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
   {
     id: 'games',
-    icon: 'ðŸ§©',
+    icon: '🧩',
     label: 'Games',
     color: '#4F46E5',
     bgColor: '#EEF2FF',
@@ -68,7 +68,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'memory-match',
         categoryId: 'games',
-        icon: 'ðŸƒ',
+        icon: '🃏',
         title: 'Match the Pairs',
         subtitle: 'Find matching pairs of cards',
         description: 'Flip cards and find the matching pairs.',
@@ -85,7 +85,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'word-search',
         categoryId: 'games',
-        icon: 'ðŸ”¤',
+        icon: '🔠',
         title: 'Word Search',
         subtitle: 'Find hidden words in the grid',
         description: 'Spot and tap words hidden in a letter grid.',
@@ -102,7 +102,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'jigsaw-puzzle',
         categoryId: 'games',
-        icon: 'ðŸ§©',
+        icon: '🧩',
         title: 'Jigsaw Puzzle',
         subtitle: 'Drag pieces to complete the picture',
         description: 'Arrange puzzle pieces to form a complete picture.',
@@ -120,7 +120,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
   },
   {
     id: 'workout',
-    icon: 'ðŸ‹ï¸',
+    icon: '🏋️',
     label: 'Workout',
     color: '#16A34A',
     bgColor: '#F0FDF4',
@@ -128,7 +128,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'sit-and-step',
         categoryId: 'workout',
-        icon: 'ðŸª‘',
+        icon: '🪑',
         title: 'Sit & Step Strength',
         subtitle: 'Seated leg exercises',
         description: 'Lift each knee up and down while sitting. Safe and easy.',
@@ -145,13 +145,13 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'spin-and-strengthen',
         categoryId: 'workout',
-        icon: 'ðŸ’ª',
+        icon: '💪',
         title: 'Spin & Strengthen',
         subtitle: 'Arm and shoulder circles',
         description: 'Stretch arms out and slowly circle them forward then back.',
         benefits: ['Eases stiff shoulders', 'Feels refreshing'],
         skills: ['Flexibility', 'Coordination'],
-        instructions: ['Hold your arms out and make slow circles â€” forward 5 times, then backward.'],
+        instructions: ['Hold your arms out and make slow circles — forward 5 times, then backward.'],
         difficulty: 'Easy',
         durationMin: 4,
         patientType: 'All patients',
@@ -162,7 +162,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'neck-relief',
         categoryId: 'workout',
-        icon: 'ðŸ§˜',
+        icon: '🧘',
         title: 'Neck Relief Routine',
         subtitle: 'Gentle neck stretch',
         description: 'Slowly roll your head side to side. Nice and easy.',
@@ -180,7 +180,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
   },
   {
     id: 'relaxing',
-    icon: 'ðŸŽµ',
+    icon: '🎵',
     label: 'Relaxing',
     color: '#7C3AED',
     bgColor: '#F5F3FF',
@@ -188,7 +188,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'music-listen',
         categoryId: 'relaxing',
-        icon: 'ðŸŽµ',
+        icon: '🎵',
         title: 'Listening to Music',
         subtitle: 'Pick a song and relax',
         description: 'Choose a gentle melody and simply listen. Nothing else needed.',
@@ -205,7 +205,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'meditation',
         categoryId: 'relaxing',
-        icon: 'ðŸŒ¸',
+        icon: '🌸',
         title: 'Meditation',
         subtitle: 'Sit quietly and feel calm',
         description: 'Close your eyes, breathe slowly, and let your thoughts settle.',
@@ -222,7 +222,7 @@ export const ACTIVITY_CATALOGUE: ActivityCategory[] = [
       {
         id: 'breathing-exercise',
         categoryId: 'relaxing',
-        icon: 'ðŸŒ¿',
+        icon: '🌿',
         title: 'Breathing Exercise',
         subtitle: 'Follow the bubble to breathe',
         description: 'Watch the bubble and breathe with it. In, hold, and out.',
@@ -320,12 +320,12 @@ export const WEEKLY_STATS: WeeklyStats[] = [
 // â”€â”€â”€ Motivational messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const MOTIVATIONAL = [
-  'You are doing amazing! ðŸŒŸ',
-  'Every step forward matters ðŸ’ª',
-  'Your brain is growing stronger! ðŸ§ ',
-  'Keep it up â€” you inspire us! ðŸŒ¸',
+  'You are doing amazing! 🌟',
+  'Every step forward matters 💪',
+  'Your brain is growing stronger! 🧠',
+  'Keep it up — you inspire us! 🌸',
   'Progress is happening every day âœ¨',
-  'Small wins lead to big victories ðŸ†',
+  'Small wins lead to big victories 🏆',
 ];
 
 export function getMotivationalMessage(): string {
@@ -350,10 +350,10 @@ export function getRecommendations(): Activity[] {
 // â”€â”€â”€ Badge definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const BADGES: Record<string, { icon: string; label: string; desc: string }> = {
-  'first-play':     { icon: 'ðŸŽ‰', label: 'First Step',      desc: 'Completed your first activity' },
-  'week-streak':    { icon: 'ðŸ”¥', label: 'Week Warrior',    desc: '7-day activity streak' },
-  'memory-master':  { icon: 'ðŸ§ ', label: 'Memory Master',   desc: 'Completed all memory games' },
-  'chill-champion': { icon: 'ðŸŒ¿', label: 'Chill Champion',  desc: 'Completed all relaxing activities' },
-  'fit-hero':       { icon: 'ðŸ’ª', label: 'Fit Hero',        desc: 'Completed all workout exercises' },
+  'first-play':     { icon: '🎉', label: 'First Step',      desc: 'Completed your first activity' },
+  'week-streak':    { icon: '🔥', label: 'Week Warrior',    desc: '7-day activity streak' },
+  'memory-master':  { icon: '🧠', label: 'Memory Master',   desc: 'Completed all memory games' },
+  'chill-champion': { icon: '🌿', label: 'Chill Champion',  desc: 'Completed all relaxing activities' },
+  'fit-hero':       { icon: '💪', label: 'Fit Hero',        desc: 'Completed all workout exercises' },
   'star-player':    { icon: 'â­', label: 'Star Player',     desc: 'Earned 500 XP in total' },
 };

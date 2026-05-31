@@ -66,8 +66,8 @@ export function buildPatientBentoModel(p: Params): PatientBentoModel {
     riskLevel === 'stable'
       ? `${name.split(' ')[0] ?? name} is stable this week`
       : riskLevel === 'elevated'
-        ? 'Elevated attention â€” review drivers'
-        : 'At risk â€” prioritize follow-up';
+        ? 'Elevated attention — review drivers'
+        : 'At risk — prioritize follow-up';
 
   const adherence7d = Math.min(1, Math.max(0, adherencePercent / 100));
   const criticalTasks = hasRecentAlerts ? 0.45 : 0.82;
@@ -88,7 +88,7 @@ export function buildPatientBentoModel(p: Params): PatientBentoModel {
     alerts.push({ id: 'a3', severity: 'high', title: 'Missed medication or check-in' });
   }
   if (alerts.length === 0) {
-    alerts.push({ id: 'ok1', severity: 'watch', title: 'No critical items â€” pattern looks steady' });
+    alerts.push({ id: 'ok1', severity: 'watch', title: 'No critical items — pattern looks steady' });
   } else if (alerts.length === 1) {
     alerts.push({ id: 'ok2', severity: 'watch', title: 'Review full history if unsure' });
   }
@@ -112,7 +112,7 @@ export function buildPatientBentoModel(p: Params): PatientBentoModel {
       decision: atRisk ? 'Review history and notify patient if needed' : 'Keep current plan; spot-check next week'
     },
     location: {
-      shortLabel: 'Near home Â· approx. 0.3 mi',
+      shortLabel: 'Near home · approx. 0.3 mi',
       detail: 'Last known: 123 Oak St area (mock). Open Maps for full navigation.',
       updatedAt: '12 min ago'
     },
@@ -130,9 +130,9 @@ export function buildPatientBentoModel(p: Params): PatientBentoModel {
     },
     activity: {
       summary: lastActivityLabel.includes('Opened')
-        ? 'Opened app recently â€” no activities completed'
+        ? 'Opened app recently — no activities completed'
         : lastActivityLabel,
-      decision: 'Send a gentle nudge or simplify todayâ€™s tasks'
+      decision: "Send a gentle nudge or simplify today's tasks"
     }
   };
 }

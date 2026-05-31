@@ -29,7 +29,7 @@ function Stars({ rating }: { rating: number }) {
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   caregiver: CaregiverListing;
-  isConfirmed: boolean;
+  linkStatus: 'PENDING' | 'CONFIRMED' | 'SUSPENDED' | 'ENDED' | null;
   onBack: () => void;
   onConfirm: (c: CaregiverListing) => void;
 };
@@ -37,7 +37,7 @@ type Props = {
 // ─── Component ────────────────────────────────────────────────────────────────
 export const CaregiverDetailView: React.FC<Props> = ({
   caregiver,
-  isConfirmed,
+  linkStatus,
   onBack,
   onConfirm,
 }) => (
@@ -58,16 +58,25 @@ export const CaregiverDetailView: React.FC<Props> = ({
 
       {/* Hero */}
       <View style={d.heroWrap}>
-        <View style={[d.avatar, isConfirmed && d.avatarConfirmed]}>
+        <View style={[
+          d.avatar,
+          linkStatus === 'CONFIRMED' && d.avatarConfirmed,
+          linkStatus === 'PENDING' && { borderColor: '#F59E0B', borderWidth: 3 }
+        ]}>
           {caregiver.profile_photo_url ? (
             <Image source={{ uri: caregiver.profile_photo_url }} style={d.avatarImage} />
           ) : (
             <Text style={d.avatarEmoji}>{caregiver.emoji || '👩‍⚕️'}</Text>
           )}
         </View>
-        {isConfirmed && (
+        {linkStatus === 'CONFIRMED' && (
           <View style={d.confirmedBadge}>
             <Text style={d.confirmedBadgeText}>✓  Your Active Caregiver</Text>
+          </View>
+        )}
+        {linkStatus === 'PENDING' && (
+          <View style={[d.confirmedBadge, { backgroundColor: '#F59E0B' }]}>
+            <Text style={d.confirmedBadgeText}>⏳  Request Pending Approval</Text>
           </View>
         )}
       </View>
@@ -160,15 +169,24 @@ export const CaregiverDetailView: React.FC<Props> = ({
       <View style={{ height: 164 }} />
     </ScrollView>
 
-    {/* Confirm button — only shown before confirmation */}
-    {!isConfirmed && (
+    {/* Action button wrap */}
+    {linkStatus !== 'CONFIRMED' && (
       <View style={d.buttonWrap}>
-        <Pressable
-          style={({ pressed }) => [d.confirmBtn, pressed && d.confirmBtnPressed]}
-          onPress={() => onConfirm(caregiver)}
-        >
-          <Text style={d.confirmBtnText}>Request Caregiver</Text>
-        </Pressable>
+        {linkStatus === 'PENDING' ? (
+          <Pressable
+            style={[d.confirmBtn, { backgroundColor: C.borderMid }]}
+            disabled={true}
+          >
+            <Text style={d.confirmBtnText}>Pending Request</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [d.confirmBtn, pressed && d.confirmBtnPressed]}
+            onPress={() => onConfirm(caregiver)}
+          >
+            <Text style={d.confirmBtnText}>Request Caregiver</Text>
+          </Pressable>
+        )}
       </View>
     )}
   </View>

@@ -22,7 +22,7 @@ type Props = NativeStackScreenProps<PatientStackParams, 'PatientAiScreen'>;
 const SUGGESTIONS = [
   {
     id: 'med',
-    icon: 'ðŸ’Š',
+    icon: '💊',
     colour: '#DCFCE7',
     iconBg: '#4ADE80',
     title: 'Check my medication',
@@ -31,16 +31,16 @@ const SUGGESTIONS = [
   },
   {
     id: 'heart',
-    icon: 'ðŸ’“',
+    icon: '💖',
     colour: '#EFF6FF',
     iconBg: '#93C5FD',
     title: 'Heart rate today?',
     subtitle: 'Currently 72 BPM',
-    answer: "Your heart rate is **72 BPM** â€” that is perfectly within the healthy resting range of 60â€“100 BPM. You are doing great! Try a short walk today to keep it steady.",
+    answer: "Your heart rate is **72 BPM** — that is perfectly within the healthy resting range of 60-100 BPM. You are doing great! Try a short walk today to keep it steady.",
   },
   {
     id: 'walk',
-    icon: 'ðŸš¶',
+    icon: '🚶',
     colour: '#F0FFF4',
     iconBg: '#34D399',
     title: 'When is my next walk?',
@@ -49,16 +49,16 @@ const SUGGESTIONS = [
   },
   {
     id: 'sleep',
-    icon: 'ðŸ˜´',
+    icon: '😴',
     colour: '#FAF5FF',
     iconBg: '#C084FC',
     title: 'How was my sleep?',
     subtitle: 'Last night: 7.5 hrs',
-    answer: "You slept for **7.5 hours** last night â€” that is excellent! Adults need 7â€“9 hours for optimal health. Your sleep was mostly uninterrupted. Keep up this routine!",
+    answer: "You slept for **7.5 hours** last night — that is excellent! Adults need 7-9 hours for optimal health. Your sleep was mostly uninterrupted. Keep up this routine!",
   },
   {
     id: 'water',
-    icon: 'ðŸ’§',
+    icon: '💧',
     colour: '#F0F9FF',
     iconBg: '#38BDF8',
     title: 'Am I hydrated enough?',
@@ -73,19 +73,19 @@ function getAiAnswer(query: string): string {
   if (q.includes('medic') || q.includes('pill') || q.includes('tablet'))
     return "Your next medication is Amlodipine 5mg at **2:00 PM**. Always take with water. Let me know if you need a reminder set!";
   if (q.includes('heart') || q.includes('bpm') || q.includes('pulse'))
-    return "Your resting heart rate is **72 BPM** â€” healthy and steady. If you feel palpitations or chest discomfort, please alert your caregiver immediately.";
+    return "Your resting heart rate is **72 BPM** — healthy and steady. If you feel palpitations or chest discomfort, please alert your caregiver immediately.";
   if (q.includes('walk') || q.includes('exercise') || q.includes('step'))
     return "Your next walk is at **4:30 PM** for 30 minutes. Light exercise is great for circulation and mood. Remember to take it slow and rest if needed.";
   if (q.includes('sleep') || q.includes('rest') || q.includes('nap'))
-    return "You slept **7.5 hours** last night â€” well above the minimum. A short 20-minute nap after lunch is fine, but avoid napping after 3 PM to protect your night sleep.";
+    return "You slept **7.5 hours** last night — well above the minimum. A short 20-minute nap after lunch is fine, but avoid napping after 3 PM to protect your night sleep.";
   if (q.includes('water') || q.includes('drink') || q.includes('hydrat'))
-    return "You are halfway through your daily water goal â€” **4 of 8 glasses**. Have a glass right now and another with dinner. Hydration improves energy and helps your medication work better.";
+    return "You are halfway through your daily water goal — **4 of 8 glasses**. Have a glass right now and another with dinner. Hydration improves energy and helps your medication work better.";
   if (q.includes('caregiver') || q.includes('nurse') || q.includes('doctor'))
     return "Your caregiver is available today. You can view their contact details in the Caregiver tab. If it is urgent, tap the **Ask AI** button and say 'urgent'.";
   if (q.includes('task') || q.includes('routine') || q.includes('today'))
     return "Today you have **3 tasks** remaining: afternoon medication, a 30-minute walk, and your evening blood pressure check. You can track these on your Home screen.";
   if (q.includes('pain') || q.includes('hurt') || q.includes('unwell') || q.includes('sick'))
-    return "I am sorry to hear that. Please **alert your caregiver immediately** using the emergency button. Do not wait â€” your health comes first. Would you like me to help contact them?";
+    return "I am sorry to hear that. Please **alert your caregiver immediately** using the emergency button. Do not wait — your health comes first. Would you like me to help contact them?";
   return `I heard you say: **"${query}"**. I am still learning! For now, try asking me about your medication, heart rate, walk schedule, sleep, or hydration. Your caregiver can answer anything more specific.`;
 }
 
@@ -163,7 +163,7 @@ export const PatientAiScreen: React.FC<Props> = ({ navigation }) => {
           {/* â”€â”€ Greeting / Suggestions â”€â”€ */}
           {showSuggestions && (
             <>
-              <Text style={styles.greeting}>I can help you withâ€¦</Text>
+              <Text style={styles.greeting}>I can help you with...</Text>
               {SUGGESTIONS.map((s) => (
                 <Pressable
                   key={s.id}
@@ -211,7 +211,7 @@ export const PatientAiScreen: React.FC<Props> = ({ navigation }) => {
                 <Text style={styles.aiBubbleAvatarText}>âœ¦</Text>
               </View>
               <View style={[styles.bubble, styles.bubbleAi]}>
-                <Text style={styles.bubbleText}>Thinkingâ€¦</Text>
+                <Text style={styles.bubbleText}>Thinking...</Text>
               </View>
             </View>
           )}
@@ -223,7 +223,7 @@ export const PatientAiScreen: React.FC<Props> = ({ navigation }) => {
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Ask me anythingâ€¦"
+            placeholder="Ask me anything..."
             placeholderTextColor={C.textMuted}
             returnKeyType="send"
             onSubmitEditing={() => sendMessage(input)}
@@ -233,7 +233,7 @@ export const PatientAiScreen: React.FC<Props> = ({ navigation }) => {
             onPress={() => sendMessage(input)}
             style={({ pressed }) => [styles.sendBtn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.sendIcon}>ðŸŽ¤</Text>
+            <Text style={styles.sendIcon}>🎙️</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

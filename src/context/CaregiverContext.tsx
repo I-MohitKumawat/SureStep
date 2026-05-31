@@ -64,7 +64,7 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
       if (!patientPhone) return;
 
       // Optimistic update
-      setConfirmedCaregiverState(c);
+      setConfirmedCaregiverState(c ? { ...c, status: 'PENDING' } : null);
 
       try {
         if (c) {

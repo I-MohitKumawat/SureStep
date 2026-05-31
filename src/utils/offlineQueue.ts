@@ -76,4 +76,8 @@ export const flush = async (): Promise<void> => {
   }
 };
 
+export const hasPendingTaskUpdate = (taskId: string): boolean => {
+  return queue.some(r => r.endpoint.includes(`/tasks/${taskId}`));
+};
+
 export const clearQueue = () => { queue = []; };

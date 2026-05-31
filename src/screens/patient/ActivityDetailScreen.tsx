@@ -17,7 +17,7 @@ import type { PatientStackParams } from '../../types/navigation.types';
 
 type Props = NativeStackScreenProps<PatientStackParams, 'ActivityDetailScreen'>;
 
-// Two simple checks â€” enough for safety without overwhelming the patient
+// Two simple checks — enough for safety without overwhelming the patient
 const CHECKS = [
   { id: 'ready',       label: 'I feel comfortable and ready' },
   { id: 'no-stress',   label: 'I am calm and not feeling unwell' },
@@ -69,7 +69,7 @@ export const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => 
           <Text style={s.desc}>{activity.subtitle}</Text>
         </View>
 
-        {/* How to play â€” single line instruction */}
+        {/* How to play — single line instruction */}
         <View style={[s.howCard, { borderLeftColor: activity.color }]}>
           <Text style={s.howLabel}>How to play</Text>
           <Text style={s.howText}>{activity.instructions[0]}</Text>
@@ -120,7 +120,7 @@ const s = StyleSheet.create({
 
   scroll: { paddingBottom: 24 },
 
-  // Banner â€” large and iconic
+  // Banner — large and iconic
   banner: {
     marginHorizontal: 16, borderRadius: 28,
     height: 200, alignItems: 'center', justifyContent: 'center',
@@ -168,7 +168,7 @@ const s = StyleSheet.create({
   tick: { fontFamily: F.extraBold, fontSize: 15, color: '#fff' },
   checkLabel: { flex: 1, fontFamily: F.medium, fontSize: 15, color: C.textBody, lineHeight: 21 },
 
-  // Play button â€” big, friendly, unmissable
+  // Play button — big, friendly, unmissable
   playBtn: {
     marginHorizontal: 16, borderRadius: 999,
     paddingVertical: 20,

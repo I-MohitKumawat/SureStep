@@ -47,7 +47,7 @@ async function writeWavFile(
   view.setUint16(32, 2, true);  view.setUint16(34, 16, true);
   ws(36, 'data'); view.setUint32(40, dataSize, true);
 
-  // PCM samples â€” sine wave + gentle 2nd harmonic for warmth
+  // PCM samples — sine wave + gentle 2nd harmonic for warmth
   let off = 44;
   for (const { hz, dur } of notes) {
     const n = Math.floor(SR * dur);
@@ -63,7 +63,7 @@ async function writeWavFile(
     }
   }
 
-  // Convert to base64 in 3072-byte chunks (3072 % 3 === 0 â†’ no mid-stream padding)
+  // Convert to base64 in 3072-byte chunks (3072 % 3 === 0 → no mid-stream padding)
   const bytes = new Uint8Array(buf);
   const CHUNK = 3072;
   let b64 = '';
@@ -97,38 +97,38 @@ const CARD_W = SCREEN_W - CARD_SIDE_PADDING * 2;
 const relaxActivities: RelaxCard[] = [
   {
     id: 'music-listen',
-    icon: 'ðŸŽµ',
+    icon: '🎵',
     title: 'Listen & Feel',
     subtitle: 'Tune into calming music',
-    instructions: 'Close your eyes and listen to the music in your mind. Let each note wash over you. There is nothing to do â€” just be.',
+    instructions: 'Close your eyes and listen to the music in your mind. Let each note wash over you. There is nothing to do — just be.',
   },
   {
     id: 'nature-sounds',
-    icon: 'ðŸŒ¿',
+    icon: '🌿',
     title: 'Nature Sounds',
     subtitle: 'Imagine a peaceful place',
     instructions: 'Picture a gentle stream or a quiet forest. Breathe slowly and imagine the sounds of nature around you.',
   },
   {
     id: 'hand-massage',
-    icon: 'ðŸ¤²',
+    icon: '🤲',
     title: 'Hand Massage',
     subtitle: 'Warm self-care for your hands',
     instructions: 'Rub your palms together gently to warm them. Then slowly massage each finger and the back of your hands.',
   },
   {
     id: 'gratitude',
-    icon: 'ðŸŒ¸',
+    icon: '🌸',
     title: 'Gratitude Moment',
     subtitle: 'Think of three good things',
-    instructions: 'Think of three things that made you smile today â€” big or small. Hold each one gently in your mind.',
+    instructions: 'Think of three things that made you smile today — big or small. Hold each one gently in your mind.',
   },
   {
     id: 'gentle-stretch',
-    icon: 'ðŸŒ…',
+    icon: '🌅',
     title: 'Gentle Stretch',
     subtitle: 'Easy stretches for comfort',
-    instructions: 'Slowly reach your arms up, then out to the sides. Let gravity do the work â€” no forcing. Hold each position for a breath.',
+    instructions: 'Slowly reach your arms up, then out to the sides. Let gravity do the work — no forcing. Hold each position for a breath.',
   },
 ];
 
@@ -144,7 +144,7 @@ const SONGS: Song[] = [
     id: 'morning-peace',
     title: 'Morning Peace',
     description: 'Soft C-major lullaby',
-    icon: 'ðŸŒ…',
+    icon: '🌅',
     colour: '#C4B5FD',
     notes: [
       { hz: 261, dur: 0.6 }, { hz: 329, dur: 0.6 }, { hz: 392, dur: 0.6 },
@@ -156,7 +156,7 @@ const SONGS: Song[] = [
     id: 'ocean-breeze',
     title: 'Ocean Breeze',
     description: 'Gentle A-minor waves',
-    icon: 'ðŸŒŠ',
+    icon: '🌊',
     colour: '#67E8F9',
     notes: [
       { hz: 220, dur: 0.7 }, { hz: 261, dur: 0.5 }, { hz: 329, dur: 0.7 },
@@ -168,7 +168,7 @@ const SONGS: Song[] = [
     id: 'lullaby',
     title: 'Gentle Lullaby',
     description: 'Warm G-major melody',
-    icon: 'ðŸŒ™',
+    icon: '🌙',
     colour: '#FCD34D',
     notes: [
       { hz: 392, dur: 0.5 }, { hz: 440, dur: 0.5 }, { hz: 493, dur: 0.6 },
@@ -178,7 +178,7 @@ const SONGS: Song[] = [
   },
 ];
 
-// â”€â”€â”€ 1. Listen & Feel â€” Music Player â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ 1. Listen & Feel — Music Player â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MusicListenActivity({ onDone }: { onDone: () => void }) {
   const [selected, setSelected] = useState<Song | null>(null);
   const [playing,  setPlaying]  = useState(false);
@@ -196,13 +196,13 @@ function MusicListenActivity({ onDone }: { onDone: () => void }) {
     setPlaying(false);
   }, []);
 
-  // Play a song â€” write WAV to cache then load & loop
+  // Play a song — write WAV to cache then load & loop
   const play = useCallback(async (song: Song) => {
     await stop();
     setLoading(true);
     try {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
-      // Write WAV to device cache (file:// path â€” data: URIs not supported by expo-av)
+      // Write WAV to device cache (file:// path — data: URIs not supported by expo-av)
       const uri = await writeWavFile(song.notes, song.id);
       const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
       soundRef.current = sound;
@@ -239,7 +239,7 @@ function MusicListenActivity({ onDone }: { onDone: () => void }) {
 
   return (
     <View style={styles.exContainer}>
-      <Text style={styles.gameHint}>Choose a song and relax ðŸŽ§</Text>
+      <Text style={styles.gameHint}>Choose a song and relax 🎧</Text>
 
       {/* Song selection */}
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
@@ -267,7 +267,7 @@ function MusicListenActivity({ onDone }: { onDone: () => void }) {
             onPress={() => void togglePlay()}
             style={[styles.playOrb, { backgroundColor: selected.colour }]}
           >
-            <Text style={styles.playOrbIcon}>{playing ? 'â¸' : 'â–¶'}</Text>
+            <Text style={styles.playOrbIcon}>{playing ? '⏸' : '▶'}</Text>
           </Pressable>
 
           {/* Waveform visualizer */}
@@ -288,19 +288,19 @@ function MusicListenActivity({ onDone }: { onDone: () => void }) {
           </View>
 
           <Text style={[styles.gameHint, { marginTop: 4 }]}>
-            {playing ? `â™ª Now playing: ${selected.title}` : 'Tap â–¶ to play'}
+            {playing ? `♪ Now playing: ${selected.title}` : 'Tap ▶ to play'}
           </Text>
         </>
       )}
 
       <Pressable onPress={() => { void stop(); onDone(); }} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.secondaryBtnText}>Done listening âœ“</Text>
+        <Text style={styles.secondaryBtnText}>Done listening ✓</Text>
       </Pressable>
     </View>
   );
 }
 
-// 2. Breathing Bubble â€” expand / contract cycle
+// 2. Breathing Bubble — expand / contract cycle
 function NatureSoundsActivity({ onDone }: { onDone: () => void }) {
   type Phase = 'inhale' | 'hold' | 'exhale';
   const [phase, setPhase] = useState<Phase>('inhale');
@@ -317,13 +317,13 @@ function NatureSoundsActivity({ onDone }: { onDone: () => void }) {
   };
   const bubbleSize = phase === 'inhale' ? 110 : phase === 'hold' ? 110 : 70;
   const bubbleColor = phase === 'inhale' ? '#C4B5FD' : phase === 'hold' ? '#A78BFA' : '#7C3AED';
-  const phaseLabel = phase === 'inhale' ? 'Breathe In ðŸ˜®â€ðŸ’¨' : phase === 'hold' ? 'Hold... â¸' : 'Breathe Out ðŸ’¨';
+  const phaseLabel = phase === 'inhale' ? 'Breathe In 😮‍💨' : phase === 'hold' ? 'Hold... ⏱️' : 'Breathe Out 💨';
   const hint = phase === 'inhale' ? '4 counts' : phase === 'hold' ? '2 counts' : '6 counts';
   return (
     <View style={styles.exContainer}>
       <Text style={styles.gameHint}>Follow the bubble. Tap to advance.</Text>
       <Pressable onPress={advance} style={[styles.bubble, { width: bubbleSize, height: bubbleSize, borderRadius: bubbleSize / 2, backgroundColor: bubbleColor }]}>
-        <Text style={styles.bubbleEmoji}>{phase === 'inhale' ? 'ðŸ«§' : phase === 'hold' ? 'â¸ï¸' : 'ðŸŒ¬ï¸'}</Text>
+        <Text style={styles.bubbleEmoji}>{phase === 'inhale' ? '🌬️' : phase === 'hold' ? '⏱️' : '💨'}</Text>
       </Pressable>
       <Text style={styles.directionText}>{phaseLabel}</Text>
       <Text style={styles.gameHint}>{hint}</Text>
@@ -339,14 +339,14 @@ function NatureSoundsActivity({ onDone }: { onDone: () => void }) {
   );
 }
 
-// 3. Hand Massage â€” timed steps with a visual progress bar
+// 3. Hand Massage — timed steps with a visual progress bar
 function HandMassageActivity({ onDone }: { onDone: () => void }) {
   const steps = [
-    { label: 'Rub palms together', icon: 'ðŸ¤²' },
-    { label: 'Massage right thumb', icon: 'ðŸ‘' },
-    { label: 'Massage left thumb', icon: 'ðŸ‘' },
-    { label: 'Gently squeeze each finger', icon: 'âœ‹' },
-    { label: 'Stroke backs of both hands', icon: 'ðŸ™Œ' },
+    { label: 'Rub palms together', icon: '🤲' },
+    { label: 'Massage right thumb', icon: '👍' },
+    { label: 'Massage left thumb', icon: '👍' },
+    { label: 'Gently squeeze each finger', icon: '🖐️' },
+    { label: 'Stroke backs of both hands', icon: '🙌' },
   ];
   const [step, setStep] = useState(0);
   const done = step >= steps.length;
@@ -367,7 +367,7 @@ function HandMassageActivity({ onDone }: { onDone: () => void }) {
         </View>
       ) : (
         <View style={styles.massageCard}>
-          <Text style={{ fontSize: 40 }}>âœ…</Text>
+          <Text style={{ fontSize: 40 }}>✅</Text>
           <Text style={styles.massageLabel}>Lovely work!</Text>
         </View>
       )}
@@ -376,7 +376,7 @@ function HandMassageActivity({ onDone }: { onDone: () => void }) {
       </View>
       <Text style={styles.gameHint}>{step + (done ? 0 : 1)} / {steps.length}</Text>
       <Pressable onPress={next} disabled={done} style={({ pressed }) => [styles.bigTapBtn, { opacity: done ? 0.4 : 1 }, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.bigTapText}>Next â†’</Text>
+        <Text style={styles.bigTapText}>Next ➡️</Text>
       </Pressable>
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
@@ -385,14 +385,14 @@ function HandMassageActivity({ onDone }: { onDone: () => void }) {
   );
 }
 
-// 4. Gratitude Jar â€” tap a card to reveal a prompt, then confirm
+// 4. Gratitude Jar — tap a card to reveal a prompt, then confirm
 function GratitudeActivity({ onDone }: { onDone: () => void }) {
   const cards = [
-    { front: 'ðŸŽ', prompt: 'A gift I received â€” big or small' },
-    { front: 'â¤ï¸', prompt: 'Someone who cares for me' },
-    { front: 'ðŸ¡', prompt: 'A place that feels safe' },
-    { front: 'ðŸ˜„', prompt: 'A moment that made me laugh' },
-    { front: 'ðŸŒŸ', prompt: 'Something I am proud of' },
+    { front: '🎁', prompt: 'A gift I received — big or small' },
+    { front: '❤️', prompt: 'Someone who cares for me' },
+    { front: '🏡', prompt: 'A place that feels safe' },
+    { front: '😄', prompt: 'A moment that made me laugh' },
+    { front: '🌟', prompt: 'Something I am proud of' },
   ];
   const [flipped, setFlipped] = useState<number[]>([]);
   const [done, setDone] = useState(false);
@@ -409,12 +409,12 @@ function GratitudeActivity({ onDone }: { onDone: () => void }) {
       <View style={styles.jarRow}>
         {cards.map((c, i) => (
           <Pressable key={i} onPress={() => flip(i)} style={[styles.jarCard, flipped.includes(i) && styles.jarCardOpen]}>
-            <Text style={{ fontSize: 22 }}>{flipped.includes(i) ? 'ðŸ«™' : c.front}</Text>
+            <Text style={{ fontSize: 22 }}>{flipped.includes(i) ? '✨' : c.front}</Text>
             {flipped.includes(i) && <Text style={styles.jarPrompt}>{c.prompt}</Text>}
           </Pressable>
         ))}
       </View>
-      {done && <Text style={styles.successText}>Beautiful thoughts! ðŸŒ¸</Text>}
+      {done && <Text style={styles.successText}>Beautiful thoughts! 🌸</Text>}
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
       </Pressable>
@@ -422,14 +422,14 @@ function GratitudeActivity({ onDone }: { onDone: () => void }) {
   );
 }
 
-// 5. Body Scan â€” tap body parts from head to toe
+// 5. Body Scan — tap body parts from head to toe
 function GentleStretchActivity({ onDone }: { onDone: () => void }) {
   const parts = [
-    { id: 'head', icon: 'ðŸ§ ', label: 'Relax your forehead & jaw' },
-    { id: 'shoulders', icon: 'ðŸ«¸', label: 'Drop your shoulders down' },
-    { id: 'hands', icon: 'ðŸ¤²', label: 'Unclench your hands' },
-    { id: 'belly', icon: 'ðŸ«', label: 'Let your belly soften' },
-    { id: 'feet', icon: 'ðŸ¦¶', label: 'Feel your feet on the floor' },
+    { id: 'head', icon: '🧠', label: 'Relax your forehead & jaw' },
+    { id: 'shoulders', icon: '🧍', label: 'Drop your shoulders down' },
+    { id: 'hands', icon: '🤲', label: 'Unclench your hands' },
+    { id: 'belly', icon: '🧘', label: 'Let your belly soften' },
+    { id: 'feet', icon: '🦵', label: 'Feel your feet on the floor' },
   ];
   const [step, setStep] = useState(0);
   const done = step >= parts.length;
@@ -449,7 +449,7 @@ function GentleStretchActivity({ onDone }: { onDone: () => void }) {
         </View>
       ) : (
         <View style={styles.massageCard}>
-          <Text style={{ fontSize: 44 }}>ðŸŒ…</Text>
+          <Text style={{ fontSize: 44 }}>🌅</Text>
           <Text style={styles.massageLabel}>Fully relaxed. Well done!</Text>
         </View>
       )}
@@ -493,11 +493,11 @@ const RelaxModal = ({
         <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modalHeader}>
             <Pressable onPress={onClose} style={styles.modalCloseBtn}>
-              <Text style={styles.modalCloseText}>âœ•</Text>
+              <Text style={styles.modalCloseText}>✖</Text>
             </Pressable>
           </View>
           <View style={styles.modalIconBubble}>
-            <Text style={styles.modalIcon}>{activity?.icon ?? 'ðŸŽµ'}</Text>
+            <Text style={styles.modalIcon}>{activity?.icon ?? '🎵'}</Text>
           </View>
           <Text style={styles.modalTitle}>{activity?.title ?? 'Relax'}</Text>
           <View style={styles.gameArea}>{body}</View>
@@ -610,9 +610,9 @@ export const PatientRelaxingScreen: React.FC<Props> = ({ navigation }) => {
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent =
-              tab === 'Search' && confirmedCaregiver ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
+              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
             const label =
-              tab === 'Search' && confirmedCaregiver
+              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED'
                 ? confirmedCaregiver.name.split(' ')[0]
                 : tab;
             return (

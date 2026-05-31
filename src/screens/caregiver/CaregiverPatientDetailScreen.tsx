@@ -15,8 +15,9 @@
  * Result: 77KB monolith → ~250-line orchestrator + 3 focused tab components + 1 shared styles file.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Animated, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useIsFocused } from '@react-navigation/native';
 import type { CaregiverStackParams } from '../../types/navigation.types';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
@@ -27,6 +28,12 @@ import { DashboardAlertsTab }  from '../../components/caregiver/dashboard/Dashbo
 import { DashboardManageTab }  from '../../components/caregiver/dashboard/DashboardManageTab';
 import { F } from '../../theme/fonts';
 import { C } from '../../theme/colors';
+import { getPatientProfile } from '../../services/userService';
+import {
+  getRoutineTemplates,
+  deactivateRoutineTemplate,
+} from '../../services/taskService';
+
 import {
   IconDashboard, IconBell, IconActivity,
 } from '../../assets/icons/NavIcons';
@@ -44,8 +51,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientDetailScreen'>;
 type CaregiverTab = 'Home' | 'Alerts' | 'Manage';
-type EditingTask  = { id: string; title: string; description: string; time: string; icon: string; status: string };
-type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string };
+type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string; photoUrl?: string | null };
 
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<{ active: boolean }>> = {
   Home:   ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
@@ -56,13 +62,90 @@ const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<{ active: boolean }>> =
 export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const patientId    = route.params.patientId;
   const patientName  = route.params.patientName;
+  const isFocused    = useIsFocused();
 
-  const { tasks, loading: tasksLoading, createTask, updateTask, deleteTask } = useTasks();
+  const { tasks, loading: tasksLoading, loadTasksForPatient } = useTasks();
   const patientTasks  = useMemo(() => tasks.filter(t => t.patientId === patientId), [tasks, patientId]);
-  const manageLoading = tasksLoading && patientTasks.length === 0;
+  const manageTasks = useMemo(() =>
+    patientTasks.map(t => ({
+      ...t,
+      instructions_md: t.instructionsMd,
+      patient_hint: t.description,
+    })), [patientTasks]);
 
   // ── Tab state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<CaregiverTab>('Home');
+
+  // ── Routines & Care Plan states ──────────────────────────────────────────
+  const [templatesList, setTemplatesList] = useState<any[]>([]);
+  const [routinesLoading, setRoutinesLoading] = useState(true);
+
+  // Load templates only — templates change rarely (user-triggered), no need to poll
+  const loadTemplates = useCallback(async () => {
+    try {
+      const templatesRes = await getRoutineTemplates(patientId);
+      setTemplatesList(templatesRes.data?.data?.templates ?? []);
+    } catch (err) {
+      console.warn('Failed to load templates:', err);
+    }
+  }, [patientId]);
+
+  // Load tasks for context (used by manageTasks) — called once on focus
+  // We don't poll this because the patient's optimistic state would get clobbered.
+  // The caregiver sees updates via the context's 10s poll from the patient's device.
+  const loadRoutines = useCallback(async () => {
+    setRoutinesLoading(true);
+    try {
+      await Promise.all([
+        loadTemplates(),
+        loadTasksForPatient(patientId),
+      ]);
+    } catch (err) {
+      console.warn('Failed to load routines:', err);
+    } finally {
+      setRoutinesLoading(false);
+    }
+  }, [patientId, loadTasksForPatient, loadTemplates]);
+
+  // Refresh task statuses from DB every 10s for caregiver view — separate from loadRoutines
+  // Uses getTodaysTasks but merges via context so patient optimistic state is preserved
+  const refreshTaskStatuses = useCallback(async () => {
+    try {
+      await loadTasksForPatient(patientId);
+    } catch { /* silent */ }
+  }, [patientId, loadTasksForPatient]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    void loadRoutines();
+    // Poll for task status updates every 10 seconds (reduced from 4s)
+    const interval = setInterval(() => {
+      void refreshTaskStatuses();
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [isFocused, loadRoutines, refreshTaskStatuses]);
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    try {
+      await deactivateRoutineTemplate(templateId);
+      Alert.alert('Success', 'Routine template deleted successfully.');
+      void loadTemplates(); // only reload templates, not tasks
+    } catch (err) {
+      console.warn('Failed to delete template:', err);
+      Alert.alert('Error', 'Failed to delete routine template.');
+    }
+  };
+
+  const { updateTaskStatus: updateContextTaskStatus } = useTasks();
+  const handleUpdateTaskStatus = async (taskId: string, status: string) => {
+    try {
+      // Route through TaskContext so optimistic update propagates to patient screen too
+      await updateContextTaskStatus(taskId, status as any);
+    } catch (err) {
+      console.warn('Failed to update task status:', err);
+      Alert.alert('Error', 'Failed to update routine task status.');
+    }
+  };
 
   // ── Reminder toast ───────────────────────────────────────────────────────
   const [reminderSentKeys, setReminderSentKeys] = useState<Set<string>>(new Set());
@@ -117,40 +200,59 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const [patientDetails,     setPatientDetails]     = useState<PatientDetails | null>(null);
 
   useEffect(() => {
-    setPatientDetails({ fullName: patientName, dob: '—', gender: '—', city: '—', language: 'English' });
-  }, [patientName]);
+    const loadProfile = async () => {
+      try {
+        const { data } = await getPatientProfile(patientId);
+        if (data?.data) {
+          const p = data.data;
+          setPatientDetails({
+            fullName: p.user?.name || p.name || patientName,
+            dob: p.user?.date_of_birth || p.date_of_birth || '—',
+            gender: p.user?.gender || p.gender || '—',
+            city: p.user?.city || p.city || '—',
+            language: p.user?.preferred_language === 'hi' ? 'Hindi' : 'English',
+            photoUrl: p.user?.photo_url || p.photo_url || null,
+          });
+        } else {
+          setPatientDetails({ fullName: patientName, dob: '—', gender: '—', city: '—', language: 'English', photoUrl: null });
+        }
+      } catch (err) {
+        console.warn('Failed to load patient profile:', err);
+        setPatientDetails({ fullName: patientName, dob: '—', gender: '—', city: '—', language: 'English', photoUrl: null });
+      }
+    };
+    void loadProfile();
+  }, [patientId, patientName]);
 
-  // ── Manage-tab modal form state ──────────────────────────────────────────
-  const [showRoutineModal, setShowRoutineModal] = useState(false);
-  const [editingRoutine,   setEditingRoutine]   = useState<EditingTask | null>(null);
-  const [form,             setForm]             = useState({ title: '', description: '', time: '08:00', icon: '🍽️' });
-  const [formError,        setFormError]        = useState<string | null>(null);
-  const [saving,           setSaving]           = useState(false);
-
-  const openAddRoutine = () => { setEditingRoutine(null); setForm({ title: '', description: '', time: '08:00', icon: '🍽️' }); setFormError(null); setShowRoutineModal(true); };
-  const openEditRoutine = (task: EditingTask) => { setEditingRoutine(task); setForm({ title: task.title, description: task.description, time: task.time, icon: task.icon }); setFormError(null); setShowRoutineModal(true); };
-
-  const saveRoutine = async () => {
-    if (!form.title.trim()) { setFormError('Title is required.'); return; }
-    if (!form.time.trim())  { setFormError('Time is required.');  return; }
-    setSaving(true); setFormError(null);
-    try {
-      if (editingRoutine) await updateTask(editingRoutine.id, { title: form.title, description: form.description, time: form.time, icon: form.icon });
-      else await createTask({ patientId, title: form.title, description: form.description, time: form.time, icon: form.icon });
-      setShowRoutineModal(false);
-    } catch { setFormError('Save failed. Please try again.'); }
-    finally { setSaving(false); }
-  };
+  const calculatedAge = useMemo(() => {
+    if (!patientDetails?.dob || patientDetails.dob === '—') {
+      return patientName === 'Dorothy Hargrove' ? 78 : null;
+    }
+    const dobDate = new Date(patientDetails.dob);
+    if (isNaN(dobDate.getTime())) return patientName === 'Dorothy Hargrove' ? 78 : null;
+    const today = new Date();
+    let age = today.getFullYear() - dobDate.getFullYear();
+    const m = today.getMonth() - dobDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+      age--;
+    }
+    return age;
+  }, [patientDetails?.dob, patientName]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const batteryColor  = batteryLevel >= 50 ? C.safeText : batteryLevel >= 20 ? '#D97706' : C.error;
   const capsuleScrollY = useRef(new Animated.Value(0)).current;
 
   const routineItems = useMemo(() =>
-    patientTasks.slice().sort((a, b) => a.time.localeCompare(b.time)).map(t => ({
-      key: t.id, emoji: t.icon ?? '📋', title: t.title,
+    patientTasks.slice().sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(t => ({
+      key: t.id,
+      category: t.category,      // Structured category for icon mapping
+      iconName: t.iconName,      // Optional icon override from backend
+      emoji: t.icon,             // Legacy field during migration
+      title: t.title,
       meta: t.description ? `${t.time} · ${t.description}` : t.time,
-      done: t.status === 'done', status: t.status,
+      done: t.status === 'done',
+      status: t.status,
     })), [patientTasks]);
 
   const activeRoutineIndex = useMemo(() => {
@@ -161,8 +263,9 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const routineCallouts = useMemo(() => {
     const out: Array<{ id: string; emoji: string; title: string; message: string; severity: 'high' | 'medium' }> = [];
     for (const t of patientTasks) {
-      if (t.status === 'missed') out.push({ id: `missed-${t.id}`, emoji: t.icon ?? '📋', title: 'Missed routine', message: t.title, severity: 'high' });
-      else if (t.status === 'unsure') out.push({ id: `unsure-${t.id}`, emoji: t.icon ?? '📋', title: 'Needs follow-up', message: t.title, severity: 'medium' });
+      if (t.status === 'missed')  out.push({ id: `missed-${t.id}`,  emoji: t.icon ?? '', title: 'Missed routine',     message: t.title, severity: 'high' });
+      if (t.status === 'overdue') out.push({ id: `overdue-${t.id}`, emoji: t.icon ?? '', title: 'Overdue — act now',   message: t.title, severity: 'high' });
+      if (t.status === 'unsure')  out.push({ id: `unsure-${t.id}`,  emoji: t.icon ?? '', title: 'Needs follow-up',    message: t.title, severity: 'medium' });
     }
     return out.filter(c => !dismissedCallouts.has(c.id));
   }, [patientTasks, dismissedCallouts]);
@@ -187,9 +290,6 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
           <Pressable onPress={() => navigation.navigate('CaregiverTriageScreen')} style={({ pressed }) => [styles.backNavBtn, pressed && { opacity: 0.72 }]} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={styles.backNavText}>← Back</Text>
           </Pressable>
-          <Pressable onPress={() => navigation.navigate('CaregiverProfileEditScreen')} style={({ pressed }) => [styles.myProfileBtn, pressed && { opacity: 0.8 }]}>
-            <Text style={styles.myProfileBtnText}>👤 My Profile</Text>
-          </Pressable>
         </View>
 
         {/* Tab content */}
@@ -202,19 +302,15 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
         ) : activeTab === 'Manage' ? (
           <DashboardManageTab
             patientName={patientName}
-            patientTasks={patientTasks}
-            manageLoading={manageLoading}
-            showRoutineModal={showRoutineModal}
-            editingRoutine={editingRoutine}
-            form={form}
-            formError={formError}
-            saving={saving}
-            onOpenAdd={openAddRoutine}
-            onOpenEdit={openEditRoutine}
-            onDelete={(id) => void deleteTask(id)}
-            onSave={() => void saveRoutine()}
-            onCloseModal={() => setShowRoutineModal(false)}
-            onFormChange={(patch) => setForm(f => ({ ...f, ...patch }))}
+            patientId={patientId}
+            tasks={manageTasks}
+            templates={templatesList}
+            loading={routinesLoading || tasksLoading}
+            onRefresh={loadRoutines}
+            onOpenAdd={() => navigation.navigate('CaregiverRoutineEditorScreen', { patientId, patientName, mode: 'create' })}
+            onOpenEdit={(routine) => navigation.navigate('CaregiverRoutineEditorScreen', { patientId, patientName, mode: 'edit', routine })}
+            onDeleteTemplate={handleDeleteTemplate}
+            onUpdateTaskStatus={handleUpdateTaskStatus}
           />
         ) : (
           <DashboardHomeTab
@@ -229,6 +325,8 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             hasRealLocation={hasRealLocation}
             hasRealZones={hasRealZones}
             patientTasks={patientTasks}
+            patientAge={calculatedAge}
+            patientPhoto={patientDetails?.photoUrl}
             activeRoutineIndex={activeRoutineIndex}
             routineItems={routineItems}
             routineCallouts={routineCallouts}

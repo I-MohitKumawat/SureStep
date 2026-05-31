@@ -16,9 +16,33 @@ export type RelationshipType =
 
 export type RelationshipStatus = 'PENDING' | 'CONFIRMED' | 'SUSPENDED' | 'ENDED';
 
-export type TaskStatus = 'PENDING' | 'DONE' | 'MISSED' | 'UNSURE' | 'SKIPPED';
+export type TaskStatus = 'PENDING' | 'DONE' | 'MISSED' | 'OVERDUE' | 'UNSURE' | 'SKIPPED';
 
-export type TaskRecurrenceType = 'NONE' | 'DAILY' | 'WEEKLY' | 'CUSTOM';
+export type TaskRecurrenceType =
+  | 'NONE'
+  | 'DAILY'
+  | 'ALTERNATE_DAYS'
+  | 'SPECIFIC_WEEKDAYS'
+  | 'EVERY_X_DAYS'
+  | 'WEEKLY'
+  | 'MONTHLY'
+  | 'CUSTOM';
+
+/** Structured category for a routine task — replaces emoji-only categorisation. */
+export type TaskCategory =
+  | 'medication'
+  | 'meal'
+  | 'exercise'
+  | 'walk'
+  | 'appointment'
+  | 'cognition'
+  | 'therapy'
+  | 'hygiene'
+  | 'sleep'
+  | 'custom';
+
+/** Escalation priority for a routine task — drives alert severity. */
+export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
 export type LocationSource = 'PHONE' | 'WEARABLE' | 'GLASS' | 'MANUAL';
 

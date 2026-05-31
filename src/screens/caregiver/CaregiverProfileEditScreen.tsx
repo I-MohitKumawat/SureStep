@@ -211,7 +211,7 @@ export const CaregiverProfileEditScreen: React.FC<Props> = ({ navigation }) => {
         <Pressable onPress={() => void pickPhoto()} style={s.photoWrap}>
           {photoSrc
             ? <Image source={{ uri: photoSrc }} style={s.photo} />
-            : <View style={s.photoFallback}><Text style={{ fontSize:38 }}>ðŸ‘¤</Text></View>}
+            : <View style={s.photoFallback}><Text style={{ fontSize:38 }}>👤</Text></View>}
           <View style={s.photoPlus}><Text style={{ color:'#fff', fontSize:16, fontFamily: F.bold }}>+</Text></View>
         </Pressable>
 

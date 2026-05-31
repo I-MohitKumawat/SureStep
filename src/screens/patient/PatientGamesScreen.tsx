@@ -71,38 +71,38 @@ const CARD_W = SCREEN_W - CARD_SIDE_PADDING * 2;
 const games: GameCard[] = [
   {
     id: 'memory-match',
-    icon: 'ðŸƒ',
+    icon: '🃏',
     title: 'Memory Match',
     subtitle: 'Flip and find pairs',
     instructions: 'Tap two cards to flip them. If they match, they stay open. Try to find all pairs.',
   },
   {
     id: 'picture-puzzle',
-    icon: 'ðŸ§©',
+    icon: '🧩',
     title: 'Picture Puzzle',
     subtitle: 'Complete the image',
-    instructions: 'Drag simple pieces into place to complete the picture. Take it slowâ€”there is no timer.',
+    instructions: 'Drag simple pieces into place to complete the picture. Take it slow—there is no timer.',
   },
   {
     id: 'word-finder',
-    icon: 'ðŸ”¤',
+    icon: '🔠',
     title: 'Word Finder',
     subtitle: 'Find familiar words',
     instructions: 'Scan the letters and tap highlighted words. Start with short words and build confidence.',
   },
   {
     id: 'color-sort',
-    icon: 'ðŸŽ¨',
+    icon: '🎨',
     title: 'Color Sort',
     subtitle: 'Sort by color',
-    instructions: 'Drag items into the matching color box. This helps attention and handâ€“eye coordination.',
+    instructions: 'Drag items into the matching color box. This helps attention and hand-eye coordination.',
   },
   {
     id: 'sound-recall',
-    icon: 'ðŸ””',
+    icon: '🔔',
     title: 'Sound Recall',
     subtitle: 'Listen and choose',
-    instructions: 'Listen to a sound and pick the matching picture. Repeat as neededâ€”no pressure.',
+    instructions: 'Listen to a sound and pick the matching picture. Repeat as needed—no pressure.',
   },
 ];
 
@@ -123,7 +123,7 @@ function shuffle<T>(arr: T[]) {
 type MemoryTile = { id: string; value: string; revealed: boolean; matched: boolean };
 function MemoryMatchGame({ onDone }: { onDone: () => void }) {
   const [tiles, setTiles] = useState<MemoryTile[]>(() => {
-    const values = ['ðŸŽ', 'ðŸŒ', 'ðŸ‡', 'ðŸŠ', 'ðŸŽ', 'ðŸŒ', 'ðŸ‡', 'ðŸŠ'];
+    const values = ['🍎', '🍌', '🍇', '🍊', '🍎', '🍌', '🍇', '🍊'];
     return shuffle(values).map((v, i) => ({ id: `t_${i}_${v}`, value: v, revealed: false, matched: false }));
   });
   const [lock, setLock] = useState(false);
@@ -133,7 +133,7 @@ function MemoryMatchGame({ onDone }: { onDone: () => void }) {
   const total   = tiles.length / 2;
 
   const reset = () => {
-    const values = ['ðŸŽ', 'ðŸŒ', 'ðŸ‡', 'ðŸŠ', 'ðŸŽ', 'ðŸŒ', 'ðŸ‡', 'ðŸŠ'];
+    const values = ['🍎', '🍌', '🍇', '🍊', '🍎', '🍌', '🍇', '🍊'];
     setTiles(shuffle(values).map((v, i) => ({ id: `t_${i}_${v}`, value: v, revealed: false, matched: false })));
     setMoves(0);
   };
@@ -166,8 +166,8 @@ function MemoryMatchGame({ onDone }: { onDone: () => void }) {
   return (
     <View>
       <View style={styles.scoreBadgeRow}>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>ðŸƒ Pairs: {matched}/{total}</Text></View>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>ðŸ‘† Moves: {moves}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>🃏 Pairs: {matched}/{total}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>👆 Moves: {moves}</Text></View>
       </View>
       <Text style={styles.gameHint}>Find all matching pairs!</Text>
       <View style={styles.grid}>
@@ -216,8 +216,8 @@ function PicturePuzzleGame({ onDone }: { onDone: () => void }) {
   return (
     <View>
       <View style={styles.scoreBadgeRow}>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{isSolved ? 'âœ… Solved!' : 'ðŸ”¢ Arrange 1â†’4'}</Text></View>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>ðŸ”„ Swaps: {moves}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{isSolved ? '✅ Solved!' : '🔢 Arrange 1→4'}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>🔄 Swaps: {moves}</Text></View>
       </View>
       <Text style={styles.gameHint}>Tap two tiles to swap. Arrange in order.</Text>
       <View style={styles.puzzleGrid}>
@@ -263,8 +263,8 @@ function WordFinderGame({ onDone }: { onDone: () => void }) {
   return (
     <View>
       <View style={styles.scoreBadgeRow}>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>ðŸ“ {progress.length}/{target.length} letters</Text></View>
-        {progress === target && <View style={[styles.scoreBadge, { backgroundColor: '#D1FAE5' }]}><Text style={[styles.scoreBadgeText, { color: '#065F46' }]}>ðŸŽ‰ Correct!</Text></View>}
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>📋 {progress.length}/{target.length} letters</Text></View>
+        {progress === target && <View style={[styles.scoreBadge, { backgroundColor: '#D1FAE5' }]}><Text style={[styles.scoreBadgeText, { color: '#065F46' }]}>🎉 Correct!</Text></View>}
       </View>
       <Text style={styles.gameHint}>Tap letters in order to spell: <Text style={{ color: C.primary }}>{target}</Text></Text>
       <View style={styles.lettersRow}>
@@ -313,7 +313,7 @@ function ColorSortGame({ onDone }: { onDone: () => void }) {
     <View>
       <View style={styles.scoreBadgeRow}>
         <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>â­ Score: {score}/{items.length}</Text></View>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{done ? 'Done! ðŸŽ‰' : `Q ${idx + 1}/${items.length}`}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{done ? 'Done! 🎉' : `Q ${idx + 1}/${items.length}`}</Text></View>
       </View>
       <Text style={styles.gameHint}>What colour is the dot?</Text>
       <View style={styles.sortItem}>
@@ -341,9 +341,9 @@ const SOUND_PATTERNS: Record<string, { hz: number; dur: number }[]> = {
 };
 
 const RECALL_ROUNDS = [
-  { clue: 'Doorbell', answer: 'doorbell', sound: 'doorbell', choices: [{ id: 'doorbell', icon: 'ðŸ””', label: 'Doorbell' }, { id: 'phone', icon: 'ðŸ“ž', label: 'Phone' }, { id: 'alarm', icon: 'â°', label: 'Alarm' }] },
-  { clue: 'Phone ringing', answer: 'phone', sound: 'phone', choices: [{ id: 'doorbell', icon: 'ðŸ””', label: 'Doorbell' }, { id: 'phone', icon: 'ðŸ“ž', label: 'Phone' }, { id: 'alarm', icon: 'â°', label: 'Alarm' }] },
-  { clue: 'Alarm clock',  answer: 'alarm', sound: 'alarm', choices: [{ id: 'doorbell', icon: 'ðŸ””', label: 'Doorbell' }, { id: 'phone', icon: 'ðŸ“ž', label: 'Phone' }, { id: 'alarm', icon: 'â°', label: 'Alarm' }] },
+  { clue: 'Doorbell', answer: 'doorbell', sound: 'doorbell', choices: [{ id: 'doorbell', icon: '🔔', label: 'Doorbell' }, { id: 'phone', icon: '📞', label: 'Phone' }, { id: 'alarm', icon: 'â°', label: 'Alarm' }] },
+  { clue: 'Phone ringing', answer: 'phone', sound: 'phone', choices: [{ id: 'doorbell', icon: '🔔', label: 'Doorbell' }, { id: 'phone', icon: '📞', label: 'Phone' }, { id: 'alarm', icon: 'â°', label: 'Alarm' }] },
+  { clue: 'Alarm clock',  answer: 'alarm', sound: 'alarm', choices: [{ id: 'doorbell', icon: '🔔', label: 'Doorbell' }, { id: 'phone', icon: '📞', label: 'Phone' }, { id: 'alarm', icon: 'â°', label: 'Alarm' }] },
 ];
 
 function SoundRecallGame({ onDone }: { onDone: () => void }) {
@@ -381,7 +381,7 @@ function SoundRecallGame({ onDone }: { onDone: () => void }) {
       <Text style={styles.gameHint}>Listen, then pick the matching picture.</Text>
       {/* Play sound button */}
       <Pressable onPress={playClue} style={({ pressed }) => [styles.listenBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.listenBtnIcon}>ðŸ”Š</Text>
+        <Text style={styles.listenBtnIcon}>🔊</Text>
         <Text style={styles.listenBtnText}>Play: {current?.clue}</Text>
       </Pressable>
       <View style={styles.choiceRow}>
@@ -392,7 +392,7 @@ function SoundRecallGame({ onDone }: { onDone: () => void }) {
           </Pressable>
         ))}
       </View>
-      {feedback === 'correct' && <Text style={styles.successText}>âœ… Correct!</Text>}
+      {feedback === 'correct' && <Text style={styles.successText}>✅ Correct!</Text>}
       {feedback === 'wrong'   && <Text style={[styles.successText, { color: '#EF4444' }]}>âŒ Try again!</Text>}
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
@@ -426,12 +426,12 @@ const PlayModal = ({
         <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modalHeader}>
             <Pressable onPress={onClose} style={styles.modalCloseBtn}>
-              <Text style={styles.modalCloseText}>âœ•</Text>
+              <Text style={styles.modalCloseText}>❌</Text>
             </Pressable>
           </View>
 
           <View style={styles.modalIconBubble}>
-            <Text style={styles.modalIcon}>{game?.icon ?? 'ðŸŽ®'}</Text>
+            <Text style={styles.modalIcon}>{game?.icon ?? '🎮'}</Text>
           </View>
           <Text style={styles.modalTitle}>{game?.title ?? 'Game'}</Text>
 

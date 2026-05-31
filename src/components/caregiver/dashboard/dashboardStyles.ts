@@ -92,6 +92,187 @@ export const styles = StyleSheet.create({
   bottomLabel: { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3 },
   bottomLabelActive: { fontFamily: F.bold, color: C.primary },
   activeIndicator: { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
+
+  // ── New Mockup-Aligned Styles ──────────────────────────────────────────────
+  newHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F4F4F5',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    marginBottom: 14,
+  },
+  newHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  newAvatarTouch: {
+    marginRight: 14,
+  },
+  newAvatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: '#E4E4E7',
+  },
+  newAvatarPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+  },
+  newAvatarText: {
+    fontFamily: F.bold,
+    fontSize: 20,
+    color: '#065F46',
+  },
+  newHeaderInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  newHeaderName: {
+    fontFamily: F.extraBold,
+    fontSize: 18,
+    color: '#09090B',
+  },
+  newHeaderAge: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#71717A',
+    marginTop: 2,
+  },
+  newActiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E6F4EA',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#C2E7CD',
+  },
+  newActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#137333',
+    marginRight: 6,
+  },
+  newActiveText: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: '#137333',
+  },
+
+  // Gradient Status Card
+  newStatusCardPress: {
+    borderRadius: 20,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#1E73E6',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  newStatusCard: {
+    padding: 20,
+    borderRadius: 20,
+  },
+  statusCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusHomeIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusLiveBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusLiveText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  statusCardMiddle: {
+    marginBottom: 20,
+  },
+  statusCardSub: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.75)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  statusCardMain: {
+    fontFamily: F.extraBold,
+    fontSize: 28,
+    color: '#FFFFFF',
+    marginTop: 4,
+  },
+  statusCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusCardTimeIcon: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginRight: 6,
+  },
+  statusCardTimeText: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+
+  // Indicators Row
+  newIndicatorsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  newIndicatorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F4F4F5',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    width: '48.5%',
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+  },
+  newIndicatorIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  newIndicatorText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#18181B',
+  },
 });
 
 export const alertStyles = StyleSheet.create({
@@ -166,6 +347,11 @@ export const mStyles = StyleSheet.create({
   formError: { fontFamily: F.regular, fontSize: 13, color: C.error, marginBottom: 8 },
   saveBtn: { backgroundColor: C.primary, borderRadius: 16, paddingVertical: 15, alignItems: 'center', marginTop: 6, shadowColor: C.primary, shadowOpacity: 0.3, shadowOffset: { width: 0, height: 5 }, shadowRadius: 10, elevation: 7 },
   saveBtnText: { fontFamily: F.bold, fontSize: 16, color: C.primaryText },
+  bannerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 20, borderWidth: 1.5, borderColor: '#BBF7D0', padding: 16, marginBottom: 18, shadowColor: '#10B981', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 3 },
+  bannerContent: { flex: 1, paddingRight: 8 },
+  bannerTitle: { fontFamily: F.extraBold, fontSize: 16, color: '#14532D' },
+  bannerDesc: { fontFamily: F.regular, fontSize: 12, color: '#15803D', marginTop: 4, lineHeight: 16 },
+  bannerChevron: { fontFamily: F.bold, fontSize: 24, color: '#15803D', alignSelf: 'center', marginLeft: 8 },
 });
 
 export const rSumStyles = StyleSheet.create({

@@ -2,9 +2,9 @@
  * CaregiverPatientsScreen.tsx
  *
  * Patient list sourced exclusively from Supabase:
- *  - patient_caregiver_links  â†’ which patients belong to this caregiver
- *  - mock_users / patients    â†’ patient names
- *  - tasks                    â†’ real completion stats, last activity, alerts
+ *  - patient_caregiver_links  → which patients belong to this caregiver
+ *  - mock_users / patients    → patient names
+ *  - tasks                    → real completion stats, last activity, alerts
  *
  * Realtime: re-fetches the full list whenever a new link INSERT fires.
  */
@@ -30,6 +30,7 @@ import {
   respondToPatientRequest,
 } from '../../services/relationshipService';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/apiClient';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import {
@@ -135,7 +136,7 @@ const PatientCard = ({ patient, onPress }: { patient: Patient; onPress: () => vo
         <View style={styles.nameRow}>
           <Text style={styles.patientName}>{patient.name}</Text>
         </View>
-        <Text style={styles.lastActivity}>Last activity Â· {patient.lastActivity}</Text>
+        <Text style={styles.lastActivity}>Last activity · {patient.lastActivity}</Text>
         <View style={styles.progressBarTrack}>
           <View style={[styles.progressBarFill, { width: `${progressPct}%` as `${number}%` }]} />
         </View>
@@ -177,10 +178,68 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
   const loadPatients = useCallback(async (phone: string) => {
     setPatients((prev) => { if (prev.length === 0) setLoading(true); return prev; });
     setError(null);
-    console.warn('[CaregiverPatients] loadPatients: Supabase removed, returning empty array');
-    setPatients([]);
-    setRawTasks([]);
-    setLoading(false);
+    try {
+      const { data } = await apiClient.get('/relationships/my-patients');
+      const patientRows: any[] = data?.data?.patients ?? [];
+      
+      const allTasks: RawTask[] = [];
+      const mappedPatients: Patient[] = [];
+
+      await Promise.all(
+        patientRows.map(async (p: any) => {
+          try {
+            const res = await apiClient.get(`/tasks/patient/${p.id}/today`);
+            const tasksList: any[] = res?.data?.data?.tasks ?? res?.data?.tasks ?? [];
+            const mappedTasks: RawTask[] = tasksList.map((t: any) => ({
+              id: t.id,
+              patient_id: t.patient_id,
+              title: t.title,
+              status: t.status,
+              completed_at: t.completed_at,
+            }));
+            
+            allTasks.push(...mappedTasks);
+
+            const completedTasks = mappedTasks.filter((t) => t.status === 'done').length;
+            const totalTasks = mappedTasks.length;
+            const hasMissed = mappedTasks.some((t) => t.status === 'missed');
+            
+            const lastActivity = computeLastActivity(mappedTasks);
+            const statusLabel = deriveStatusLabel(completedTasks, totalTasks, hasMissed);
+
+            mappedPatients.push({
+              id: p.id,
+              name: p.name,
+              completedTasks,
+              totalTasks,
+              lastActivity,
+              statusLabel,
+            });
+          } catch (e) {
+            console.error(`[CaregiverPatients] Error loading tasks for patient ${p.id}:`, e);
+            mappedPatients.push({
+              id: p.id,
+              name: p.name,
+              completedTasks: 0,
+              totalTasks: 0,
+              lastActivity: 'Error loading activity',
+              statusLabel: 'On track',
+            });
+          }
+        })
+      );
+
+      // Sort patients by name to keep order consistent
+      mappedPatients.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      setPatients(mappedPatients);
+      setRawTasks(allTasks);
+    } catch (e: any) {
+      console.error('[CaregiverPatients] loadPatients error:', e);
+      setError(e?.message || 'Failed to load patients');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   // â”€â”€ Load pending requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -376,7 +435,7 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                       <Text style={[l3Styles.patientName, totalAlerts > 0 && l3Styles.patientNameUnseen]}>
                         {patient.name}
                       </Text>
-                      <Text style={l3Styles.lastSeen}>Last activity Â· {patient.lastActivity}</Text>
+                      <Text style={l3Styles.lastSeen}>Last activity · {patient.lastActivity}</Text>
                     </View>
                     <View style={[l3Styles.riskBadge, { backgroundColor: riskC.bg, borderColor: riskC.border }]}>
                       <Text style={[l3Styles.riskText, { color: riskC.text }]}>{risk.toUpperCase()}</Text>
@@ -415,13 +474,13 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                       style={({ pressed }) => [l3Styles.actionBtn, l3Styles.callBtn, pressed && { opacity: 0.8 }]}
                       onPress={() => void Linking.openURL('tel:')}
                     >
-                      <Text style={l3Styles.callBtnText}>ðŸ“ž  Call</Text>
+                      <Text style={l3Styles.callBtnText}>📞  Call</Text>
                     </Pressable>
                     <Pressable
                       style={({ pressed }) => [l3Styles.actionBtn, l3Styles.notifyBtn, pressed && { opacity: 0.8 }]}
                       onPress={() => void Linking.openURL('sms:')}
                     >
-                      <Text style={l3Styles.notifyBtnText}>ðŸ‘¨â€ðŸ‘©â€ðŸ‘§  Notify Family</Text>
+                      <Text style={l3Styles.notifyBtnText}>👨‍👩‍👧  Notify Family</Text>
                     </Pressable>
                   </View>
                 </Pressable>
@@ -446,7 +505,7 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             </View>
             <Text style={settingsStyles.profileTag}>CAREGIVER PROFILE</Text>
-            <Text style={settingsStyles.profilePhone}>{caregiverPhone ?? 'â€”'}</Text>
+            <Text style={settingsStyles.profilePhone}>{caregiverPhone ?? '—'}</Text>
           </View>
 
           <View style={settingsStyles.divider} />
@@ -454,9 +513,9 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
           {/* Read-only identity fields */}
           <Text style={settingsStyles.sectionHeading}>Account</Text>
           {([
-            { label: 'Phone Number', value: caregiverPhone ?? 'â€”', emoji: 'ðŸ“ž' },
-            { label: 'Role',         value: 'Caregiver',           emoji: 'ðŸ§‘â€âš•ï¸' },
-            { label: 'Account Type', value: 'Standard',            emoji: 'ðŸ“Š' },
+            { label: 'Phone Number', value: caregiverPhone ?? '—', emoji: '📞' },
+            { label: 'Role',         value: 'Caregiver',           emoji: '🧑‍⚕️' },
+            { label: 'Account Type', value: 'Standard',            emoji: '📊' },
           ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
             <View key={row.label} style={settingsStyles.fieldRow}>
               <View style={settingsStyles.fieldEmojiWrap}>
@@ -474,8 +533,8 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
           {/* Preferences */}
           <Text style={settingsStyles.sectionHeading}>Preferences</Text>
           {([
-            { label: 'Notifications', value: 'Enabled', emoji: 'ðŸ””' },
-            { label: 'Language',      value: 'English', emoji: 'ðŸŒ' },
+            { label: 'Notifications', value: 'Enabled', emoji: '🔔' },
+            { label: 'Language',      value: 'English', emoji: '🌐' },
             { label: 'App Version',   value: '1.0.0',   emoji: 'â„¹ï¸'  },
           ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
             <View key={row.label} style={settingsStyles.fieldRow}>

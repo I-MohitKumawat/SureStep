@@ -44,10 +44,10 @@ function HUD({
 
   return (
     <View style={hud.container}>
-      {/* Top row: exit â€” title â€” pause */}
+      {/* Top row: exit — title — pause */}
       <View style={hud.topRow}>
         <Pressable onPress={onExit} style={hud.iconBtn} hitSlop={10}>
-          <Text style={hud.iconBtnText}>âœ•</Text>
+          <Text style={hud.iconBtnText}>❌</Text>
         </Pressable>
         <Text style={hud.title} numberOfLines={1}>{activity.title}</Text>
         <Pressable onPress={onPause} style={hud.iconBtn} hitSlop={10}>
@@ -119,7 +119,7 @@ function ResultOverlay({
     <Modal transparent animationType="fade" visible>
       <View style={res.overlay}>
         <Animated.View style={[res.card, { transform: [{ scale: scaleAnim }] }]}>
-          <Text style={res.emoji}>ðŸŽ‰</Text>
+          <Text style={res.emoji}>🎉</Text>
           <Text style={res.heading}>Amazing Work!</Text>
           <View style={res.scoreBox}>
             <Text style={res.scoreNum}>{score}</Text>
@@ -161,7 +161,7 @@ function PauseOverlay({ onResume, onExit }: { onResume: () => void; onExit: () =
         <View style={pause.card}>
           <Text style={pause.emoji}>â¸</Text>
           <Text style={pause.title}>Paused</Text>
-          <Text style={pause.hint}>Take a breath â€” you're doing great!</Text>
+          <Text style={pause.hint}>Take a breath — you're doing great!</Text>
           <Pressable onPress={onResume} style={pause.resumeBtn}>
             <Text style={pause.resumeText}>â–¶  Resume</Text>
           </Pressable>
@@ -235,8 +235,8 @@ export const ActivityPlayScreen: React.FC<Props> = ({ navigation, route }) => {
     setRestartKey((k) => k + 1);
   };
 
-  // "Back to Activities" goes all the way back to the hub, not just one screen
-  const exitToActivities = () => navigation.navigate('PatientActivitiesScreen');
+  // "Back to Activities" goes back to patient home screen with Activity tab preselected
+  const exitToActivities = () => navigation.navigate('PatientHomeScreen', { initialTab: 'Activity' });
 
   if (!activity) {
     return (
@@ -288,7 +288,7 @@ export const ActivityPlayScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 };
 
-// â”€â”€â”€ Game body router â€” maps new activity IDs to components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Game body router — maps new activity IDs to components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function GameBody({
   activity, onDone, onScoreUpdate, paused,
@@ -315,7 +315,7 @@ function GameBody({
     case 'breathing-exercise': return <NatureSoundsActivity {...props} />;
     default: return (
       <View style={{ padding: 32, alignItems: 'center' }}>
-        <Text style={{ fontSize: 40, marginBottom: 12 }}>ðŸŒŸ</Text>
+        <Text style={{ fontSize: 40, marginBottom: 12 }}>🌟</Text>
         <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textSecondary, textAlign: 'center' }}>
           Activity coming soon!
         </Text>

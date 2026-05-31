@@ -39,35 +39,35 @@ const CARD_W = SCREEN_W - CARD_SIDE_PADDING * 2;
 const workouts: WorkoutCard[] = [
   {
     id: 'chair-march',
-    icon: 'ðŸª‘',
+    icon: '🪑',
     title: 'Chair March',
     subtitle: 'March in place while seated',
-    instructions: 'Sit tall in your chair. Lift your right knee, then your left â€” like marching. Keep a steady rhythm.',
+    instructions: 'Sit tall in your chair. Lift your right knee, then your left — like marching. Keep a steady rhythm.',
   },
   {
     id: 'arm-circles',
-    icon: 'ðŸ’ª',
+    icon: '💪',
     title: 'Arm Circles',
     subtitle: 'Stretch and strengthen shoulders',
     instructions: 'Extend both arms out to the sides. Make slow, large circles forward, then backward. Feel the gentle stretch.',
   },
   {
     id: 'heel-raises',
-    icon: 'ðŸ¦¶',
+    icon: '🦵',
     title: 'Heel Raises',
     subtitle: 'Strengthen calves and balance',
     instructions: 'Stand behind a chair and hold the back lightly. Slowly rise onto your toes, then lower back down. Repeat gently.',
   },
   {
     id: 'neck-rolls',
-    icon: 'ðŸ§˜',
+    icon: '🧘',
     title: 'Neck Rolls',
     subtitle: 'Release tension in neck',
     instructions: 'Sit comfortably. Slowly tilt your head to the right, roll it forward, then to the left. Move gently and smoothly.',
   },
   {
     id: 'deep-breath',
-    icon: 'ðŸŒ¬ï¸',
+    icon: '🌬️',
     title: 'Deep Breathing',
     subtitle: 'Calm the body and mind',
     instructions: 'Breathe in through your nose for 4 counts, hold for 2, breathe out slowly for 6 counts. Repeat 5 times.',
@@ -97,7 +97,7 @@ function ChairMarchExercise({ onDone }: { onDone: () => void }) {
         <Text style={styles.countOf}>/ {target}</Text>
       </View>
       <Pressable onPress={tap} style={({ pressed }) => [styles.bigTapBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.bigTapText}>ðŸ¦µ Lift!</Text>
+        <Text style={styles.bigTapText}>🦵 Lift!</Text>
       </Pressable>
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
@@ -121,14 +121,14 @@ function ArmCirclesExercise({ onDone }: { onDone: () => void }) {
   return (
     <View style={styles.exContainer}>
       <Text style={styles.gameHint}>
-        {phase === 'forward' ? 'ðŸ”„ Circle FORWARD' : phase === 'backward' ? 'ðŸ”ƒ Circle BACKWARD' : 'âœ… Done!'}
+        {phase === 'forward' ? '🔄 Circle FORWARD' : phase === 'backward' ? '🔄 Circle BACKWARD' : '✅ Done!'}
       </Text>
       <View style={styles.countCircle}>
         <Text style={styles.countNum}>{reps}</Text>
         <Text style={styles.countOf}>/ {target}</Text>
       </View>
       <Pressable onPress={tap} style={({ pressed }) => [styles.bigTapBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.bigTapText}>ðŸ’ª Circle!</Text>
+        <Text style={styles.bigTapText}>💪 Circle!</Text>
       </Pressable>
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
@@ -154,7 +154,7 @@ function HeelRaisesExercise({ onDone }: { onDone: () => void }) {
         <Text style={styles.countOf}>/ {target}</Text>
       </View>
       <Pressable onPress={tap} style={({ pressed }) => [styles.bigTapBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.bigTapText}>ðŸ¦¶ Rise!</Text>
+        <Text style={styles.bigTapText}>🦵 Rise!</Text>
       </Pressable>
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
@@ -164,7 +164,7 @@ function HeelRaisesExercise({ onDone }: { onDone: () => void }) {
 }
 
 function NeckRollsExercise({ onDone }: { onDone: () => void }) {
-  const directions = ['Right âž¡ï¸', 'Forward â¬‡ï¸', 'Left â¬…ï¸'];
+  const directions = ['Right ➡️', 'Forward ⬇️', 'Left ⬅️'];
   const [step, setStep] = useState(0);
   const [round, setRound] = useState(0);
   const totalRounds = 3;
@@ -185,7 +185,7 @@ function NeckRollsExercise({ onDone }: { onDone: () => void }) {
       </View>
       <Text style={styles.directionText}>{directions[step]}</Text>
       <Pressable onPress={tap} style={({ pressed }) => [styles.bigTapBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.bigTapText}>Next â†’</Text>
+        <Text style={styles.bigTapText}>Next ➡️</Text>
       </Pressable>
       <Pressable onPress={reset} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.secondaryBtnText}>Restart</Text>
@@ -207,7 +207,7 @@ function DeepBreathingExercise({ onDone }: { onDone: () => void }) {
     setRep(next);
     if (next >= target) setTimeout(onDone, 300);
   };
-  const label = phase === 'in' ? 'ðŸ˜®â€ðŸ’¨ Breathe In' : phase === 'hold' ? 'â¸ Hold' : 'ðŸ’¨ Breathe Out';
+  const label = phase === 'in' ? '😮‍💨 Breathe In' : phase === 'hold' ? '⏱️ Hold' : '💨 Breathe Out';
   return (
     <View style={styles.exContainer}>
       <Text style={styles.gameHint}>Follow the breathing guide. Tap to advance.</Text>
@@ -251,11 +251,11 @@ const StartModal = ({
         <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modalHeader}>
             <Pressable onPress={onClose} style={styles.modalCloseBtn}>
-              <Text style={styles.modalCloseText}>âœ•</Text>
+              <Text style={styles.modalCloseText}>✖</Text>
             </Pressable>
           </View>
           <View style={styles.modalIconBubble}>
-            <Text style={styles.modalIcon}>{workout?.icon ?? 'ðŸ‹ï¸'}</Text>
+            <Text style={styles.modalIcon}>{workout?.icon ?? '🏋️'}</Text>
           </View>
           <Text style={styles.modalTitle}>{workout?.title ?? 'Workout'}</Text>
           <View style={styles.gameArea}>{body}</View>
@@ -368,9 +368,9 @@ export const PatientWorkoutScreen: React.FC<Props> = ({ navigation }) => {
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent =
-              tab === 'Search' && confirmedCaregiver ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
+              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
             const label =
-              tab === 'Search' && confirmedCaregiver
+              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED'
                 ? confirmedCaregiver.name.split(' ')[0]
                 : tab;
             return (

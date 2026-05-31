@@ -48,29 +48,29 @@ type FamilyTab = 'Home' | 'Map' | 'Alerts';
 function safetyCard(status: BreachStatus['status'], coordsAgeS: number) {
   if (coordsAgeS > 120 || status === 'no_signal') return {
     bg: '#1F2937', border: '#374151', labelColor: '#D1D5DB',
-    badge: 'NO SIGNAL', badgeBg: '#374151', icon: 'ðŸ“µ',
+    badge: 'NO SIGNAL', badgeBg: '#374151', icon: '📵',
     description: 'Cannot reach device. Please call the caregiver.',
   };
   switch (status) {
     case 'safe': return {
       bg: '#ECFDF5', border: '#6EE7B7', labelColor: '#065F46',
-      badge: 'SAFE', badgeBg: '#10B981', icon: 'âœ…',
+      badge: 'SAFE', badgeBg: '#10B981', icon: '✅',
       description: 'Patient is within their safe zone.',
     };
     case 'approaching': return {
       bg: '#FFFBEB', border: '#FCD34D', labelColor: '#92400E',
-      badge: 'NEAR BOUNDARY', badgeBg: '#F59E0B', icon: 'âš ï¸',
+      badge: 'NEAR BOUNDARY', badgeBg: '#F59E0B', icon: '⚠️',
       description: 'Patient is approaching the edge of their safe zone.',
     };
     case 'breach': return {
       bg: '#FEF2F2', border: '#FCA5A5', labelColor: '#991B1B',
-      badge: 'OUTSIDE ZONE', badgeBg: '#EF4444', icon: 'ðŸš¨',
+      badge: 'OUTSIDE ZONE', badgeBg: '#EF4444', icon: '🚨',
       description: 'Patient has left the safe zone. Caregiver has been alerted.',
     };
     default: return {
       bg: C.surface, border: C.border, labelColor: C.textSecondary,
-      badge: 'LOCATINGâ€¦', badgeBg: C.textMuted, icon: 'ðŸ“¡',
-      description: 'Acquiring patient locationâ€¦',
+      badge: 'LOCATING...', badgeBg: C.textMuted, icon: '📡',
+      description: 'Acquiring patient location...',
     };
   }
 }
@@ -228,7 +228,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
           style={styles.signOutBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.signOutText}>â† Back</Text>
+          <Text style={styles.signOutText}>← Back</Text>
         </Pressable>
       </View>
 
@@ -292,13 +292,13 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
                 </MapView>
               )}
               <View style={styles.miniMapOverlay}>
-                <Text style={styles.miniMapTap}>Tap to open full map â€º</Text>
+                <Text style={styles.miniMapTap}>Tap to open full map ›</Text>
               </View>
             </Pressable>
 
             {/* â”€â”€ Routine Progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <View style={styles.routineCard}>
-              <Text style={styles.sectionTitle}>ðŸ“‹  Today's Routine</Text>
+              <Text style={styles.sectionTitle}>📋  Today's Routine</Text>
               <View style={styles.routineProgressRow}>
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { width: `${routinePercent}%` as `${number}%` }]} />
@@ -337,9 +337,9 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {activeTab === 'Alerts' && (
           <View style={styles.alertsList}>
-            <Text style={styles.sectionTitle}>ðŸ””  Recent Alerts</Text>
+            <Text style={styles.sectionTitle}>🔔  Recent Alerts</Text>
             {alerts.length === 0 ? (
-              <Text style={styles.emptyText}>No alerts â€” all clear! âœ…</Text>
+              <Text style={styles.emptyText}>No alerts — all clear! ✅</Text>
             ) : (
               alerts.map((alert) => (
                 <View
@@ -350,7 +350,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
                   ]}
                 >
                   <Text style={styles.alertIcon}>
-                    {alert.breachType === 'exit' ? 'ðŸš¨' : 'âœ…'}
+                    {alert.breachType === 'exit' ? '🚨' : '✅'}
                   </Text>
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.alertTitle}>
@@ -362,7 +362,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text style={styles.alertTime}>{formatAge(alert.createdAt)}</Text>
                   </View>
                   {alert.acknowledgedAt && (
-                    <Text style={styles.alertAcked}>âœ“ Acked</Text>
+                    <Text style={styles.alertAcked}>✓ Acked</Text>
                   )}
                 </View>
               ))
@@ -375,7 +375,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
       <View style={styles.bottomBar}>
         {(['Home', 'Map', 'Alerts'] as FamilyTab[]).map((tab) => {
           const isActive = activeTab === tab;
-          const icons: Record<FamilyTab, string> = { Home: 'ðŸ ', Map: 'ðŸ—ºï¸', Alerts: 'ðŸ””' };
+          const icons: Record<FamilyTab, string> = { Home: '🏠', Map: '🗺️', Alerts: '🔔' };
           return (
             <Pressable key={tab} onPress={() => setActiveTab(tab)} style={styles.bottomTab}>
               <Text style={[styles.bottomTabIcon, isActive && { opacity: 1 }]}>{icons[tab]}</Text>
