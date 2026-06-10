@@ -32,7 +32,10 @@ export const connectSocket = (accessToken: string): Socket => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { io } = require('socket.io-client') as { io: (url: string, opts: object) => Socket };
-    socket = io(process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000', {
+    const rawUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+    const socketUrl = rawUrl.replace('/api/v1', '');
+    console.log('[socketClient] Connecting to WebSocket URL:', socketUrl);
+    socket = io(socketUrl, {
       auth:       { token: accessToken },
       transports: ['websocket'],
       reconnection: true,

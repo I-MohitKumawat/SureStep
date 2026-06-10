@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,11 +9,10 @@ import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { CaregiverStackParams } from '../../types/navigation.types';
 import {
-  getTodaysTasks,
   getRoutineTemplates,
-  deactivateRoutineTemplate,
-  updateTaskStatusIdempotent
+  deactivateRoutineTemplate
 } from '../../services/taskService';
+import { useTasks } from '../../context/TaskContext';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientRoutinesScreen'>;
 type ScreenTab = 'daily_flow' | 'care_plan';
@@ -67,8 +66,10 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
   const patientId = route.params?.patientId;
   const patientName = route.params?.patientName ?? 'Patient';
 
+  const { tasks: contextTasks, loadTasksForPatient, updateTaskStatus } = useTasks();
+  const tasks = useMemo(() => contextTasks.filter(t => t.patientId === patientId), [contextTasks, patientId]);
+
   const [activeTab, setActiveTab] = useState<ScreenTab>('daily_flow');
-  const [tasks, setTasks] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
@@ -79,11 +80,10 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
     if (!patientId) return;
     setLoading(true);
     try {
-      const [tasksRes, templatesRes] = await Promise.all([
-        getTodaysTasks(patientId),
+      const [_, templatesRes] = await Promise.all([
+        loadTasksForPatient(patientId, true),
         getRoutineTemplates(patientId)
       ]);
-      setTasks(tasksRes.data?.data?.tasks ?? []);
       setTemplates(templatesRes.data?.data?.templates ?? []);
     } catch (err) {
       console.error('[CaregiverPatientRoutines] Failed to fetch routines:', err);
@@ -91,7 +91,7 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, loadTasksForPatient]);
 
   // Reload data when screen is focused (handles returning from editor)
   useFocusEffect(
@@ -121,15 +121,11 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
 
   // Update status of today's task instance
   const handleUpdateStatus = async (taskId: string, targetStatus: string) => {
-    const clientActionId = `${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     try {
-      // Optimistic state update
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: targetStatus } : t));
-      await updateTaskStatusIdempotent(taskId, targetStatus.toUpperCase(), clientActionId);
+      await updateTaskStatus(taskId, targetStatus.toLowerCase() as any);
     } catch (err) {
       console.error('[CaregiverPatientRoutines] Status update failed:', err);
       Alert.alert('Error', 'Failed to update task status. Please retry.');
-      void loadData(); // rollback
     }
   };
 
@@ -276,7 +272,7 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                   {/* Tasks Timeline */}
                   {tasks
                     .slice()
-                    .sort((a, b) => (a.scheduled_time || a.time || '').localeCompare(b.scheduled_time || b.time || ''))
+                    .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
                     .map((task) => {
                       const pri = getPriorityStyle(task.priority);
                       const stat = getStatusBadge(task.status);
@@ -288,7 +284,7 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                           {/* Top Row: Time, Priority Badge, Status Badge */}
                           <View style={styles.cardHeader}>
                             <View style={styles.headerLeft}>
-                              <Text style={styles.timeLabel}>⏰ {task.scheduled_time.slice(0, 5)}</Text>
+                              <Text style={styles.timeLabel}>⏰ {task.time}</Text>
                               <View style={[styles.badge, { backgroundColor: pri.bg, borderColor: pri.border }]}>
                                 <Text style={[styles.badgeText, { color: pri.text }]}>
                                   {task.priority?.toUpperCase() || 'MEDIUM'}
@@ -314,12 +310,12 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                           {/* Title & Description */}
                           <Pressable onPress={() => toggleTaskExpanded(task.id)} style={styles.titleSection}>
                             <View style={styles.categoryCircle}>
-                              <Text style={styles.categoryEmoji}>{task.emoji || task.icon_name || '📋'}</Text>
+                              <Text style={styles.categoryEmoji}>{task.icon || task.iconName || '📋'}</Text>
                             </View>
                             <View style={styles.titleTextWrap}>
                               <Text style={styles.cardTitle}>{task.title}</Text>
                               <Text numberOfLines={isExpanded ? undefined : 1} style={styles.cardDesc}>
-                                {task.instructions_md || 'No additional instructions.'}
+                                {task.instructionsMd || 'No additional instructions.'}
                               </Text>
                             </View>
                             <View style={styles.chevron}>
@@ -330,21 +326,21 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                           {/* Expanded Content */}
                           {isExpanded && (
                             <View style={styles.expandedContent}>
-                              {task.instructions_md ? (
+                              {task.instructionsMd ? (
                                 <View style={styles.sectionBlock}>
                                   <Text style={styles.sectionLabel}>Patient Instructions</Text>
-                                  <Text style={styles.markdownBody}>{task.instructions_md}</Text>
+                                  <Text style={styles.markdownBody}>{task.instructionsMd}</Text>
                                 </View>
                               ) : null}
 
-                              {task.caregiver_note ? (
+                              {task.caregiverNote ? (
                                 <View style={[styles.sectionBlock, styles.caregiverNoteBlock]}>
                                   <Text style={[styles.sectionLabel, { color: '#0F766E' }]}>Caregiver Clinical Note</Text>
-                                  <Text style={styles.noteBody}>{task.caregiver_note}</Text>
+                                  <Text style={styles.noteBody}>{task.caregiverNote}</Text>
                                 </View>
                               ) : null}
 
-                              {task.voice_note_url && (
+                              {task.voiceNoteUrl && (
                                 <View style={styles.audioPlayerPlaceholder}>
                                   <VolumeIcon />
                                   <Text style={styles.audioText}>Patient Left Voice Note (Play Audio)</Text>

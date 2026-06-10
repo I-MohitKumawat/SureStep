@@ -27,3 +27,27 @@ export const uploadPhoto = (formData: FormData) =>
   apiClient.post('/media/upload/photo', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+
+export const uploadProfilePhoto = async (localUri: string): Promise<string> => {
+  if (localUri.startsWith('http://') || localUri.startsWith('https://')) {
+    return localUri;
+  }
+  const filename = localUri.split('/').pop() || 'photo.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+  const formData = new FormData();
+  formData.append('photo', {
+    uri: localUri,
+    name: filename,
+    type,
+  } as any);
+
+  const response = await uploadPhoto(formData);
+  const data = response.data?.data || response.data;
+  const url = data?.photoUrl || data?.url;
+  if (!url) {
+    throw new Error('Upload succeeded but returned no image URL');
+  }
+  return url;
+};

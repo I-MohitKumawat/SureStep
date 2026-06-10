@@ -13,7 +13,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CaregiverStackParams } from '../../types/navigation.types';
 // useUserProfile removed — use useAuth() from src/context/AuthContext instead
 import { useAuth } from '../../context/AuthContext';
-import { getCaregiverProfile, updateCaregiverProfile } from '../../services/userService';
+import { getCaregiverProfile, updateCaregiverProfile, updateMe, uploadProfilePhoto } from '../../services/userService';
 // supabase removed — all data now via src/services/ + Express API
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
@@ -95,7 +95,7 @@ function Dropdown({ label, value, options, onSelect }: { label:string; value:str
 }
 
 export const CaregiverProfileEditScreen: React.FC<Props> = ({ navigation }) => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -157,18 +157,18 @@ export const CaregiverProfileEditScreen: React.FC<Props> = ({ navigation }) => {
     if (res.canceled) return;
     const uri = res.assets[0].uri;
     setPhotoUri(uri);
-    const phone = user?.phone ?? 'unknown';
-    const ext = uri.split('.').pop() ?? 'jpg';
-    try {
-      const blob = await (await fetch(uri)).blob();
-      // REMOVED: Supabase migration to Express/PostgreSQL
-      console.warn('[CaregiverProfileEdit] uploadPhoto: Supabase removed, keeping local URI');
-    } catch { /* ignore */ }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      let remotePhotoUrl = profile?.photo_url;
+      if (photoUri && photoUri !== profile?.photo_url) {
+        remotePhotoUrl = await uploadProfilePhoto(photoUri);
+        await updateMe({ photo_url: remotePhotoUrl });
+        updateUser({ photo_url: remotePhotoUrl });
+      }
+
       await updateCaregiverProfile({
         ...profile,
         role: 'caregiver',
@@ -184,7 +184,7 @@ export const CaregiverProfileEditScreen: React.FC<Props> = ({ navigation }) => {
     } finally { setSaving(false); }
   };
 
-  const photoSrc = photoUri ?? profile?.profilePhotoUrl;
+  const photoSrc = photoUri ?? profile?.photo_url;
 
   if (loading) {
     return (

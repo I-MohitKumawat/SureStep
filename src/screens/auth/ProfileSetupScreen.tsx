@@ -17,7 +17,8 @@ import { useAuth } from '../../context/AuthContext';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
-import { updateCaregiverProfile, updatePatientProfile, updateMe } from '../../services/userService';
+import { updateCaregiverProfile, updatePatientProfile, updateMe, uploadProfilePhoto } from '../../services/userService';
+import { updateFamilyProfile } from '../../services/familyService';
 import { provisionUser } from '../../services/authService';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 
@@ -48,6 +49,7 @@ const AVAILABILITY = [
 ];
 const GENDERS = ["Male", "Female"];
 const PREF_LANGUAGES = ["English", "Hindi", "Kannada", "Tamil", "Telugu"];
+const RELATION_OPTIONS = ["Spouse", "Parent", "Daughter", "Son", "Sibling", "Grandchild", "Friend", "Other"];
 
 // ─── Step Indicator ──────────────────────────────────────────────────────────
 function StepIndicator({
@@ -301,6 +303,15 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [optInNews, setOptInNews] = useState(true);
 
+  // Family Fields
+  const [relationLabel, setRelationLabel] = useState("");
+  const [whatsAppNumber, setWhatsAppNumber] = useState("");
+  const [notifyOnBreach, setNotifyOnBreach] = useState(true);
+  const [notifyOnSos, setNotifyOnSos] = useState(true);
+  const [notifyOnMissedCritical, setNotifyOnMissedCritical] = useState(true);
+  const [notifyOnDailyDigest, setNotifyOnDailyDigest] = useState(true);
+  const [digestFrequency, setDigestFrequency] = useState<'DAILY' | 'WEEKLY'>('DAILY');
+
   // Professional Caregiver Fields (Step 3)
   const [yearsExp, setYearsExp] = useState(0);
   const [maxPatients, setMaxPatients] = useState(3);
@@ -386,6 +397,13 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
         return;
       }
     }
+    if (role === "FAMILY") {
+      if (!relationLabel) {
+        setSubmitError("Please select your relationship to the patient.");
+        setShowErrors(true);
+        return;
+      }
+    }
     setSubmitError(null);
 
     if (role === "CAREGIVER" && step === 2) {
@@ -412,6 +430,17 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
           is_discoverable: draft.isDiscoverable,
         });
         return res.status === 200 || res.status === 201;
+      } else if (role === "FAMILY") {
+        const res = await updateFamilyProfile({
+          relation_label: draft.relationLabel || null,
+          whatsapp_number: draft.whatsAppNumber || null,
+          notify_on_breach: draft.notifyOnBreach,
+          notify_on_sos: draft.notifyOnSos,
+          notify_on_missed_critical: draft.notifyOnMissedCritical,
+          notify_on_daily_digest: draft.notifyOnDailyDigest,
+          digest_frequency: draft.digestFrequency,
+        });
+        return res.status === 200 || res.status === 201 || res.data?.success;
       } else {
         const res = await updatePatientProfile({
           emergency_contact_name: draft.emergencyContactName,
@@ -462,6 +491,14 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
         dailyRate,
         aboutMe: bio.trim(),
         isDiscoverable,
+        // family fields
+        relationLabel,
+        whatsAppNumber,
+        notifyOnBreach,
+        notifyOnSos,
+        notifyOnMissedCritical,
+        notifyOnDailyDigest,
+        digestFrequency,
       };
 
       // 1. Provision user in backend DB
@@ -487,6 +524,16 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
         return;
       }
 
+      // 1.5 Upload profile picture if exists
+      let remotePhotoUrl = undefined;
+      if (photoUri) {
+        try {
+          remotePhotoUrl = await uploadProfilePhoto(photoUri);
+        } catch (uploadErr) {
+          console.warn("[ProfileSetup] photo upload failed, proceeding without photo:", uploadErr);
+        }
+      }
+
       // 2. Update core user fields
       try {
         await updateMe({
@@ -497,7 +544,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
           gender: draft.gender,
           city: draft.city,
           preferred_language: language === "Hindi" ? "hi" : "en",
-          photo_url: photoUri || undefined,
+          photo_url: remotePhotoUrl || undefined,
         });
       } catch (updateErr) {
         console.warn("[ProfileSetup] updateMe failed:", updateErr);
@@ -518,6 +565,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
         phone: provisionedUser.phone || phone,
         name: name.trim(),
         role: provisionedUser.role as any,
+        photo_url: remotePhotoUrl || undefined,
       });
     } catch (e) {
       console.error("[ProfileSetup] handleFinish error:", e);
@@ -554,6 +602,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
     if (field === "city") return !city.trim();
     if (field === "emergencyName") return !emergencyName.trim();
     if (field === "emergencyPhone") return !emergencyPhone.trim();
+    if (field === "relationLabel") return !relationLabel;
     return false;
   };
 
@@ -724,6 +773,109 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                         onChangeText={setBio}
                         multiline
                       />
+                    </>
+                  )}
+
+                  {/* Family Role Details */}
+                  {role === "FAMILY" && (
+                    <>
+                      <View style={s.divider} />
+                      <Text style={s.sectionHeader}>Family Member Profile</Text>
+
+                      <DropdownPicker
+                        label="Relationship to Patient"
+                        value={relationLabel}
+                        options={RELATION_OPTIONS}
+                        onSelect={setRelationLabel}
+                        error={hasErrors("relationLabel")}
+                      />
+
+                      <UnderlineInput
+                        label="WhatsApp Number (optional)"
+                        value={whatsAppNumber}
+                        onChangeText={setWhatsAppNumber}
+                        keyboardType="phone-pad"
+                      />
+
+                      <View style={s.divider} />
+                      <Text style={s.sectionHeader}>Notification Preferences</Text>
+
+                      <View style={s.toggleRow}>
+                        <View style={s.toggleTextWrap}>
+                          <Text style={s.toggleLabel}>Geofence Breach</Text>
+                          <Text style={s.toggleSub}>Alert when patient leaves safe zone</Text>
+                        </View>
+                        <Switch
+                          value={notifyOnBreach}
+                          onValueChange={setNotifyOnBreach}
+                          trackColor={{ false: C.border, true: C.primaryLight }}
+                          thumbColor={notifyOnBreach ? C.primary : '#f4f3f4'}
+                        />
+                      </View>
+
+                      <View style={s.toggleRow}>
+                        <View style={s.toggleTextWrap}>
+                          <Text style={s.toggleLabel}>SOS Triggered</Text>
+                          <Text style={s.toggleSub}>Emergency SOS alerts (always critical)</Text>
+                        </View>
+                        <Switch
+                          value={notifyOnSos}
+                          onValueChange={setNotifyOnSos}
+                          trackColor={{ false: C.border, true: C.primaryLight }}
+                          thumbColor={notifyOnSos ? C.primary : '#f4f3f4'}
+                        />
+                      </View>
+
+                      <View style={s.toggleRow}>
+                        <View style={s.toggleTextWrap}>
+                          <Text style={s.toggleLabel}>Critical Task Missed</Text>
+                          <Text style={s.toggleSub}>When a critical routine task is overdue</Text>
+                        </View>
+                        <Switch
+                          value={notifyOnMissedCritical}
+                          onValueChange={setNotifyOnMissedCritical}
+                          trackColor={{ false: C.border, true: C.primaryLight }}
+                          thumbColor={notifyOnMissedCritical ? C.primary : '#f4f3f4'}
+                        />
+                      </View>
+
+                      <View style={s.toggleRow}>
+                        <View style={s.toggleTextWrap}>
+                          <Text style={s.toggleLabel}>Daily Digest</Text>
+                          <Text style={s.toggleSub}>Summary of the day's events</Text>
+                        </View>
+                        <Switch
+                          value={notifyOnDailyDigest}
+                          onValueChange={setNotifyOnDailyDigest}
+                          trackColor={{ false: C.border, true: C.primaryLight }}
+                          thumbColor={notifyOnDailyDigest ? C.primary : '#f4f3f4'}
+                        />
+                      </View>
+
+                      {notifyOnDailyDigest && (
+                        <View style={s.chipGroup}>
+                          <Text style={s.chipGroupTitle}>Digest Frequency</Text>
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            {(['DAILY', 'WEEKLY'] as const).map(f => (
+                              <Pressable
+                                key={f}
+                                style={[
+                                  ch.chip,
+                                  digestFrequency === f && ch.chipActive
+                                ]}
+                                onPress={() => setDigestFrequency(f)}
+                              >
+                                <Text style={[
+                                  ch.chipText,
+                                  digestFrequency === f && ch.chipTextActive
+                                ]}>
+                                  {f === 'DAILY' ? 'Daily' : 'Weekly'}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      )}
                     </>
                   )}
 

@@ -3,13 +3,18 @@
  * Extracted from CaregiverDashboardScreen.tsx lines 477–753 (Home tab content).
  * Owns: patient header, routine capsule list, geofence status card.
  */
-import React, { useMemo } from "react";
-import { Animated, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, Animated, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { styles, alertStyles, rSumStyles } from "./dashboardStyles";
+import { C } from "../../../theme/colors";
+import { F } from "../../../theme/fonts";
+import { DashboardActionSection } from "./DashboardActionSection";
 import type { Task, TaskCategory } from "../../../context/TaskContext";
 import { IconHome } from "../../../assets/icons/NavIcons";
+import { RoutineCapsule } from "../../shared/RoutineCapsule";
+import type { ApiPatientState } from "../../../services/geofenceService";
 import {
   checkBreach, haversineMeters,
   type Coords, type GeofenceZone,
@@ -43,32 +48,20 @@ type Props = {
   onNavigateGeofenceEditor: () => void;
   patientAge?: number | null;
   patientPhoto?: string | null;
+  patientState?: ApiPatientState | null;
+  onRefreshLocation?: () => Promise<void>;
+  relationshipStatus?: string | null;
+  carePlan?: any | null;
+  onNavigateAssessment?: () => void;
+  onCompleteMeeting?: () => Promise<void>;
+  onNavigateCareCircle?: () => void;
 };
 
 const CAPSULE_HEIGHT = 84;
 const CAPSULE_GAP = 12;
 const CAPSULE_STEP = CAPSULE_HEIGHT + CAPSULE_GAP;
 
-/**
- * Maps a structured TaskCategory to a Feather icon name.
- * Replaces the old emoji-string parsing approach — categories come directly
- * from the backend 'category' column on routine_templates / tasks.
- */
-const getCategoryIcon = (category: TaskCategory): string => {
-  switch (category) {
-    case 'medication':   return 'activity';    // pill / health activity
-    case 'meal':         return 'coffee';       // meal / food
-    case 'exercise':     return 'zap';          // physical effort
-    case 'walk':         return 'compass';      // outdoor navigation
-    case 'appointment':  return 'calendar';     // scheduled visit
-    case 'cognition':    return 'award';        // brain/game activity
-    case 'therapy':      return 'heart';        // therapeutic care
-    case 'hygiene':      return 'droplet';      // water / cleanliness
-    case 'sleep':        return 'moon';         // rest / sleep
-    case 'custom':       return 'clipboard';    // generic task
-    default:             return 'clipboard';
-  }
-};
+
 
 export const DashboardHomeTab: React.FC<Props> = ({
   patientName, patientPhone, batteryLevel, batteryColor,
@@ -78,7 +71,66 @@ export const DashboardHomeTab: React.FC<Props> = ({
   onShowPatientProfile, onShowRoutineSummary, onDismissCallout, onSendReminder,
   onNavigateManage, onNavigateGeofenceMap, onNavigateGeofenceEditor,
   patientAge, patientPhoto,
+  patientState, onRefreshLocation,
+  relationshipStatus, carePlan, onNavigateAssessment, onCompleteMeeting, onNavigateCareCircle,
 }) => {
+  const [activeFilter, setActiveFilter] = useState<'missed' | 'pending' | 'completed' | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefreshLocation) return;
+    setRefreshing(true);
+    try {
+      await onRefreshLocation();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const computedActiveZone = useMemo(() => {
+    if (!patientCoords || !zones.length) return null;
+    const insideZones = zones.filter((z) => {
+      if (!z.isActive) return false;
+      const d = haversineMeters(z.center.latitude, z.center.longitude, patientCoords.latitude, patientCoords.longitude);
+      return d <= z.radiusM;
+    });
+    if (!insideZones.length) return null;
+    insideZones.sort((a, b) => a.radiusM - b.radiusM);
+    return insideZones[0];
+  }, [patientCoords, zones]);
+
+  const activeZoneLabel = patientState?.current_zone_name || computedActiveZone?.label || 'Home';
+
+  const safetyText = patientState?.sos_active || patientState?.safety_state === 'CRITICAL'
+    ? 'EMERGENCY: SOS Active'
+    : patientState?.safety_state === 'BREACH'
+    ? 'Outside safe zone'
+    : patientState?.safety_state === 'APPROACHING'
+    ? 'Approaching boundary'
+    : patientState?.safety_state === 'SAFE'
+    ? `Safe inside ${activeZoneLabel}`
+    : patientCoords && zones.length > 0
+    ? (() => {
+        const breach = checkBreach(patientCoords, zones);
+        if (breach.status === 'breach') return 'Outside safe zone';
+        if (breach.status === 'approaching') return 'Approaching boundary';
+        if (breach.status === 'safe') return `Safe at ${breach.zone?.label || 'Home'}`;
+        return 'Safe inside Home';
+      })()
+    : 'Safe inside Home';
+
+  const filteredRoutineItems = useMemo(() => {
+    if (!activeFilter) return routineItems;
+    return routineItems.filter(item => {
+      if (activeFilter === 'completed') return item.status === 'completed';
+      if (activeFilter === 'missed') return item.status === 'missed';
+      if (activeFilter === 'pending') return item.status === 'upcoming' || item.status === 'active';
+      return true;
+    });
+  }, [routineItems, activeFilter]);
+
+
   const lastActivityLabel = useMemo(() => {
     const times = patientTasks.filter(t => t.completedAt).map(t => new Date(t.completedAt!).getTime());
     if (!times.length) return "No activity yet";
@@ -141,44 +193,66 @@ export const DashboardHomeTab: React.FC<Props> = ({
       {/* ── Current Status Gradient Card ─────────────────────────── */}
       <Pressable onPress={onNavigateGeofenceMap} style={({ pressed }) => [styles.newStatusCardPress, pressed && { opacity: 0.95 }]}>
         <LinearGradient
-          colors={['#1E73E6', '#0F59C8']}
+          colors={
+            patientState?.sos_active || ['CRITICAL', 'BREACH'].includes(patientState?.safety_state ?? '')
+              ? ['#DC2626', '#B91C1C']
+              : patientState?.safety_state === 'APPROACHING'
+              ? ['#F59E0B', '#D97706']
+              : ['#1E73E6', '#0F59C8']
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.newStatusCard}
         >
           <View style={styles.statusCardTop}>
             <View style={styles.statusHomeIconCircle}>
-              <IconHome size={22} color="#FFFFFF" strokeWidth={2} />
+              {patientState?.sos_active || ['CRITICAL', 'BREACH'].includes(patientState?.safety_state ?? '') ? (
+                <Feather name="alert-triangle" size={22} color="#FFFFFF" />
+              ) : patientState?.safety_state === 'APPROACHING' ? (
+                <Feather name="alert-circle" size={22} color="#FFFFFF" />
+              ) : (
+                <IconHome size={22} color="#FFFFFF" strokeWidth={2} />
+              )}
             </View>
+
+            {onRefreshLocation && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation(); // prevent navigation
+                  void handleRefresh();
+                }}
+                disabled={refreshing}
+                style={({ pressed }) => [
+                  {
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                  pressed && { opacity: 0.72 },
+                  refreshing && { opacity: 0.5 },
+                ]}
+              >
+                {refreshing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="refresh-cw" size={18} color="#FFFFFF" />
+                )}
+              </Pressable>
+            )}
           </View>
 
           <View style={styles.statusCardMiddle}>
             <Text style={styles.statusCardSub}>Current Status</Text>
-            {/* 
-              BACKEND FETCH REQUIREMENT: Live location tracking status.
-              Calculated by checking if the latest location 'patientCoords' (from 'patient_locations' table) 
-              violates any active 'geofences' defined for the patient.
-            */}
             <Text style={styles.statusCardMain} numberOfLines={1}>
-              {(() => {
-                if (patientCoords && zones.length > 0) {
-                  const breach = checkBreach(patientCoords, zones);
-                  if (breach.status === 'breach') return "Outside safe zone";
-                  if (breach.status === 'approaching') return "Approaching boundary";
-                  if (breach.status === 'safe') return `Safe at ${breach.zone.label || 'Home'}`;
-                }
-                return "Safe at Home";
-              })()}
+              {safetyText}
             </Text>
           </View>
 
           <View style={styles.statusCardBottom}>
             <Feather name="clock" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-            {/* 
-              BACKEND FETCH REQUIREMENT: Last location timestamp.
-              Derived from 'coordsTs' ('recorded_at' field in the 'patient_locations' table)
-              to display time elapsed since the last location ping.
-            */}
             <Text style={styles.statusCardTimeText}>
               {(() => {
                 if (!coordsTs) return "Last updated 2 min ago";
@@ -196,31 +270,169 @@ export const DashboardHomeTab: React.FC<Props> = ({
 
       {/* ── Side-by-Side Indicators ──────────────────────────────── */}
       <View style={styles.newIndicatorsRow}>
-        {/* 
-          BACKEND FETCH REQUIREMENT: Battery percentage.
-          Currently parsed from 'batteryLevel' prop. In production, this should be real-time 
-          telemetry data sent from the patient's mobile app and stored in the database.
-        */}
         <View style={styles.newIndicatorChip}>
           <Ionicons name="battery-charging" size={18} color="#18181B" style={{ marginRight: 8 }} />
-          <Text style={styles.newIndicatorText}>{batteryLevel}%</Text>
+          <Text style={styles.newIndicatorText}>
+            {patientState?.battery_pct != null ? `${patientState.battery_pct}%` : `${batteryLevel}%`}
+          </Text>
         </View>
-        {/* 
-          BACKEND FETCH REQUIREMENT: Signal/network strength indicator.
-          Currently static 'Strong Signal'. In production, this should display network connectivity 
-          quality (e.g. WiFi/Cellular strength values) sent via device telemetry.
-        */}
         <View style={styles.newIndicatorChip}>
-          <Ionicons name="cellular" size={18} color="#18181B" style={{ marginRight: 8 }} />
-          <Text style={styles.newIndicatorText}>Strong Signal</Text>
+          <Ionicons 
+            name={patientState?.network_status === 'Offline' ? 'cellular-outline' : 'cellular'} 
+            size={18} 
+            color="#18181B" 
+            style={{ marginRight: 8 }} 
+          />
+          <Text style={styles.newIndicatorText}>
+            {patientState?.network_status || 'Offline'}
+          </Text>
         </View>
       </View>
 
+      {/* ── Onboarding / Care Plan Card ───────────────────────────── */}
+      {relationshipStatus && (
+        <View style={localStyles.carePlanCard}>
+          {relationshipStatus === 'ACCEPTED' && (
+            <View style={localStyles.cardInner}>
+              <View style={localStyles.badgeRow}>
+                <View style={[localStyles.badge, { backgroundColor: '#DBEAFE' }]}>
+                  <Text style={[localStyles.badgeText, { color: '#1E40AF' }]}>👥 MEETING PENDING</Text>
+                </View>
+              </View>
+              <Text style={localStyles.cardTitle}>Meet {patientName} In Person</Text>
+              <Text style={localStyles.cardDesc}>
+                Before completing the patient safety assessment, meet in person to establish familiarity and verify basic setup.
+              </Text>
+              <Pressable 
+                style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }]}
+                onPress={onCompleteMeeting}
+              >
+                <Text style={localStyles.primaryBtnText}>Mark Meeting Completed</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {(relationshipStatus === 'MEETING_COMPLETED' || relationshipStatus === 'ASSESSMENT_PENDING') && (
+            <View style={localStyles.cardInner}>
+              <View style={localStyles.badgeRow}>
+                <View style={[localStyles.badge, { backgroundColor: '#FEE2E2' }]}>
+                  <Text style={[localStyles.badgeText, { color: '#991B1B' }]}>📋 ASSESSMENT REQUIRED</Text>
+                </View>
+              </View>
+              <Text style={localStyles.cardTitle}>Structured Patient Assessment</Text>
+              <Text style={localStyles.cardDesc}>
+                Complete the cognitive, safety, and mobility baseline assessment to configure geofences and routines.
+              </Text>
+              <Pressable 
+                style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }]}
+                onPress={onNavigateAssessment}
+              >
+                <Text style={localStyles.primaryBtnText}>Start Assessment Wizard</Text>
+              </Pressable>
+              <Pressable 
+                style={({ pressed }) => [localStyles.secondaryBtn, pressed && { opacity: 0.85 }]}
+                onPress={onNavigateCareCircle}
+              >
+                <Text style={localStyles.secondaryBtnText}>Manage Care Circle & Invites</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {relationshipStatus === 'ACTIVE_CARE' && carePlan && (
+            <View style={localStyles.cardInner}>
+              <View style={localStyles.badgeRow}>
+                <View style={[localStyles.badge, { backgroundColor: '#D1FAE5' }]}>
+                  <Text style={[localStyles.badgeText, { color: '#065F46' }]}>💚 ACTIVE CARE PLAN</Text>
+                </View>
+                <Text style={localStyles.versionText}>v{carePlan.assessment_version || 1}</Text>
+              </View>
+              <Text style={localStyles.cardTitle}>Care Plan & Goals</Text>
+              <Text style={localStyles.careGoalsText}>{carePlan.care_goals || 'No specific goals set.'}</Text>
+              
+              <View style={localStyles.riskRow}>
+                {carePlan.risk_profile?.fall_risk && (
+                  <View style={[localStyles.riskBadge, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
+                    <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Fall: {carePlan.risk_profile.fall_risk}</Text>
+                  </View>
+                )}
+                {carePlan.risk_profile?.wandering_risk && (
+                  <View style={[localStyles.riskBadge, carePlan.risk_profile.wandering_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.wandering_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
+                    <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.wandering_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.wandering_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Wandering: {carePlan.risk_profile.wandering_risk}</Text>
+                  </View>
+                )}
+                {carePlan.risk_profile?.medication_adherence_risk && (
+                  <View style={[localStyles.riskBadge, carePlan.risk_profile.medication_adherence_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.medication_adherence_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
+                    <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.medication_adherence_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.medication_adherence_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Med: {carePlan.risk_profile.medication_adherence_risk}</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={localStyles.sectionLabel}>Monitoring Requirements</Text>
+              <Text style={localStyles.monitoringText}>{carePlan.monitoring_requirements || 'Standard GPS safety tracking.'}</Text>
+
+              <Pressable 
+                style={({ pressed }) => [localStyles.secondaryBtn, pressed && { opacity: 0.85 }]}
+                onPress={onNavigateAssessment}
+              >
+                <Text style={localStyles.secondaryBtnText}>Update Assessment & Plan</Text>
+              </Pressable>
+
+              <Pressable 
+                style={({ pressed }) => [localStyles.secondaryBtn, pressed && { opacity: 0.85 }]}
+                onPress={onNavigateCareCircle}
+              >
+                <Text style={localStyles.secondaryBtnText}>Manage Care Circle & Invites</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* ── Daily Routine ─────────────────────────────────────────── */}
-      {/* 
-        BACKEND FETCH REQUIREMENT: Routine tasks. 
-        Fetched from database ('tasks' table) where 'patient_id' matches current patient.
-      */}
+      {routineItems.length > 0 && (
+        <>
+          {/* Header Row */}
+          <View style={styles.routineHeaderRow}>
+            <Text style={styles.routineHeaderTitle}>Daily Routine</Text>
+            <Pressable onPress={onShowRoutineSummary} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+              <Text style={styles.routineOverviewLink}>View Overview</Text>
+            </Pressable>
+          </View>
+
+          {/* Filter Row */}
+          <View style={styles.filterRow}>
+            {[
+              { key: 'missed', label: 'Missed', color: '#F97316', count: routineItems.filter(t => t.status === 'missed').length, activeStyle: styles.filterBtnActiveMissed, textActiveStyle: styles.filterTextActiveMissed, badgeActiveStyle: styles.filterCountBadgeActiveMissed, textBadgeActiveStyle: styles.filterCountTextActiveMissed },
+              { key: 'pending', label: 'Pending', color: '#94A3B8', count: routineItems.filter(t => t.status === 'upcoming' || t.status === 'active').length, activeStyle: styles.filterBtnActivePending, textActiveStyle: styles.filterTextActivePending, badgeActiveStyle: styles.filterCountBadgeActivePending, textBadgeActiveStyle: styles.filterCountTextActivePending },
+              { key: 'completed', label: 'Completed', color: '#22C55E', count: routineItems.filter(t => t.status === 'completed').length, activeStyle: styles.filterBtnActiveCompleted, textActiveStyle: styles.filterTextActiveCompleted, badgeActiveStyle: styles.filterCountBadgeActiveCompleted, textBadgeActiveStyle: styles.filterCountTextActiveCompleted },
+            ].map((f) => {
+              const isActive = activeFilter === f.key;
+              return (
+                <Pressable
+                  key={f.key}
+                  style={[
+                    styles.filterBtn,
+                    isActive && f.activeStyle
+                  ]}
+                  onPress={() => setActiveFilter(activeFilter === f.key ? null : (f.key as any))}
+                >
+                  <View style={[styles.filterDot, { backgroundColor: f.color }]} />
+                  <Text style={[styles.filterText, isActive && f.textActiveStyle]}>
+                    {f.label}
+                  </Text>
+                  <View style={[styles.filterCountBadge, isActive && f.badgeActiveStyle]}>
+                    <Text style={[styles.filterCountText, isActive && f.textBadgeActiveStyle]}>
+                      {f.count}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+        </>
+      )}
+
       {routineItems.length === 0 ? (
         <View style={styles.routineOuterContainer}>
           <Pressable style={{ alignItems: "center", paddingVertical: 28 }} onPress={onNavigateManage}>
@@ -231,30 +443,6 @@ export const DashboardHomeTab: React.FC<Props> = ({
         </View>
       ) : (
         <View style={styles.routineOuterContainer}>
-          {/* Summary bar */}
-          {/* 
-            BACKEND FETCH REQUIREMENT: Routine statistics/counts. 
-            Computed via query aggregation of 'tasks' status values ('done', 'missed', 'pending') 
-            for the current active day.
-          */}
-          <Pressable style={({ pressed }) => [rSumStyles.bar, pressed && { opacity: 0.88 }]} onPress={onShowRoutineSummary}>
-            {[
-              { count: patientTasks.filter(t => t.status === "missed").length, label: "Missed", dot: "#DC2626" },
-              { count: patientTasks.filter(t => t.status === "pending" || t.status === "unsure").length, label: "Pending", dot: "#F59E0B" },
-              { count: patientTasks.filter(t => t.status === "done").length, label: "Completed", dot: "#10B981" },
-            ].map((s, i, arr) => (
-              <React.Fragment key={s.label}>
-                <View style={rSumStyles.statChip}>
-                  <View style={[rSumStyles.statDot, { backgroundColor: s.dot }]} />
-                  <Text style={rSumStyles.statNum}>{s.count}</Text>
-                  <Text style={rSumStyles.statLabel}>{s.label}</Text>
-                </View>
-                {i < arr.length - 1 && <View style={rSumStyles.divider} />}
-              </React.Fragment>
-            ))}
-            <Feather name="chevron-right" size={18} color="#9CA3AF" />
-          </Pressable>
-
           {/* Callout strip */}
           {/* 
             BACKEND FETCH REQUIREMENT: Live routine breach warnings.
@@ -300,33 +488,183 @@ export const DashboardHomeTab: React.FC<Props> = ({
               onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: capsuleScrollY } } }], { useNativeDriver: true })}
               scrollEventThrottle={16}
             >
-              {routineItems.map((item, idx) => {
-                const cc = getCapsuleColors(idx, item.done, item.status);
-                const scale = capsuleScrollY.interpolate({ inputRange: [(idx - 1) * CAPSULE_STEP, idx * CAPSULE_STEP, (idx + 1) * CAPSULE_STEP], outputRange: [0.92, 1, 0.92], extrapolate: "clamp" });
-                return (
-                  <Animated.View key={item.key} style={[styles.routineCapsule, { backgroundColor: cc.backgroundColor, borderColor: cc.borderColor, transform: [{ scale }] }]}>
-                    <View style={styles.routineCapsuleTextCol}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name={getCategoryIcon(item.category) as any} size={18} color={cc.titleColor} style={{ marginRight: 8 }} />
-                        <Text style={[styles.routineCapsuleTitle, { color: cc.titleColor }]} numberOfLines={1}>{item.title}</Text>
-                      </View>
-                      <Text style={[styles.routineCapsuleMeta, { color: cc.metaColor }]} numberOfLines={1}>{item.meta}</Text>
-                    </View>
-                    <View style={styles.capsuleRight}>
-                      <Text style={[styles.routineCapsuleStatus, { color: cc.statusColor }]}>
-                        {item.status === 'overdue' ? 'Overdue' : idx < activeRoutineIndex ? (item.done ? "Done" : "Missed") : idx === activeRoutineIndex ? "Now" : "Next"}
-                      </Text>
-                      <Pressable onPress={() => onSendReminder(item.key)} style={({ pressed }) => [styles.capsuleReminderBtn, pressed && { opacity: 0.72 }]} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Feather name={reminderSentKeys.has(item.key) ? "check" : "bell"} size={16} color={cc.titleColor} />
-                      </Pressable>
-                    </View>
-                  </Animated.View>
-                );
-              })}
+              {filteredRoutineItems.length === 0 ? (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 }}>
+                  <Feather name="info" size={24} color="#9CA3AF" style={{ marginBottom: 8 }} />
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#6B7280" }}>No matching routines today.</Text>
+                </View>
+              ) : (
+                filteredRoutineItems.map((item, idx) => {
+                  const scale = capsuleScrollY.interpolate({
+                    inputRange: [(idx - 1) * CAPSULE_STEP, idx * CAPSULE_STEP, (idx + 1) * CAPSULE_STEP],
+                    outputRange: [0.92, 1, 0.92],
+                    extrapolate: "clamp"
+                  });
+
+                  return (
+                    <Animated.View key={item.key} style={{ transform: [{ scale }] }}>
+                      <RoutineCapsule
+                        item={{
+                          key: item.key,
+                          title: item.title,
+                          category: item.category,
+                          status: item.status as any,
+                          meta: item.meta,
+                        }}
+                        onSendReminder={onSendReminder}
+                        reminderSent={reminderSentKeys.has(item.key)}
+                      />
+                    </Animated.View>
+                  );
+                })
+
+              )}
             </Animated.ScrollView>
           </View>
         </View>
       )}
+
+      <DashboardActionSection
+        patientName={patientName}
+        patientPhone={patientPhone}
+        onNavigateGeofenceMap={onNavigateGeofenceMap}
+      />
     </>
   );
 };
+
+const localStyles = StyleSheet.create({
+  carePlanCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardInner: {
+    gap: 12,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  versionText: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: C.textMuted,
+  },
+  cardTitle: {
+    fontFamily: F.extraBold,
+    fontSize: 17,
+    color: C.textPrimary,
+  },
+  cardDesc: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: C.textSecondary,
+    lineHeight: 18,
+  },
+  primaryBtn: {
+    backgroundColor: C.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.primaryText,
+  },
+  secondaryBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  secondaryBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: C.textPrimary,
+  },
+  careGoalsText: {
+    fontFamily: F.regular,
+    fontSize: 14,
+    color: C.textPrimary,
+    lineHeight: 20,
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 10,
+  },
+  sectionLabel: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: C.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 4,
+  },
+  monitoringText: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: C.textPrimary,
+    lineHeight: 18,
+  },
+  riskRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  riskBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  riskBadgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+  },
+  riskLow: {
+    backgroundColor: '#E6F4EA',
+  },
+  riskMedium: {
+    backgroundColor: '#FFF7ED',
+  },
+  riskHigh: {
+    backgroundColor: '#FEE2E2',
+  },
+  riskLowText: {
+    color: '#065F46',
+  },
+  riskMediumText: {
+    color: '#C2410C',
+  },
+  riskHighText: {
+    color: '#991B1B',
+  },
+});
+

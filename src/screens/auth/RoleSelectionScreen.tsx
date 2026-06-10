@@ -86,7 +86,7 @@ function RoleCard({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
   const { firebaseUser } = useAuth();
-  const [selectedRole, setSelectedRole] = useState<'CAREGIVER' | 'PATIENT' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'CAREGIVER' | 'PATIENT' | 'FAMILY' | null>(null);
 
   const totalSteps  = selectedRole === 'CAREGIVER' ? 3 : 2;
   const stepLabels  = selectedRole === 'CAREGIVER'
@@ -147,6 +147,13 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
               selected={selectedRole === 'CAREGIVER'}
               onPress={() => setSelectedRole('CAREGIVER')}
             />
+            <RoleCard
+              emoji="👪"
+              title="I'm a Family Member"
+              description="Observe, support, and stay informed."
+              selected={selectedRole === 'FAMILY'}
+              onPress={() => setSelectedRole('FAMILY')}
+            />
           </View>
 
           {/* CTA */}
@@ -161,7 +168,7 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
           >
             <Text style={s.ctaText}>
               {selectedRole
-                ? `Next: ${selectedRole === 'PATIENT' ? 'profile info' : 'basic info'}  ›`
+                ? `Next: ${selectedRole === 'CAREGIVER' ? 'basic info' : 'profile info'}  ›`
                 : 'Select a role to continue'}
             </Text>
           </Pressable>

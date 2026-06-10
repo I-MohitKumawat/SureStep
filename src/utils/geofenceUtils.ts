@@ -1,12 +1,19 @@
 /**
- * SureStep – Geofence utilities (v2)
+ * SureStep — src/utils/geofenceUtils.ts
  *
- * Replaces the old hardcoded PATIENT_GEOFENCES map with:
- *   - Dynamic zone fetch/save via Supabase
- *   - Multi-zone breach detection
- *   - Approaching-zone warning threshold
- *   - Haversine math (unchanged)
+ * Geofence utility functions connecting to the real Express backend API.
+ * Uses AsyncStorage as a write-through cache for offline resilience.
+ *
+ * Architecture:
+ *   fetchPatientGeofences  → GET /location/geofences/patient/:id
+ *   saveGeofenceZone       → POST/PATCH /location/geofences/...
+ *   deleteGeofenceZone     → DELETE /location/geofences/:id
+ *   writeLocationPing      → POST /location/ping
+ *   fetchLatestPatientLocation → GET /location/patient/:id/current
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as geofenceSvc from '../services/geofenceService';
+import locationSvc from '../services/locationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,20 +26,55 @@ export type GeofenceZone = {
   center: Coords;
   radiusM: number;
   isActive: boolean;
-  boundaryType: 'soft' | 'hard';  // soft = notify only | hard = emergency escalation
+  boundaryType: 'soft' | 'hard';
   createdBy?: string;
+  notifyOnArrival?: boolean;
+  notifyOnDeparture?: boolean;
+  colour?: string;
 };
 
 export type BreachStatus =
-  | { status: 'safe';       zone: GeofenceZone; distanceFromCenter: number; marginM: number }
+  | { status: 'safe'; zone: GeofenceZone; distanceFromCenter: number; marginM: number }
   | { status: 'approaching'; zone: GeofenceZone; distanceFromCenter: number; marginM: number }
-  | { status: 'breach';     zone: GeofenceZone | null; distanceM: number }
+  | { status: 'breach'; zone: GeofenceZone | null; distanceM: number }
   | { status: 'no_signal' };
+
+export type BreachAlert = {
+  id: string;
+  breachType: 'exit' | 'enter';
+  latitude: number | null;
+  longitude: number | null;
+  distanceM: number | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+  zoneLabel?: string;
+};
 
 // Distance at which we show the "approaching boundary" warning (fraction of radius)
 const APPROACH_FRACTION = 0.80;   // 80% of radius reached → amber warning
 
-// ─── Haversine ───────────────────────────────────────────────────────────────
+const CACHE_KEY_PREFIX = '@surestep:zones_cache:';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// ─── API Zone → GeofenceZone mapper ──────────────────────────────────────────
+
+function apiZoneToLocal(z: geofenceSvc.ApiZone): GeofenceZone {
+  return {
+    id: z.id,
+    patientId: z.patient_id,
+    label: z.label,
+    center: { latitude: z.center_lat, longitude: z.center_lng },
+    radiusM: z.radius_m,
+    isActive: z.is_active,
+    boundaryType: z.boundary_type === 'HARD' ? 'hard' : 'soft',
+    createdBy: z.created_by,
+    notifyOnArrival: z.notify_on_arrival,
+    notifyOnDeparture: z.notify_on_departure,
+    colour: z.colour,
+  };
+}
+
+// ─── Haversine ────────────────────────────────────────────────────────────────
 
 /** Great-circle distance in metres between two lat/lng coordinates. */
 export function haversineMeters(
@@ -67,14 +109,13 @@ export function checkBreach(coords: Coords, zones: GeofenceZone[]): BreachStatus
   for (const zone of active) {
     const dist = haversineMeters(
       zone.center.latitude, zone.center.longitude,
-      coords.latitude,      coords.longitude,
+      coords.latitude, coords.longitude,
     );
     if (dist < closestDist) {
       closestDist = dist;
       closestZone = zone;
     }
     if (dist <= zone.radiusM) {
-      // Inside this zone
       const marginM = zone.radiusM - dist;
       const approachThreshold = zone.radiusM * (1 - APPROACH_FRACTION);
       if (marginM <= approachThreshold) {
@@ -84,41 +125,176 @@ export function checkBreach(coords: Coords, zones: GeofenceZone[]): BreachStatus
     }
   }
 
-  // Outside all zones
   return {
     status: 'breach',
     zone: closestZone,
-    distanceM: closestZone
-      ? closestDist - closestZone.radiusM
-      : 0,
+    distanceM: closestZone ? closestDist - closestZone.radiusM : 0,
   };
 }
 
-// ─── Supabase CRUD ────────────────────────────────────────────────────────────
-// REMOVED: Supabase migration to Express/PostgreSQL
-// These functions will be replaced with Express API calls
+// ─── API-backed CRUD with AsyncStorage cache ──────────────────────────────────
 
-/** Fetch all geofence zones for a given patient from Supabase. */
+/** Fetch zones from backend API; fall back to cache on network failure. */
 export async function fetchPatientGeofences(patientId: string): Promise<GeofenceZone[]> {
-  console.warn('[geofence] fetchPatientGeofences: Supabase removed, returning empty array');
-  return [];
+  const cacheKey = CACHE_KEY_PREFIX + patientId;
+
+  try {
+    const apiZones = await geofenceSvc.fetchZones(patientId);
+    const zones = apiZones.map(apiZoneToLocal);
+
+    // Write-through cache
+    await AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), zones }));
+    return zones;
+  } catch (err) {
+    console.warn('[geofenceUtils] API fetch failed, falling back to cache:', err);
+
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      const { zones } = JSON.parse(cached) as { ts: number; zones: GeofenceZone[] };
+      return zones;
+    }
+    return [];
+  }
 }
 
-/** Persist a zone to Supabase. Pass `id` to update, omit to insert. Throws on error. */
+/** Save a zone via API; updates cache on success. */
 export async function saveGeofenceZone(
   zone: Omit<GeofenceZone, 'id'> & { id?: string },
 ): Promise<GeofenceZone> {
-  console.warn('[geofence] saveGeofenceZone: Supabase removed, throwing error');
-  throw new Error('Supabase removed - migrate to Express API');
+  const payload: geofenceSvc.CreateZonePayload = {
+    label: zone.label,
+    center_lat: zone.center.latitude,
+    center_lng: zone.center.longitude,
+    radius_m: zone.radiusM,
+    boundary_type: zone.boundaryType === 'hard' ? 'HARD' : 'SOFT',
+    notify_on_arrival: zone.notifyOnArrival ?? true,
+    notify_on_departure: zone.notifyOnDeparture ?? true,
+    colour: zone.colour,
+  };
+
+  let saved: geofenceSvc.ApiZone;
+  if (zone.id) {
+    saved = await geofenceSvc.updateZone(zone.id, payload);
+  } else {
+    saved = await geofenceSvc.createZone(zone.patientId, payload);
+  }
+
+  const result = apiZoneToLocal(saved);
+
+  // Invalidate cache so next fetch is fresh
+  await AsyncStorage.removeItem(CACHE_KEY_PREFIX + zone.patientId);
+
+  return result;
 }
 
-/** Delete a zone by ID. Returns true on success. */
+/** Delete a zone via API. Returns true on success. */
 export async function deleteGeofenceZone(id: string): Promise<boolean> {
-  console.warn('[geofence] deleteGeofenceZone: Supabase removed, returning false');
-  return false;
+  try {
+    await geofenceSvc.deleteZone(id);
+    // Invalidate all zone caches (we don't know which patient)
+    const keys = await AsyncStorage.getAllKeys();
+    const cacheKeys = keys.filter((k) => k.startsWith(CACHE_KEY_PREFIX));
+    if (cacheKeys.length > 0) await AsyncStorage.multiRemove(cacheKeys);
+    return true;
+  } catch (err) {
+    console.error('[geofenceUtils] deleteGeofenceZone failed:', err);
+    return false;
+  }
 }
 
-/** Log a breach event to geofence_alerts. */
+// ─── Location ping ─────────────────────────────────────────────────────────────
+
+const OFFLINE_QUEUE_KEY = '@surestep:offline_pings';
+
+/** Write a location ping to the backend. Queues offline if unavailable. */
+export async function writeLocationPing(params: {
+  patientId: string;
+  coords: Coords;
+  accuracyM?: number;
+  speedKmh?: number;
+  heading?: number;
+  batteryPct?: number;
+  networkStatus?: string;
+  source: 'foreground' | 'background';
+}): Promise<void> {
+  const ping = {
+    lat: params.coords.latitude,
+    lng: params.coords.longitude,
+    accuracy_m: params.accuracyM,
+    speed_kmh: params.speedKmh,
+    heading: params.heading,
+    battery_pct: params.batteryPct,
+    network_status: params.networkStatus,
+    source: params.source === 'background' ? 'PHONE' : 'PHONE',
+    recorded_at: new Date().toISOString(),
+  };
+
+  try {
+    await locationSvc.postPing(ping);
+
+    // Flush offline queue on success
+    const queued = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (queued) {
+      const pings = JSON.parse(queued);
+      if (pings.length > 0) {
+        try {
+          // Lazy import to avoid circular dep
+          const { default: apiClient } = await import('./apiClientImport');
+          await apiClient.post('/location/pings/sync', pings);
+          await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY);
+        } catch (_) { /* sync failed — will retry next time */ }
+      }
+    }
+  } catch (_) {
+    // Network unavailable — queue for later batch sync
+    const queued = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+    const existing: any[] = queued ? JSON.parse(queued) : [];
+    // Cap queue at 100 pings to prevent unbounded growth
+    const updated = [...existing, ping].slice(-100);
+    await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updated));
+  }
+}
+
+/** Fetch latest patient location from backend API, including GPS metrics. */
+export async function fetchLatestPatientLocation(
+  patientId: string,
+): Promise<(Coords & { recordedAt: number; accuracyM?: number; speedKmh?: number; batteryPct?: number }) | null> {
+  try {
+    const res = await locationSvc.getCurrentLocation(patientId);
+    const loc = res?.data?.data?.location;
+    if (!loc) return null;
+    return {
+      latitude:   loc.lat,
+      longitude:  loc.lng,
+      recordedAt: new Date(loc.recorded_at).getTime(),
+      accuracyM:  loc.accuracy_m  != null ? Number(loc.accuracy_m)  : undefined,
+      speedKmh:   loc.speed_kmh   != null ? Number(loc.speed_kmh)   : undefined,
+      batteryPct: loc.battery_pct != null ? Number(loc.battery_pct) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+
+/** Fetch the last N location pings for trail display. */
+export async function fetchLocationTrail(
+  patientId: string,
+  limit = 20,
+): Promise<Coords[]> {
+  try {
+    const res = await locationSvc.getTrail(patientId);
+    const pings = res?.data?.data?.pings ?? [];
+    return pings.slice(0, limit).map((p: any) => ({
+      latitude: p.lat,
+      longitude: p.lng,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Log a breach alert (called from background task). */
 export async function logBreachAlert(params: {
   patientId: string;
   geofenceId: string | null;
@@ -126,89 +302,50 @@ export async function logBreachAlert(params: {
   coords: Coords;
   distanceM: number;
 }): Promise<string | null> {
-  console.warn('[geofence] logBreachAlert: Supabase removed, returning null');
+  // The backend awareness engine creates alerts automatically on ping processing.
+  // This is a no-op from the client side — backend handles deduplication.
+  console.log('[geofenceUtils] logBreachAlert: handled server-side via ping evaluation');
   return null;
 }
 
 /** Acknowledge an alert. */
-export async function acknowledgeAlert(alertId: string, byPhone: string): Promise<void> {
-  console.warn('[geofence] acknowledgeAlert: Supabase removed, no-op');
+export async function acknowledgeAlert(alertId: string, _byPhone: string): Promise<void> {
+  try {
+    await geofenceSvc.acknowledgeAlert(alertId);
+  } catch (err) {
+    console.error('[geofenceUtils] acknowledgeAlert failed:', err);
+  }
 }
 
-/** Write a location ping to patient_locations. */
-export async function writeLocationPing(params: {
-  patientId: string;
-  coords: Coords;
-  accuracyM?: number;
-  source: 'foreground' | 'background';
-}): Promise<void> {
-  console.warn('[geofence] writeLocationPing: Supabase removed, no-op');
-}
-
-/** Fetch the last N location pings for trail display. */
-export async function fetchLocationTrail(
-  patientId: string,
-  limit = 20,
-): Promise<Coords[]> {
-  console.warn('[geofence] fetchLocationTrail: Supabase removed, returning empty array');
-  return [];
-}
-
-/** Fetch the single most-recent location ping for a patient. */
-export async function fetchLatestPatientLocation(
-  patientId: string,
-): Promise<(Coords & { recordedAt: number }) | null> {
-  console.warn('[geofence] fetchLatestPatientLocation: Supabase removed, returning null');
-  return null;
-}
-
-export type BreachAlert = {
-  id: string;
-  breachType: 'exit' | 'enter';
-  latitude: number | null;
-  longitude: number | null;
-  distanceM: number | null;
-  acknowledgedAt: string | null;
-  createdAt: string;
-  zoneLabel?: string;
-};
-
-/** Fetch the last N breach alerts for a patient (most recent first). */
+/** Fetch breach alert history. */
 export async function fetchBreachHistory(
   patientId: string,
   limit = 10,
 ): Promise<BreachAlert[]> {
-  console.warn('[geofence] fetchBreachHistory: Supabase removed, returning empty array');
-  return [];
+  try {
+    const { alerts } = await geofenceSvc.fetchAlerts(patientId, { limit });
+    return alerts.map((a) => ({
+      id: a.id,
+      breachType: a.alert_type === 'ZONE_EXIT' ? 'exit' : 'enter',
+      latitude: a.lat,
+      longitude: a.lng,
+      distanceM: a.distance_from_zone_m ?? null,
+      acknowledgedAt: a.acknowledged_at ?? null,
+      createdAt: a.created_at,
+    }));
+  } catch {
+    return [];
+  }
 }
 
-/**
- * Subscribe to live patient location pings via Supabase Realtime.
- * Returns an unsubscribe function.
- */
+/** Subscribe to live patient location via WebSocket (handled by GeofenceContext). */
 export function subscribeToPatientLocation(
-  patientId: string,
-  onUpdate: (coords: Coords & { recordedAt: number }) => void,
+  _patientId: string,
+  _onUpdate: (coords: Coords & { recordedAt: number }) => void,
 ): () => void {
-  console.warn('[geofence] subscribeToPatientLocation: Supabase removed, returning no-op');
-  return () => {};
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rowToZone(row: any): GeofenceZone {
-  return {
-    id:           row.id,
-    patientId:    row.patient_id,
-    label:        row.label ?? 'Home',
-    center: {
-      latitude:   Number(row.latitude),
-      longitude:  Number(row.longitude),
-    },
-    radiusM:      Number(row.radius_m),
-    isActive:     Boolean(row.is_active),
-    boundaryType: (row.boundary_type === 'hard' ? 'hard' : 'soft'),
-    createdBy:    row.created_by,
-  };
+  // WebSocket subscription is managed by GeofenceContext — this is a no-op stub
+  // to maintain backwards compatibility with callers.
+  return () => { };
 }
 
 // Legacy export kept for existing callers

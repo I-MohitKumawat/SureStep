@@ -27,6 +27,11 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
   const [confirmedCaregiver, setConfirmedCaregiverState] = useState<CaregiverListing | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const confirmedCaregiverRef = React.useRef(confirmedCaregiver);
+  React.useEffect(() => {
+    confirmedCaregiverRef.current = confirmedCaregiver;
+  }, [confirmedCaregiver]);
+
   /**
    * Sync context state with latest DB record.
    */
@@ -38,7 +43,7 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // If we already have the caregiver, skip API fetch unless forced
-      if (confirmedCaregiver && !force) {
+      if (confirmedCaregiverRef.current && !force) {
         return;
       }
 
@@ -53,7 +58,7 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
       }
     },
-    [confirmedCaregiver],
+    [],
   );
 
   /**

@@ -228,7 +228,7 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
         await createRoutineTemplate(patientId, payload);
         Alert.alert('Success', 'New routine template configured.');
       }
-      navigation.goBack();
+      navigation.navigate('CaregiverPatientDetailScreen', { patientId, patientName, refresh: true });
     } catch (err) {
       console.error('[CaregiverRoutineEditor] Save failed:', err);
       Alert.alert('Error', 'Failed to save routine template. Please check your connection.');

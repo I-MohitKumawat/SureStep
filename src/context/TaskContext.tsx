@@ -11,11 +11,13 @@
  *   - updateTaskStatus now generates a UUID client_action_id for idempotent offline sync
  */
 import React, {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useState, useRef, type ReactNode,
 } from 'react';
 import * as taskService from '../services/taskService';
 import { enqueue, flush, hasPendingTaskUpdate } from '../utils/offlineQueue';
 import type { TaskCategory, TaskPriority } from '../types/enums';
+import { useAuth } from './AuthContext';
+import { connectSocket } from '../services/socketClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +44,8 @@ export type Task = {
   createdAt:        string;
   updatedAt:        string;
   localUpdateTs?:   number;
+  caregiverNote?:   string;
+  voiceNoteUrl?:    string;
 };
 
 export type TaskDraft = {
@@ -62,7 +66,7 @@ export type TaskDraft = {
 type TaskContextValue = {
   tasks:              Task[];
   loading:            boolean;
-  loadTasksForPatient:(patientId: string) => Promise<void>;
+  loadTasksForPatient:(patientId: string, forceRefresh?: boolean) => Promise<void>;
   createTask:         (draft: TaskDraft) => Promise<Task>;
   updateTask:         (taskId: string, patch: Partial<TaskDraft>) => Promise<void>;
   updateTaskStatus:   (taskId: string, status: TaskStatus) => Promise<void>;
@@ -120,6 +124,31 @@ function extractDisplayTime(scheduledTimestamp?: string, scheduledTime?: string)
   return scheduledTime ?? '';
 }
 
+/** Centralized helper to map a raw database task row to the frontend Task model. */
+export function mapBackendTaskToFrontend(row: any): Task {
+  return {
+    id:                 row.id,
+    patientId:          row.patient_id,
+    title:              row.title          ?? '',
+    instructionsMd:     row.instructions_md ?? row.patient_hint ?? '',
+    description:        row.patient_hint   ?? row.description   ?? '',
+    category:           (row.category as TaskCategory) ?? 'custom',
+    priority:           (row.priority as TaskPriority) ?? 'medium',
+    iconName:           row.icon_name,
+    icon:               row.emoji,
+    scheduledTimestamp: row.scheduled_timestamp,
+    time:               extractDisplayTime(row.scheduled_timestamp, row.scheduled_time),
+    status:             row.status ? (row.status.toLowerCase() as TaskStatus) : 'pending',
+    clientActionId:     row.client_action_id,
+    completedAt:        row.completed_at,
+    completedBy:        row.completed_by,
+    createdAt:          row.created_at,
+    updatedAt:          row.updated_at ?? row.created_at,
+    caregiverNote:      row.caregiver_note,
+    voiceNoteUrl:       row.voice_note_url,
+  };
+}
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const TaskContext = createContext<TaskContextValue | null>(null);
@@ -130,59 +159,123 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [tasks,   setTasks]   = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const loadTasksForPatient = useCallback(async (patientId: string) => {
-    setLoading(true);
-    try {
-      const { data } = await taskService.getTodaysTasks(patientId);
-      const mapped: Task[] = (data.data?.tasks ?? []).map((row: any) => ({
-        id:                 row.id,
-        patientId:          row.patient_id,
-        title:              row.title          ?? '',
-        // BACKEND FETCH REQUIREMENT: instructions_md from tasks table (markdown care instructions)
-        instructionsMd:     row.instructions_md ?? row.patient_hint ?? '',
-        description:        row.patient_hint   ?? row.description   ?? '',
-        // BACKEND FETCH REQUIREMENT: category and priority from tasks/routine_templates
-        category:           (row.category as TaskCategory) ?? 'custom',
-        priority:           (row.priority as TaskPriority) ?? 'medium',
-        iconName:           row.icon_name,
-        icon:               row.emoji,
-        scheduledTimestamp: row.scheduled_timestamp,
-        time:               extractDisplayTime(row.scheduled_timestamp, row.scheduled_time),
-        status:             row.status as TaskStatus,
-        clientActionId:     row.client_action_id,
-        completedAt:        row.completed_at,
-        completedBy:        row.completed_by,
-        createdAt:          row.created_at,
-        updatedAt:          row.updated_at ?? row.created_at,
-      }));
-      setTasks((prev) => {
-        const others = prev.filter((t) => t.patientId !== patientId);
-        const merged = mapped.map((backendTask) => {
-          const localTask = prev.find((t) => t.id === backendTask.id);
-          if (localTask) {
-            const isQueued = hasPendingTaskUpdate(backendTask.id);
-            // 15s window — longer than the 10s polling interval — guarantees optimistic
-            // update survives at least one full poll cycle after the API call completes.
-            const isRecent = localTask.localUpdateTs && (Date.now() - localTask.localUpdateTs < 15_000);
-            if (isQueued || isRecent) {
-              return {
-                ...backendTask,
-                status: localTask.status,
-                clientActionId: localTask.clientActionId,
-                completedAt: localTask.completedAt,
-                localUpdateTs: localTask.localUpdateTs,
-              };
+  const tasksRef = useRef<Task[]>([]);
+  const lastFetchedRef = useRef<Record<string, number>>({});
+  const inFlightRef = useRef<Record<string, Promise<void>>>({});
+
+  const { firebaseUser } = useAuth();
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  // Real-time WebSocket subscriptions for task events
+  useEffect(() => {
+    if (!firebaseUser) return;
+    let socketRef: any;
+
+    const setupSocket = async () => {
+      try {
+        const token = await firebaseUser.getIdToken();
+        socketRef = connectSocket(token);
+
+        const handleTaskUpdate = (data: any) => {
+          if (!data || !data.task) return;
+          const updatedTask = mapBackendTaskToFrontend(data.task);
+          setTasks((prev) => {
+            const exists = prev.some((t) => t.id === updatedTask.id);
+            if (exists) {
+              return prev.map((t) => (t.id === updatedTask.id ? updatedTask : t));
+            } else {
+              return [...prev, updatedTask];
             }
+          });
+        };
+
+        const handleTaskDelete = (data: any) => {
+          if (!data || !data.taskId) return;
+          setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
+        };
+
+        socketRef.on('task:update', handleTaskUpdate);
+        socketRef.on('task:change', handleTaskUpdate);
+        socketRef.on('task:delete', handleTaskDelete);
+
+        return () => {
+          if (socketRef) {
+            socketRef.off('task:update', handleTaskUpdate);
+            socketRef.off('task:change', handleTaskUpdate);
+            socketRef.off('task:delete', handleTaskDelete);
           }
-          return backendTask;
-        });
-        return [...others, ...merged];
-      });
-    } catch (e) {
-      console.warn('[TaskContext] loadTasksForPatient failed:', e);
-    } finally {
-      setLoading(false);
+        };
+      } catch (err) {
+        console.warn('[TaskContext] WebSocket setup failed:', err);
+      }
+    };
+
+    let cleanupFn: (() => void) | undefined;
+    void setupSocket().then((cleanup) => {
+      cleanupFn = cleanup;
+    });
+
+    return () => {
+      if (cleanupFn) cleanupFn();
+    };
+  }, [firebaseUser]);
+
+  const loadTasksForPatient = useCallback(async (patientId: string, forceRefresh = false) => {
+    const now = Date.now();
+    const lastFetched = lastFetchedRef.current[patientId] || 0;
+    const isStale = now - lastFetched > 60_000;
+    const hasCached = tasksRef.current.some((t) => t.patientId === patientId);
+
+    if (hasCached && !isStale && !forceRefresh) {
+      return;
     }
+
+    if (inFlightRef.current[patientId] !== undefined) {
+      return inFlightRef.current[patientId];
+    }
+
+    const promise = (async () => {
+      setLoading(true);
+      try {
+        const { data } = await taskService.getTodaysTasks(patientId);
+        const mapped: Task[] = (data.data?.tasks ?? []).map((row: any) => mapBackendTaskToFrontend(row));
+        setTasks((prev) => {
+          const others = prev.filter((t) => t.patientId !== patientId);
+          const merged = mapped.map((backendTask) => {
+            const localTask = prev.find((t) => t.id === backendTask.id);
+            if (localTask) {
+              const isQueued = hasPendingTaskUpdate(backendTask.id);
+              // 15s window — longer than the 10s polling interval — guarantees optimistic
+              // update survives at least one full poll cycle after the API call completes.
+              const isRecent = localTask.localUpdateTs && (Date.now() - localTask.localUpdateTs < 15_000);
+              if (isQueued || isRecent) {
+                return {
+                  ...backendTask,
+                  status: localTask.status,
+                  clientActionId: localTask.clientActionId,
+                  completedAt: localTask.completedAt,
+                  localUpdateTs: localTask.localUpdateTs,
+                };
+              }
+            }
+            return backendTask;
+          });
+          return [...others, ...merged];
+        });
+        lastFetchedRef.current[patientId] = Date.now();
+      } catch (e) {
+        console.warn('[TaskContext] loadTasksForPatient failed:', e);
+      } finally {
+        setLoading(false);
+        delete inFlightRef.current[patientId];
+      }
+    })();
+
+    inFlightRef.current[patientId] = promise;
+    return promise;
   }, []);
 
   const createTask = useCallback(async (draft: TaskDraft): Promise<Task> => {
@@ -199,23 +292,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       end_date:           draft.endDate,
       completion_window:  draft.completionWindow,
     });
-    const row = data.data;
-    const created: Task = {
-      id:             row.id,
-      patientId:      row.patient_id,
-      title:          row.title,
-      instructionsMd: row.instructions_md ?? '',
-      description:    row.patient_hint ?? '',
-      category:       (row.category as TaskCategory) ?? 'custom',
-      priority:       (row.priority as TaskPriority) ?? 'medium',
-      iconName:       row.icon_name,
-      icon:           row.emoji,
-      scheduledTimestamp: row.scheduled_timestamp,
-      time:           extractDisplayTime(row.scheduled_timestamp, row.scheduled_time),
-      status:         'pending',
-      createdAt:      row.created_at,
-      updatedAt:      row.created_at,
-    };
+    const created = mapBackendTaskToFrontend(data.data);
     setTasks((prev) => [...prev, created]);
     return created;
   }, []);

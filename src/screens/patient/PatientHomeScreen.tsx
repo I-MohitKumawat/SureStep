@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Alert, Image } fr
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useIsFocused } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { useTasks } from '../../hooks/useTasks';
@@ -24,282 +25,23 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCaregiver } from '../../hooks/useCaregiver';
 import { AiFab } from '../../components/shared/AiAssistantFab';
 import { writeLocationPing } from '../../utils/geofenceUtils';
+import { connectSocket } from '../../services/socketClient';
 import type { PatientStackParams } from '../../types/navigation.types';
+import messaging from '@react-native-firebase/messaging';
+import { startBackgroundTracking, updateBackgroundTrackingMode } from '../../utils/locationTask';
+import { getBatteryPercentage, getNetworkStatus } from '../../utils/deviceTelemetry';
 
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientHomeScreen'>;
-type ActionState = 'done' | 'missed' | 'unsure' | null;
+type ActionState = 'done' | 'missed' | 'unsure' | 'overdue' | null;
 type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 
-type Task = {
-  id: string;
-  title: string;
-  time: string;
-  icon?: string;
-  state: ActionState;
-  instructionsMd?: string;
-  description?: string;
-};
+import { getTaskMeta, statusColors } from '../../utils/patientUtils';
+import { CaregiverProfileModal } from '../../components/patient/CaregiverProfileModal';
+import { RoutineCard } from '../../components/patient/RoutineCard';
+import type { Task } from '../../components/patient/RoutineCard';
+import { UnlinkedCaregiverModal } from '../../components/patient/UnlinkedCaregiverModal';
+import { TaskInstructionsModal } from '../../components/patient/TaskInstructionsModal';
 
-
-// --- Task meta: derive icon, hint, duration from task title ------------------
-type TaskMeta = { emoji: string; hint: string; duration: string; detail: string; tip: string };
-
-function getTaskMeta(title: string): TaskMeta {
-  const t = title.toLowerCase();
-
-  if (t.includes('med') || t.includes('pill') || t.includes('tablet')) {
-    return {
-      emoji: '💊',
-      hint: 'Before breakfast',
-      duration: '5 mins',
-      detail: 'Morning Medication',
-      tip: 'Take 1 tablet of Amlodipine 5mg with a full glass of water. Always take at the same time each day. Do not skip doses — if you miss one, take it as soon as you remember unless it\'s almost time for the next dose.',
-    };
-  }
-  if (t.includes('breakfast') || t.includes('meal') || t.includes('food') || t.includes('eat')) {
-    return {
-      emoji: '🥣',
-      hint: 'After medication',
-      duration: '20 mins',
-      detail: 'Healthy Breakfast',
-      tip: 'Have a balanced breakfast: oatmeal or whole-grain toast with fruit. Avoid high-sugar cereals. A good breakfast provides energy for morning activities and stabilises blood sugar throughout the day.',
-    };
-  }
-  if (t.includes('walk') || t.includes('exercise') || t.includes('jog') || t.includes('step')) {
-    return {
-      emoji: '🚶',
-      hint: 'Morning exercise',
-      duration: '30 mins',
-      detail: 'Daily Walk',
-      tip: 'Walk at a comfortable pace for 30 minutes. Wear supportive shoes and take water. If you feel dizzy or short of breath, stop and rest. A daily walk improves circulation, mood, and joint flexibility.',
-    };
-  }
-  if (t.includes('water') || t.includes('drink') || t.includes('hydrat')) {
-    return {
-      emoji: '💧',
-      hint: 'Stay hydrated',
-      duration: '2 mins',
-      detail: 'Hydration Check',
-      tip: 'Drink at least 2 glasses of water with each check-in. Older adults are at higher risk of dehydration. Keep a bottle nearby and sip regularly throughout the day, even if you don\'t feel thirsty.',
-    };
-  }
-  if (t.includes('sleep') || t.includes('nap') || t.includes('rest')) {
-    return {
-      emoji: '💤',
-      hint: 'Rest time',
-      duration: '60 mins',
-      detail: 'Rest / Nap Time',
-      tip: 'Lie down in a comfortable, quiet room. A short nap of 20–30 minutes can boost alertness without affecting night sleep. Avoid napping after 3 PM if you have difficulty sleeping at night.',
-    };
-  }
-  if (t.includes('blood') || t.includes('bp') || t.includes('pressure') || t.includes('sugar') || t.includes('glucose')) {
-    return {
-      emoji: '🩺',
-      hint: 'Health check',
-      duration: '5 mins',
-      detail: 'Health Monitoring',
-      tip: 'Sit calmly for 5 minutes before measuring. Place the cuff on your upper arm at heart level. Record the reading in your health log. Alert your caregiver if sistolic is above 140 or below 90.',
-    };
-  }
-
-  // Default fallback
-  return {
-    emoji: '📋',
-    hint: 'Daily task',
-    duration: '15 mins',
-    detail: title,
-    tip: 'Complete this task as directed by your care team. If you have any questions or feel unwell, press the ! button below to alert your caregiver.',
-  };
-}
-
-const statusColors: Record<'done' | 'unsure' | 'missed', string> = {
-  done: C.primary,
-  unsure: C.unsureBg,
-  missed: C.skipBg,
-};
-
-const actionSpecs: Array<{ key: Exclude<ActionState, null>; icon: string; label?: string }> = [
-  { key: 'done', icon: '👍', label: 'Done' },
-  { key: 'unsure', icon: '❓' },
-];
-
-
-
-// --- Caregiver Profile Modal --------------------------------------------------
-const CaregiverProfileModal = ({
-  visible,
-  caregiver,
-  onClose,
-}: {
-  visible: boolean;
-  caregiver: CaregiverListing | null;
-  onClose: () => void;
-}) => {
-  if (!caregiver) return null;
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.detailOverlay} onPress={onClose}>
-        <Pressable style={styles.profileSheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.detailHeader}>
-            <Pressable onPress={onClose} style={styles.detailCloseBtn}>
-              <Text style={styles.detailCloseText}>✕</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.profileAvatar}>
-            <Text style={styles.profileAvatarText}>{caregiver.emoji}</Text>
-          </View>
-
-          <Text style={styles.caregiverTagline}>Your requested caregiver</Text>
-
-          <Text style={styles.profileName}>{caregiver.name}</Text>
-          <Text style={styles.profileSubtitle}>{caregiver.specialty}</Text>
-
-          <View style={styles.detailDivider} />
-
-          <View style={styles.profileRow}>
-            <Text style={styles.profileLabel}>Availability</Text>
-            <Text style={styles.profileValue}>{caregiver.availability}</Text>
-          </View>
-          <View style={styles.profileRow}>
-            <Text style={styles.profileLabel}>Location</Text>
-            <Text style={styles.profileValue}>{caregiver.location}</Text>
-          </View>
-          <View style={styles.profileRow}>
-            <Text style={styles.profileLabel}>Fee</Text>
-            <Text style={styles.profileValue}>{caregiver.fee}</Text>
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [styles.detailDoneBtn, pressed && { opacity: 0.85 }]}
-            onPress={onClose}
-          >
-            <Text style={styles.detailDoneBtnText}>Close</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-};
-
-// --- Task Detail Modal --------------------------------------------------------
-const TaskDetailModal = () => null;
-const _unused_TaskDetailModal = ({
-  visible, task, onClose,
-}: {
-  visible: boolean;
-  task: Task | null;
-  onClose: () => void;
-}) => {
-  if (!task) return null;
-  const meta = getTaskMeta(task.title);
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.detailOverlay} onPress={onClose}>
-        <Pressable style={styles.detailSheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.detailHeader}>
-            <Pressable onPress={onClose} style={styles.detailCloseBtn}>
-              <Text style={styles.detailCloseText}>✕</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.detailIllustration}>
-            <Text style={styles.detailEmoji}>{meta.emoji}</Text>
-          </View>
-
-          <Text style={styles.detailTitle}>{meta.detail}</Text>
-          <View style={styles.detailMetaRow}>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>🕒 {task.time}</Text>
-            </View>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>⏳ {meta.duration}</Text>
-            </View>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>{meta.hint}</Text>
-            </View>
-          </View>
-
-          <View style={styles.detailDivider} />
-          <Text style={styles.detailInstructionLabel}>INSTRUCTIONS</Text>
-          <Text style={styles.detailInstruction}>{meta.tip}</Text>
-
-          <Pressable
-            style={({ pressed }) => [styles.detailDoneBtn, pressed && { opacity: 0.85 }]}
-            onPress={onClose}
-          >
-            <Text style={styles.detailDoneBtnText}>Got it</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-};
-
-// --- Routine Card -------------------------------------------------------------
-const RoutineCard = ({
-  task,
-  onUpdateStatus,
-  onViewInstructions,
-}: {
-  task: Task;
-  onUpdateStatus: (taskId: string, status: 'done' | 'unsure' | 'pending') => void;
-  onViewInstructions: (task: Task) => void;
-}) => {
-  const meta = getTaskMeta(task.title);
-  const displayEmoji = task.icon ?? meta.emoji;
-  const isDone = task.state === 'done';
-  const isUnsure = task.state === 'unsure';
-
-  return (
-    <View style={[styles.mainRoutineCard, isDone && { borderColor: '#86EFAC', backgroundColor: '#F9FBF9' }]}>
-      <View style={styles.routineTop}>
-        <View style={styles.routineIconWrap}>
-          <Text style={styles.routineIcon}>{displayEmoji}</Text>
-        </View>
-        <View style={styles.routineTextWrap}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <Text style={[styles.routineTaskTitle, isDone && { textDecorationLine: 'line-through', color: C.textMuted }]}>{task.title}</Text>
-            {isDone && (
-              <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
-                <Text style={{ color: '#166534', fontSize: 10, fontFamily: F.bold }}>DONE</Text>
-              </View>
-            )}
-            {isUnsure && (
-              <View style={[styles.statusBadge, { backgroundColor: '#FFEDD5', borderColor: '#FDBA74' }]}>
-                <Text style={{ color: '#9A3412', fontSize: 10, fontFamily: F.bold }}>UNSURE</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.routineTaskMeta}>{task.time} · {meta.hint}</Text>
-        </View>
-      </View>
-
-      {/* Patient actions: Done and Instructions */}
-      <View style={styles.cardActionsRow}>
-        <Pressable
-          style={[styles.cardActionBtn, isDone && styles.cardActionBtnDone]}
-          onPress={() => onUpdateStatus(task.id, isDone ? 'pending' : 'done')}
-        >
-          <Text style={[styles.cardActionBtnText, isDone && { color: C.primary }]}>
-            {isDone ? '✓ Completed' : 'Mark Completed'}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.cardActionBtn}
-          onPress={() => onViewInstructions(task)}
-        >
-          <Text style={styles.cardActionBtnText}>
-            📋 Instructions
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-};
-
-// --- Bottom Tab Icon components -----------------------------------------------
 type TabIconProps = { active: boolean };
 const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
   Home: ({ active }) => <IconHome size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
@@ -308,210 +50,16 @@ const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
   Search: ({ active }) => <IconSearch size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
 };
 
-// --- Completed Tasks Modal ----------------------------------------------------
-const CompletedTasksModal = () => null;
-const _unused_CompletedTasksModal = ({
-  visible, tasks, onClose, onUndo,
-}: {
-  visible: boolean;
-  tasks: Task[];
-  onClose: () => void;
-  onUndo: (taskId: string) => void;
-}) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalSheet}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Completed Tasks</Text>
-          <Pressable onPress={onClose} style={styles.modalCloseBtn}>
-            <Text style={styles.modalCloseText}>✕</Text>
-          </Pressable>
-        </View>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {tasks.length === 0 ? (
-            <Text style={styles.emptyText}>No completed tasks yet.</Text>
-          ) : (
-            tasks.map((task) => {
-              const meta = getTaskMeta(task.title);
-              return (
-                <View key={task.id} style={styles.mainRoutineCard}>
-                  <View style={styles.routineTop}>
-                    <View style={styles.routineIconWrap}>
-                      <Text style={styles.routineIcon}>{meta.emoji}</Text>
-                    </View>
-                    <View style={styles.routineTextWrap}>
-                      <Text style={styles.routineTaskTitle}>{task.title}</Text>
-                      <Text style={styles.routineTaskMeta}>{task.time} · Completed ✓</Text>
-                    </View>
-                    <Pressable
-                      onPress={() => onUndo(task.id)}
-                      style={({ pressed }) => [styles.undoBtn, pressed && { opacity: 0.7 }]}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.undoBtnText}>↩ Undo</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-      </View>
-    </View>
-  </Modal>
-);
-
-// ─── Unlinked Caregiver Warning Modal ──────────────────────────────
-const UnlinkedCaregiverModal = ({
-  visible,
-  onClose,
-  onSearch,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSearch: () => void;
-}) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={styles.alertOverlay}>
-      <View style={styles.alertCard}>
-        <View style={styles.alertIconWrap}>
-          <Text style={styles.alertIcon}>🤝</Text>
-        </View>
-        <Text style={styles.alertTitle}>Find a Caregiver</Text>
-        <Text style={styles.alertMessage}>
-          You don't have a confirmed caregiver linked yet. Would you like to search for an experienced caregiver nearby?
-        </Text>
-        <View style={styles.alertBtnRow}>
-          <Pressable
-            style={({ pressed }) => [styles.alertCancelBtn, pressed && styles.alertBtnPressed]}
-            onPress={onClose}
-          >
-            <Text style={styles.alertCancelText}>Later</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.alertConfirmBtn, pressed && styles.alertBtnPressed]}
-            onPress={onSearch}
-          >
-            <Text style={styles.alertConfirmText}>Search Nearby</Text>
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  </Modal>
-);
-
-// --- Visual Instructions Modal -----------------------------------------------
-const TaskInstructionsModal = ({
-  visible, task, onClose,
-}: {
-  visible: boolean;
-  task: Task | null;
-  onClose: () => void;
-}) => {
-  if (!task) return null;
-  const meta = getTaskMeta(task.title);
-  const displayEmoji = task.icon ?? meta.emoji;
-
-  const renderSteps = (instructionsMd: string | undefined) => {
-    if (!instructionsMd) {
-      return <Text style={styles.noStepsText}>No visual steps configured by caregiver.</Text>;
-    }
-    let steps: Array<{ text: string; photo_url?: string }> = [];
-    try {
-      if (instructionsMd.trim().startsWith('[')) {
-        steps = JSON.parse(instructionsMd);
-      } else {
-        steps = [{ text: instructionsMd }];
-      }
-    } catch {
-      steps = [{ text: instructionsMd }];
-    }
-
-    if (steps.length === 0 || (steps.length === 1 && !steps[0].text && !steps[0].photo_url)) {
-      return <Text style={styles.noStepsText}>No visual steps configured by caregiver.</Text>;
-    }
-
-    return (
-      <View style={styles.stepsContainer}>
-        {steps.map((step, idx) => (
-          <View key={idx} style={styles.stepRow}>
-            <View style={styles.stepNumberCircle}>
-              <Text style={styles.stepNumberText}>{idx + 1}</Text>
-            </View>
-            <View style={styles.stepContent}>
-              {!!step.text && <Text style={styles.stepText}>{step.text}</Text>}
-              {!!step.photo_url && (
-                <Image
-                  source={{ uri: step.photo_url }}
-                  style={styles.stepPhoto}
-                  resizeMode="cover"
-                />
-              )}
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.detailOverlay} onPress={onClose}>
-        <Pressable
-          style={[styles.detailSheet, { maxHeight: '85%', paddingBottom: 0 }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          {/* Fixed header */}
-          <View style={styles.detailHeader}>
-            <Pressable style={styles.detailCloseBtn} onPress={onClose}>
-              <Text style={styles.detailCloseText}>✕</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.detailIllustration}>
-            <Text style={styles.detailEmoji}>{displayEmoji}</Text>
-          </View>
-
-          <Text style={styles.detailTitle}>{task.title}</Text>
-
-          <View style={styles.detailMetaRow}>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>{task.time}</Text>
-            </View>
-          </View>
-
-          <View style={styles.detailDivider} />
-
-          <Text style={styles.detailInstructionLabel}>VISUAL INSTRUCTION STEPS</Text>
-
-          {/* Scrollable steps — grows to fill remaining sheet space */}
-          <ScrollView
-            style={{ flex: 1, paddingHorizontal: 20 }}
-            contentContainerStyle={{ paddingBottom: 16 }}
-            showsVerticalScrollIndicator={true}
-            bounces={true}
-          >
-            {renderSteps(task.instructionsMd)}
-          </ScrollView>
-
-          {/* Fixed footer button */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24 }}>
-            <Pressable
-              style={({ pressed }) => [styles.detailDoneBtn, { marginHorizontal: 0 }, pressed && { opacity: 0.85 }]}
-              onPress={onClose}
-            >
-              <Text style={styles.detailDoneBtnText}>Got it</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-};
+function parseTaskTimeToToday(timeStr: string): Date {
+  const [hours, minutes] = (timeStr || '').split(':').map(Number);
+  const d = new Date();
+  d.setHours(hours || 0, minutes || 0, 0, 0);
+  return d;
+}
 
 // --- Main Screen --------------------------------------------------------------
 export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { status, user } = useAuth();
+  const { status, user, firebaseUser } = useAuth();
   const { tasks, loadTasksForPatient, updateTaskStatus } = useTasks();
   const isFocused = useIsFocused();
   // Accept initialTab from route params (from Games/Activities/Family screens)
@@ -524,6 +72,10 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const [helpTask, setHelpTask] = useState<Task | null>(null);
   const [viewingInstructionsTask, setViewingInstructionsTask] = useState<Task | null>(null);
 
+  // Active alarm task and snoozed list
+  const [activeAlarmTask, setActiveAlarmTask] = useState<Task | null>(null);
+  const [snoozedTasks, setSnoozedTasks] = useState<Record<string, number>>({});
+
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Caregiver search sub-view state ─────────────────────
@@ -531,17 +83,28 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const [viewingCaregiver, setViewingCaregiver] = useState<CaregiverListing | null>(null);
   const { confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver, loading } = useCaregiver();
 
+  const hasLinkedCaregiver = !!confirmedCaregiver && (
+    confirmedCaregiver.status === 'CONFIRMED' ||
+    confirmedCaregiver.status === 'ACCEPTED' ||
+    confirmedCaregiver.status === 'MEETING_COMPLETED' ||
+    confirmedCaregiver.status === 'ASSESSMENT_PENDING' ||
+    confirmedCaregiver.status === 'ACTIVE_CARE'
+  );
+  const hasPendingRequest = !!confirmedCaregiver && (
+    confirmedCaregiver.status === 'PENDING' ||
+    confirmedCaregiver.status === 'REQUESTED'
+  );
+
   // Patient phone comes from auth — no AsyncStorage needed
   const patientId = status === 'authenticated' ? user?.id : null;
 
   useEffect(() => {
     if (!patientId || !isFocused) return;
     void loadTasksForPatient(patientId);
-    // Poll for updates every 10s — frequent enough to stay fresh,
-    // but gives the optimistic update enough time to persist before the next fetch.
+    // Poll for updates every 60s as a fallback — WebSocket synchronization handles real-time updates.
     const interval = setInterval(() => {
       void loadTasksForPatient(patientId);
-    }, 10_000);
+    }, 60_000);
     return () => clearInterval(interval);
   }, [patientId, isFocused, loadTasksForPatient]);
 
@@ -560,7 +123,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const handleUpdateTaskStatus = useCallback(
-    async (taskId: string, newStatus: 'done' | 'unsure' | 'pending') => {
+    async (taskId: string, newStatus: TaskStatus) => {
       try {
         await updateTaskStatus(taskId, newStatus);
       } catch (err) {
@@ -600,6 +163,12 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           return;
         }
 
+        // Fetch telemetry data first
+        const [batteryPct, networkStatus] = await Promise.all([
+          getBatteryPercentage(),
+          getNetworkStatus(),
+        ]);
+
         // Write first ping immediately
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         if (active) {
@@ -607,6 +176,8 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             patientId,
             coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
             accuracyM: loc.coords.accuracy ?? undefined,
+            batteryPct,
+            networkStatus,
             source: 'foreground',
           });
           if (active) setLocationStatus('sharing');
@@ -618,10 +189,16 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           async (l) => {
             if (!active) return;
             try {
+              const [bPct, nStatus] = await Promise.all([
+                getBatteryPercentage(),
+                getNetworkStatus(),
+              ]);
               await writeLocationPing({
                 patientId,
                 coords: { latitude: l.coords.latitude, longitude: l.coords.longitude },
                 accuracyM: l.coords.accuracy ?? undefined,
+                batteryPct: bPct,
+                networkStatus: nStatus,
                 source: 'foreground',
               });
               if (active) setLocationStatus('sharing');
@@ -644,11 +221,98 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 
-  // Load confirmed caregiver on mount
-  React.useEffect(() => {
-    if (patientId) void reloadCaregiver(patientId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Start adaptive background location tracking
+  useEffect(() => {
+    if (patientId) {
+      void startBackgroundTracking(patientId);
+    }
   }, [patientId]);
+
+  // Listen for foreground FCM location request push notifications
+  useEffect(() => {
+    if (!patientId) return;
+    const unsubscribe = messaging().onMessage(async (remoteMessage) => {
+      if (remoteMessage.data?.type === 'LOCATION_REQUEST') {
+        console.log('[Patient Foreground] Received location request via FCM');
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          await writeLocationPing({
+            patientId,
+            coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
+            accuracyM: loc.coords.accuracy ?? undefined,
+            source: 'foreground',
+          });
+          console.log('[Patient Foreground] Published fresh location ping');
+        } catch (err) {
+          console.warn('[Patient Foreground] Failed to get/publish location:', err);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [patientId]);
+
+  // ─── Real-time WebSocket connection for location refresh requests ──────────────────
+  useEffect(() => {
+    if (!firebaseUser || !patientId) return;
+    let socketRef: any;
+
+    void firebaseUser.getIdToken().then((token) => {
+      socketRef = connectSocket(token);
+      socketRef.emit('join:patient', patientId);
+
+      const handleLocationRequest = async () => {
+        console.log('[Patient] Received location refresh request from caregiver');
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          await writeLocationPing({
+            patientId,
+            coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
+            accuracyM: loc.coords.accuracy ?? undefined,
+            source: 'foreground',
+          });
+          console.log('[Patient] Successfully published fresh location ping');
+        } catch (err) {
+          console.warn('[Patient] Failed to get/publish fresh location fix:', err);
+        }
+      };
+
+      socketRef.on('location:request', handleLocationRequest);
+
+      const handleStateChange = (data: any) => {
+        console.log('[Patient] Safety state change received via WebSocket:', data);
+        const inEmergency =
+          data?.safety_status === 'WANDERING' ||
+          data?.safety_status === 'CRITICAL' ||
+          data?.safety_status === 'UNSAFE' ||
+          data?.sos_active === true;
+        void updateBackgroundTrackingMode(patientId, inEmergency);
+      };
+
+      socketRef.on('state:change', handleStateChange);
+
+      const handleRelationshipChange = (data: any) => {
+        console.log('[Patient] Relationship change received via WebSocket:', data);
+        if (patientId) {
+          void reloadCaregiver(patientId, true);
+        }
+      };
+
+      socketRef.on('relationship:change', handleRelationshipChange);
+    });
+
+    return () => {
+      if (socketRef) {
+        socketRef.off('location:request');
+        socketRef.off('state:change');
+        socketRef.off('relationship:change');
+      }
+    };
+  }, [firebaseUser, patientId, reloadCaregiver]);
+
+  // Load confirmed caregiver on focus or mount
+  React.useEffect(() => {
+    if (patientId && isFocused) void reloadCaregiver(patientId, true);
+  }, [patientId, isFocused, reloadCaregiver]);
 
   const hasAlertedRef = useRef(false);
 
@@ -660,6 +324,54 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     }
   }, [loading, confirmedCaregiver, patientId]);
+
+  React.useEffect(() => {
+    if (!patientId || patientTasks.length === 0) return;
+
+    const checkAlarmsAndExpiry = async () => {
+      const now = new Date();
+      for (const task of patientTasks) {
+        if (task.state === 'done' || task.state === 'missed' || task.state === 'unsure') {
+          continue;
+        }
+
+        const taskTime = parseTaskTimeToToday(task.time);
+        const timeDiffMs = now.getTime() - taskTime.getTime();
+
+        // 1. Expiry Check (over 30 minutes past scheduled time)
+        if (timeDiffMs >= 30 * 60 * 1000) {
+          console.log(`[Expiry] Task "${task.title}" expired. Marking as missed.`);
+          try {
+            await handleUpdateTaskStatus(task.id, 'missed');
+            // If the active alarm is this task, clear it
+            if (activeAlarmTask?.id === task.id) {
+              setActiveAlarmTask(null);
+            }
+          } catch (err) {
+            console.error('Failed to auto-miss expired task:', err);
+          }
+          continue;
+        }
+
+        // 2. Active Alarm Check (within 30 minutes of scheduled time)
+        if (timeDiffMs >= 0 && timeDiffMs < 30 * 60 * 1000) {
+          const snoozeUntil = snoozedTasks[task.id] || 0;
+          if (now.getTime() > snoozeUntil) {
+            if (!activeAlarmTask || activeAlarmTask.id !== task.id) {
+              setActiveAlarmTask(task);
+            }
+          }
+        }
+      }
+    };
+
+    void checkAlarmsAndExpiry();
+    const timer = setInterval(() => {
+      void checkAlarmsAndExpiry();
+    }, 10_000);
+
+    return () => clearInterval(timer);
+  }, [patientId, patientTasks, snoozedTasks, activeAlarmTask, handleUpdateTaskStatus]);
 
   const nextActionableIndex = useMemo(() => {
     const len = patientTasks.length;
@@ -688,18 +400,22 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={[styles.greetingName, { fontSize: 26 }]}>My Care Team</Text>
             </View>
           </View>
-          {confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? (
+          {hasLinkedCaregiver ? (
             <View style={styles.mainRoutineCard}>
               <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>YOUR CAREGIVER</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                <Text style={{ fontSize: 36 }}>{confirmedCaregiver.emoji || '👩‍⚕️'}</Text>
+                {confirmedCaregiver.profile_photo_url ? (
+                  <Image source={{ uri: confirmedCaregiver.profile_photo_url }} style={styles.caregiverAvatar} />
+                ) : (
+                  <Text style={{ fontSize: 36 }}>{confirmedCaregiver.emoji || '👩‍⚕️'}</Text>
+                )}
                 <View>
                   <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
                   <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
                 </View>
               </View>
             </View>
-          ) : confirmedCaregiver && confirmedCaregiver.status === 'PENDING' ? (
+          ) : hasPendingRequest ? (
             <View style={styles.mainRoutineCard}>
               <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>PENDING REQUEST</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 }}>
@@ -730,7 +446,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
       ) : activeTab === 'Activity' ? (
         <PatientActivitiesView navigation={navigation} />
 
-      ) : activeTab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? (
+      ) : activeTab === 'Search' && hasLinkedCaregiver ? (
         // -- Confirmed Caregiver Profile Card ---------------------------------
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
@@ -808,25 +524,50 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* -- Header --------------------------------------------------- */}
           <View style={styles.headerCard}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.greetingOverline}>{getGreeting()},</Text>
               <Text style={styles.greetingName}>{displayName}</Text>
               <Text style={styles.greetingDate}>{formattedDate}</Text>
             </View>
-            {confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Pressable
-                onPress={() => {
-                  setViewingCaregiver(confirmedCaregiver);
-                  setSearchSubView('detail');
-                  setActiveTab('Search');
-                }}
-                style={({ pressed }) => [styles.caregiverTile, pressed && { opacity: 0.82 }]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={() => navigation.navigate('NotificationHistoryScreen')}
+                style={({ pressed }) => [
+                  {
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: C.border,
+                  },
+                  pressed && { opacity: 0.72 },
+                ]}
               >
-                <Text style={styles.caregiverIcon}>{confirmedCaregiver.emoji}</Text>
-                <Text style={styles.caregiverTileLabel} numberOfLines={2}>{confirmedCaregiver.name.split(' ')[0]}</Text>
+                <Ionicons name="notifications-outline" size={22} color={C.primary} />
               </Pressable>
-            )}
+
+              {hasLinkedCaregiver && (
+                <Pressable
+                  onPress={() => {
+                    setViewingCaregiver(confirmedCaregiver);
+                    setSearchSubView('detail');
+                    setActiveTab('Search');
+                  }}
+                  style={({ pressed }) => [styles.caregiverTile, pressed && { opacity: 0.82 }]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {confirmedCaregiver.profile_photo_url ? (
+                    <Image source={{ uri: confirmedCaregiver.profile_photo_url }} style={styles.caregiverTileImage} />
+                  ) : (
+                    <Text style={styles.caregiverIcon}>{confirmedCaregiver.emoji}</Text>
+                  )}
+                  <Text style={styles.caregiverTileLabel} numberOfLines={2}>{confirmedCaregiver.name.split(' ')[0]}</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
 
           {/* -- Location sharing status pill --------------------------- */}
@@ -924,12 +665,12 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent =
-              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED'
+              tab === 'Search' && hasLinkedCaregiver
                 ? IconProfile
                 : TAB_ICON_COMPONENTS[tab];
             const label =
               tab === 'Search'
-                ? (confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? 'Caregiver Profile' : 'Search')
+                ? (hasLinkedCaregiver ? 'Caregiver Profile' : 'Search')
                 : tab;
             return (
               <Pressable
@@ -938,7 +679,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
                   // All tabs render inline — no navigation.navigate()
                   setActiveTab(tab);
                   if (tab === 'Search') {
-                    if (confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED') {
+                    if (hasLinkedCaregiver) {
                       setViewingCaregiver(confirmedCaregiver);
                       setSearchSubView('detail');
                     } else {
@@ -964,6 +705,73 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           })}
         </View>
       </View>
+
+      {/* 🔔 Premium Interactive Alarm Modal Overlay */}
+      {activeAlarmTask && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {}}
+        >
+          <View style={styles.alarmOverlay}>
+            <View style={styles.alarmCard}>
+              <View style={styles.alarmIconContainer}>
+                <Text style={styles.alarmEmoji}>{activeAlarmTask.icon || '⏰'}</Text>
+              </View>
+              
+              <Text style={styles.alarmSubtitle}>ACTIVELY REMINDING</Text>
+              <Text style={styles.alarmTitle}>{activeAlarmTask.title}</Text>
+              
+              <View style={styles.alarmTimeBadge}>
+                <Ionicons name="time-outline" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={styles.alarmTimeText}>Due at {activeAlarmTask.time}</Text>
+              </View>
+
+              {activeAlarmTask.description ? (
+                <Text style={styles.alarmDesc}>{activeAlarmTask.description}</Text>
+              ) : null}
+
+              <View style={styles.alarmButtons}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.alarmSnoozeBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => {
+                    const taskId = activeAlarmTask.id;
+                    setSnoozedTasks((prev) => ({
+                      ...prev,
+                      [taskId]: Date.now() + 5 * 60 * 1000,
+                    }));
+                    setActiveAlarmTask(null);
+                  }}
+                >
+                  <Text style={styles.alarmSnoozeBtnText}>Snooze (5m)</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.alarmCompleteBtn,
+                    pressed && { opacity: 0.9 },
+                  ]}
+                  onPress={async () => {
+                    const taskId = activeAlarmTask.id;
+                    try {
+                      await handleUpdateTaskStatus(taskId, 'done');
+                      setActiveAlarmTask(null);
+                    } catch (err) {
+                      console.error('Failed to complete task from alarm modal:', err);
+                    }
+                  }}
+                >
+                  <Text style={styles.alarmCompleteBtnText}>Complete</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </ScreenContainer>
   );
 };
@@ -999,6 +807,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: C.border,
   },
   caregiverIcon: { fontSize: 26 },
+  caregiverAvatar: { width: 50, height: 50, borderRadius: 25 },
+  caregiverTileImage: { width: 34, height: 34, borderRadius: 17 },
   caregiverTileLabel: {
     fontFamily: F.bold,
     fontSize: 9,
@@ -1392,5 +1202,109 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#F1F5F9',
+  },
+  alarmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  alarmCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  alarmIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#FCA5A5',
+  },
+  alarmEmoji: {
+    fontSize: 40,
+  },
+  alarmSubtitle: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: '#EF4444',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  alarmTitle: {
+    fontFamily: F.extraBold,
+    fontSize: 22,
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 28,
+  },
+  alarmTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginBottom: 16,
+  },
+  alarmTimeText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#991B1B',
+  },
+  alarmDesc: {
+    fontFamily: F.regular,
+    fontSize: 14,
+    color: '#4B5563',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  alarmButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  alarmSnoozeBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alarmSnoozeBtnText: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: '#4B5563',
+  },
+  alarmCompleteBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alarmCompleteBtnText: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 });

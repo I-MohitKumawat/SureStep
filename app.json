@@ -57,7 +57,12 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "googleServicesFile": "./google-services.json",
-      "package": "com.anonymous.surestep"
+      "package": "com.anonymous.surestep",
+      "config": {
+        "googleMaps": {
+          "apiKey": "YAIzaSyAEBzJtrgNKLdp8yGQScVK28kp4mj6xvZI"
+        }
+      }
     },
     "ios": {
       "infoPlist": {

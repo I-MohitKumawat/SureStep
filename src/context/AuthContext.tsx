@@ -15,9 +15,13 @@ import React, {
   useMemo, useState, type ReactNode,
 } from 'react';
 import { getAuth, onAuthStateChanged, signOut, getIdToken, type FirebaseAuthTypes } from '@react-native-firebase/auth';
+import * as Location from 'expo-location';
+import * as Battery from 'expo-battery';
 import type { UserRoleType } from '../types/enums';
 import { setFirebaseTokenResolver, clearFirebaseTokenResolver } from '../services/apiClient';
 import { getMe } from '../services/userService';
+import { bootstrapFcmToken } from '../services/fcmTokenService';
+import locationService from '../services/locationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +48,7 @@ type AuthContextValue = {
   logout:       () => void;
   setStatus:    (s: AuthStatus) => void;
   loginDevMode: (role: UserRoleType) => Promise<void>;
+  updateUser:   (patch: Partial<AuthUser>) => void;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -101,6 +106,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             photo_url: dbUser.photo_url || undefined,
           });
           setStatus('authenticated');
+          // Register FCM device token now that we have an authenticated session
+          void bootstrapFcmToken();
         }
       } catch (err: any) {
         // If getMe fails for ANY reason (404 = new user, network error, etc.),
@@ -178,9 +185,79 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const updateUser = useCallback((patch: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      return { ...prev, ...patch };
+    });
+  }, []);
+
+  // Caregiver and Family location watching
+  useEffect(() => {
+    if (status !== 'authenticated' || !user || (user.role !== 'CAREGIVER' && user.role !== 'FAMILY')) {
+      return;
+    }
+
+    let sub: Location.LocationSubscription | null = null;
+    let isCleaningUp = false;
+
+    const startWatching = async () => {
+      try {
+        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus !== 'granted') {
+          console.warn('[AuthContext] Foreground location permission denied for', user.role);
+          return;
+        }
+
+        if (isCleaningUp) return;
+
+        sub = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 30000,
+            distanceInterval: 10,
+          },
+          async (loc) => {
+            try {
+              let batteryPct: number | undefined;
+              const batteryLevel = await Battery.getBatteryLevelAsync().catch(() => -1);
+              if (batteryLevel >= 0) {
+                batteryPct = Math.round(batteryLevel * 100);
+              }
+
+              await locationService.postPing({
+                lat: loc.coords.latitude,
+                lng: loc.coords.longitude,
+                accuracy_m: loc.coords.accuracy ?? undefined,
+                speed_kmh: loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed * 3.6 : undefined,
+                heading: loc.coords.heading ?? undefined,
+                battery_pct: batteryPct,
+                recorded_at: new Date(loc.timestamp).toISOString(),
+                source: 'PHONE',
+              });
+            } catch (err) {
+              console.warn('[AuthContext] Failed to send location ping:', err);
+            }
+          }
+        );
+      } catch (err) {
+        console.warn('[AuthContext] Error setting up location watch:', err);
+      }
+    };
+
+    void startWatching();
+
+    return () => {
+      isCleaningUp = true;
+      if (sub) {
+        sub.remove();
+      }
+    };
+  }, [status, user]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, firebaseUser, login, logout, setStatus, loginDevMode }),
-    [status, user, firebaseUser, login, logout, loginDevMode],
+    () => ({ status, user, firebaseUser, login, logout, setStatus, loginDevMode, updateUser }),
+    [status, user, firebaseUser, login, logout, loginDevMode, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

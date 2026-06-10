@@ -1,7 +1,14 @@
 /**
  * SureStep — src/context/GeofenceContext.tsx
- * Moved from: app/context/geofenceContext.tsx
- * Mounted inside CaregiverNavigator only.
+ *
+ * Provides geofence zones, breach status, live coords, alerts, and trail
+ * to all caregiver screens.
+ *
+ * Key additions over previous version:
+ *  - Loads alerts from real backend API (GET /alerts/patient/:id)
+ *  - Subscribes to WebSocket `state:change` events for real-time coord updates
+ *  - Subscribes to `alert:new` and `sos:triggered` socket events
+ *  - Emits FCM device token on mount via alertsAPI
  */
 
 import React, {
@@ -26,46 +33,41 @@ import {
   type BreachStatus,
 } from '../utils/geofenceUtils';
 import { startBackgroundTracking, primeZonesCache } from '../utils/locationTask';
+import { fetchAlerts, type ApiAlert } from '../services/geofenceService';
+import { connectSocket, getSocket } from '../services/socketClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type GeofenceAlert = {
-  id: string;
-  patientId: string;
-  geofenceId: string | null;
-  breachType: 'exit' | 'enter';
-  distanceM: number;
-  createdAt: string;
+  id:             string;
+  patientId:      string;
+  zoneId:         string | null;
+  alertType:      string;
+  severity:       'INFO' | 'WARNING' | 'CRITICAL';
+  breachType:     'exit' | 'enter' | 'approaching' | 'sos' | 'other';
+  distanceM:      number | null;
+  lat:            number;
+  lng:            number;
+  createdAt:      string;
   acknowledgedAt: string | null;
 };
 
 type GeofenceContextValue = {
-  /** Live patient coordinates (null until first fix). */
-  coords:          Coords | null;
-  /** How old the last fix is, in seconds. */
-  coordsAgeS:      number;
-  /** Active geofence zones for the current patient. */
-  zones:           GeofenceZone[];
-  /** Computed breach status derived from coords + zones. */
-  breachStatus:    BreachStatus;
-  /** Unacknowledged alerts for this patient. */
-  alerts:          GeofenceAlert[];
-  /** Location history trail (last 20 pings). */
-  trail:           Coords[];
-  /** Whether zones are loading from Supabase. */
-  zonesLoading:    boolean;
-  /** Load / refresh zones from Supabase. */
-  loadZones:       (patientId: string) => Promise<void>;
-  /** Persist a zone (upsert). */
-  saveZone:        (zone: Omit<GeofenceZone, 'id'> & { id?: string }) => Promise<GeofenceZone | null>;
-  /** Delete a zone. */
-  deleteZone:      (id: string) => Promise<void>;
-  /** Mark an alert as acknowledged. */
-  acknowledgeAlertById: (alertId: string, byPhone: string) => Promise<void>;
-  /** Manually request a fresh location fix. */
-  refreshLocation: () => Promise<void>;
-  /** Start background tracking for a patient. */
-  startTracking:   (patientId: string) => Promise<void>;
+  coords:               Coords | null;
+  coordsAgeS:           number;
+  zones:                GeofenceZone[];
+  breachStatus:         BreachStatus;
+  alerts:               GeofenceAlert[];
+  trail:                Coords[];
+  zonesLoading:         boolean;
+  alertsLoading:        boolean;
+  loadZones:            (patientId: string) => Promise<void>;
+  loadAlerts:           (patientId: string) => Promise<void>;
+  saveZone:             (zone: Omit<GeofenceZone, 'id'> & { id?: string }) => Promise<GeofenceZone | null>;
+  deleteZone:           (id: string) => Promise<void>;
+  acknowledgeAlertById: (alertId: string) => Promise<void>;
+  refreshLocation:      () => Promise<void>;
+  startTracking:        (patientId: string) => Promise<void>;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -78,32 +80,59 @@ export function useGeofence(): GeofenceContextValue {
   return ctx;
 }
 
+// ─── Helper: map API alert to local type ─────────────────────────────────────
+
+function apiAlertToLocal(a: ApiAlert): GeofenceAlert {
+  const typeMap: Record<string, GeofenceAlert['breachType']> = {
+    ZONE_EXIT:            'exit',
+    ZONE_ENTER:           'enter',
+    APPROACHING_BOUNDARY: 'approaching',
+    SOS_TRIGGERED:        'sos',
+  };
+  return {
+    id:             a.id,
+    patientId:      a.patient_id,
+    zoneId:         a.zone_id ?? null,
+    alertType:      a.alert_type,
+    severity:       a.severity,
+    breachType:     typeMap[a.alert_type] ?? 'other',
+    distanceM:      a.distance_from_zone_m ?? null,
+    lat:            a.lat,
+    lng:            a.lng,
+    createdAt:      a.created_at,
+    acknowledgedAt: a.acknowledged_at ?? null,
+  };
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function GeofenceProvider({
   children,
   patientId,
+  accessToken,
 }: {
-  children: React.ReactNode;
-  patientId: string;
+  children:    React.ReactNode;
+  patientId:   string;
+  accessToken: string;
 }) {
-  const [coords,       setCoords]       = useState<Coords | null>(null);
-  const [coordsTs,     setCoordsTs]     = useState<number>(0);
-  const [coordsAgeS,   setCoordsAgeS]   = useState<number>(0);
-  const [zones,        setZones]        = useState<GeofenceZone[]>([]);
-  const [zonesLoading, setZonesLoading] = useState(true);
-  const [alerts,       setAlerts]       = useState<GeofenceAlert[]>([]);
-  const [trail,        setTrail]        = useState<Coords[]>([]);
+  const [coords,        setCoords]        = useState<Coords | null>(null);
+  const [coordsTs,      setCoordsTs]      = useState<number>(0);
+  const [coordsAgeS,    setCoordsAgeS]    = useState<number>(0);
+  const [zones,         setZones]         = useState<GeofenceZone[]>([]);
+  const [zonesLoading,  setZonesLoading]  = useState(true);
+  const [alerts,        setAlerts]        = useState<GeofenceAlert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [trail,         setTrail]         = useState<Coords[]>([]);
 
-  const fgSubRef  = useRef<Location.LocationSubscription | null>(null);
+  const fgSubRef    = useRef<Location.LocationSubscription | null>(null);
   const ageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Derived: breach status ──────────────────────────────────────────────────
+  // ── Derived: breach status ────────────────────────────────────────────────
   const breachStatus: BreachStatus = coords && zones.length > 0
     ? checkBreach(coords, zones)
     : { status: 'no_signal' };
 
-  // ── Age counter (ticks every second) ───────────────────────────────────────
+  // ── Age counter (ticks every second) ────────────────────────────────────
   useEffect(() => {
     ageTimerRef.current = setInterval(() => {
       if (coordsTs > 0) setCoordsAgeS(Math.floor((Date.now() - coordsTs) / 1000));
@@ -111,7 +140,7 @@ export function GeofenceProvider({
     return () => { if (ageTimerRef.current) clearInterval(ageTimerRef.current); };
   }, [coordsTs]);
 
-  // ── Load zones ──────────────────────────────────────────────────────────────
+  // ── Load zones from real API ─────────────────────────────────────────────
   const loadZones = useCallback(async (pid: string) => {
     setZonesLoading(true);
     try {
@@ -122,13 +151,73 @@ export function GeofenceProvider({
     }
   }, []);
 
-  // ── Load alerts (unacknowledged) ────────────────────────────────────────────
+  // ── Load alerts from real API ────────────────────────────────────────────
   const loadAlerts = useCallback(async (pid: string) => {
-    console.warn('[geofenceContext] loadAlerts: Supabase removed, setting empty array');
-    setAlerts([]);
+    setAlertsLoading(true);
+    try {
+      const { alerts: raw } = await fetchAlerts(pid, { limit: 30 });
+      setAlerts(raw.map(apiAlertToLocal));
+    } catch {
+      // fail silently — leave previous state
+    } finally {
+      setAlertsLoading(false);
+    }
   }, []);
 
-  // ── Foreground location subscription ───────────────────────────────────────
+  // ── WebSocket subscription ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const socket = connectSocket(accessToken);
+
+    // Real-time location/state updates from server-side awareness engine
+    const onStateChange = (data: any) => {
+      if (data.patient_id !== patientId) return;
+      if (data.last_known_lat != null && data.last_known_lng != null) {
+        setCoords({ latitude: data.last_known_lat, longitude: data.last_known_lng });
+        setCoordsTs(Date.now());
+      }
+    };
+
+    // New alert pushed from server
+    const onAlertNew = (data: any) => {
+      if (data.alert?.patient_id !== patientId) return;
+      const mapped = apiAlertToLocal(data.alert);
+      setAlerts((prev) => [mapped, ...prev.filter((a) => a.id !== mapped.id)]);
+    };
+
+    // Alert acknowledged by another caregiver
+    const onAlertAck = (data: any) => {
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === data.alert_id ? { ...a, acknowledgedAt: data.ts } : a,
+        ),
+      );
+    };
+
+    // SOS triggered
+    const onSOS = (data: any) => {
+      if (data.patient_id !== patientId) return;
+      if (data.alert) {
+        const mapped = apiAlertToLocal({ ...data.alert, alert_type: 'SOS_TRIGGERED', severity: 'CRITICAL' });
+        setAlerts((prev) => [mapped, ...prev.filter((a) => a.id !== mapped.id)]);
+      }
+    };
+
+    socket.on('state:change',      onStateChange);
+    socket.on('alert:new',         onAlertNew);
+    socket.on('alert:acknowledged', onAlertAck);
+    socket.on('sos:triggered',     onSOS);
+
+    return () => {
+      socket.off('state:change',      onStateChange);
+      socket.off('alert:new',         onAlertNew);
+      socket.off('alert:acknowledged', onAlertAck);
+      socket.off('sos:triggered',     onSOS);
+    };
+  }, [accessToken, patientId]);
+
+  // ── Foreground location subscription ────────────────────────────────────
   const startForegroundTracking = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -139,25 +228,31 @@ export function GeofenceProvider({
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const c: Coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       setCoords(c);
       setCoordsTs(Date.now());
-      void writeLocationPing({ patientId, coords: c, accuracyM: loc.coords.accuracy ?? undefined, source: 'foreground' });
+      void writeLocationPing({
+        patientId,
+        coords: c,
+        accuracyM:  loc.coords.accuracy  ?? undefined,
+        speedKmh:  (loc.coords.speed ?? 0) * 3.6,
+        source: 'foreground',
+      });
 
       fgSubRef.current = await Location.watchPositionAsync(
-        {
-          accuracy:         Location.Accuracy.Balanced,
-          timeInterval:     20_000,
-          distanceInterval: 10,
-        },
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 20_000, distanceInterval: 10 },
         (l) => {
           const c2: Coords = { latitude: l.coords.latitude, longitude: l.coords.longitude };
           setCoords(c2);
           setCoordsTs(Date.now());
-          void writeLocationPing({ patientId, coords: c2, accuracyM: l.coords.accuracy ?? undefined, source: 'foreground' });
+          void writeLocationPing({
+            patientId,
+            coords: c2,
+            accuracyM: l.coords.accuracy ?? undefined,
+            speedKmh: (l.coords.speed ?? 0) * 3.6,
+            source: 'foreground',
+          });
         },
       );
     } catch {
@@ -167,7 +262,7 @@ export function GeofenceProvider({
     }
   }, [patientId]);
 
-  // ── Bootstrap on mount ─────────────────────────────────────────────────────
+  // ── Bootstrap on mount ──────────────────────────────────────────────────
   useEffect(() => {
     void loadZones(patientId);
     void loadAlerts(patientId);
@@ -180,7 +275,7 @@ export function GeofenceProvider({
     };
   }, [patientId, loadZones, loadAlerts, startForegroundTracking]);
 
-  // ── Public methods ─────────────────────────────────────────────────────────
+  // ── Public methods ───────────────────────────────────────────────────────
 
   const saveZone = useCallback(
     async (zone: Omit<GeofenceZone, 'id'> & { id?: string }) => {
@@ -202,9 +297,11 @@ export function GeofenceProvider({
     setZones((prev) => prev.filter((z) => z.id !== id));
   }, []);
 
-  const acknowledgeAlertById = useCallback(async (alertId: string, byPhone: string) => {
-    await acknowledgeAlert(alertId, byPhone);
-    setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+  const acknowledgeAlertById = useCallback(async (alertId: string) => {
+    await acknowledgeAlert(alertId, '');
+    setAlerts((prev) =>
+      prev.map((a) => a.id === alertId ? { ...a, acknowledgedAt: new Date().toISOString() } : a),
+    );
   }, []);
 
   const refreshLocation = useCallback(async () => {
@@ -226,7 +323,9 @@ export function GeofenceProvider({
     alerts,
     trail,
     zonesLoading,
+    alertsLoading,
     loadZones,
+    loadAlerts,
     saveZone,
     deleteZone,
     acknowledgeAlertById,

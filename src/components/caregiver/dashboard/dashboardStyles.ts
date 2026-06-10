@@ -62,7 +62,6 @@ export const styles = StyleSheet.create({
   routineCapsuleTitle: { fontFamily: F.bold, fontSize: 16 },
   routineCapsuleMeta: { fontFamily: F.regular, fontSize: 13, marginTop: 3 },
   routineCapsuleStatus: { fontFamily: F.bold, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 6 },
-  capsuleRight: { alignItems: 'center', gap: 4 },
   capsuleReminderBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   capsuleReminderIcon: { fontSize: 16 },
 
@@ -273,6 +272,180 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: '#18181B',
   },
+  routineHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  routineHeaderTitle: {
+    fontFamily: F.bold,
+    fontSize: 16,
+    color: C.textPrimary,
+  },
+  routineOverviewLink: {
+    fontFamily: F.semiBold,
+    fontSize: 13,
+    color: C.primary,
+  },
+  // --- New Redesigned Routine Card & Filters ---
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    gap: 8,
+  },
+  filterBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E4E7EC',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  filterBtnActiveMissed: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
+  },
+  filterBtnActivePending: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+  },
+  filterBtnActiveCompleted: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  filterDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  filterText: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: '#71717A',
+  },
+  filterTextActiveMissed: {
+    color: '#EA580C',
+  },
+  filterTextActivePending: {
+    color: '#475569',
+  },
+  filterTextActiveCompleted: {
+    color: '#16A34A',
+  },
+  filterCountBadge: {
+    backgroundColor: '#F4F4F5',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  filterCountBadgeActiveMissed: {
+    backgroundColor: '#FFEDD5',
+  },
+  filterCountBadgeActivePending: {
+    backgroundColor: '#F1F5F9',
+  },
+  filterCountBadgeActiveCompleted: {
+    backgroundColor: '#DCFCE7',
+  },
+  filterCountText: {
+    fontFamily: F.bold,
+    fontSize: 10,
+    color: '#71717A',
+  },
+  filterCountTextActiveMissed: {
+    color: '#EA580C',
+  },
+  filterCountTextActivePending: {
+    color: '#475569',
+  },
+  filterCountTextActiveCompleted: {
+    color: '#16A34A',
+  },
+  capsuleLeftIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  capsuleStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  capsuleRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  actionContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 18,
+    marginBottom: 24,
+  },
+  bottomActionBtn: {
+    flex: 1,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  bottomActionBtnBlue: {
+    backgroundColor: '#1B52F2',
+  },
+  bottomActionBtnGray: {
+    backgroundColor: '#F0F1F3',
+    borderColor: '#E4E7EC',
+  },
+  bottomActionBtnPink: {
+    backgroundColor: '#FFF0F0',
+  },
+  bottomActionIcon: {
+    marginBottom: 8,
+  },
+  bottomActionText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    textAlign: 'center',
+    letterSpacing: 0.1,
+  },
+  bottomActionTextBlue: {
+    color: '#FFFFFF',
+  },
+  bottomActionTextGray: {
+    color: '#1A1C1E',
+  },
+  bottomActionTextPink: {
+    color: '#DC2626',
+  },
 });
 
 export const alertStyles = StyleSheet.create({
@@ -351,7 +524,6 @@ export const mStyles = StyleSheet.create({
   bannerContent: { flex: 1, paddingRight: 8 },
   bannerTitle: { fontFamily: F.extraBold, fontSize: 16, color: '#14532D' },
   bannerDesc: { fontFamily: F.regular, fontSize: 12, color: '#15803D', marginTop: 4, lineHeight: 16 },
-  bannerChevron: { fontFamily: F.bold, fontSize: 24, color: '#15803D', alignSelf: 'center', marginLeft: 8 },
 });
 
 export const rSumStyles = StyleSheet.create({

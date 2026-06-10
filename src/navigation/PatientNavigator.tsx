@@ -25,6 +25,7 @@ import { PatientAiScreen }         from '../screens/patient/PatientAiScreen';
 import { ActivityDetailScreen }    from '../screens/patient/ActivityDetailScreen';
 import { ActivityPlayScreen }      from '../screens/patient/ActivityPlayScreen';
 import { ActivityReportsScreen }   from '../screens/patient/ActivityReportsScreen';
+import { NotificationHistoryScreen } from '../screens/shared/NotificationHistoryScreen';
 
 const Stack = createNativeStackNavigator<PatientStackParams>();
 
@@ -41,6 +42,7 @@ const PatientStack: React.FC = () => (
     <Stack.Screen name="ActivityDetailScreen"    component={ActivityDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="ActivityPlayScreen"      component={ActivityPlayScreen}   options={{ animation: 'slide_from_bottom' }} />
     <Stack.Screen name="ActivityReportsScreen"   component={ActivityReportsScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="NotificationHistoryScreen" component={NotificationHistoryScreen} />
   </Stack.Navigator>
 );
 

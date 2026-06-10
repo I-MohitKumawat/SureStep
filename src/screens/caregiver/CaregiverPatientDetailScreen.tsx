@@ -29,21 +29,21 @@ import { DashboardManageTab }  from '../../components/caregiver/dashboard/Dashbo
 import { F } from '../../theme/fonts';
 import { C } from '../../theme/colors';
 import { getPatientProfile } from '../../services/userService';
+import { useAuth } from '../../context/AuthContext';
+import { usePatientTracking } from '../../context/PatientTrackingContext';
+import { useAlerts } from '../../context/AlertContext';
 import {
   getRoutineTemplates,
   deactivateRoutineTemplate,
 } from '../../services/taskService';
+import { getCarePlan } from '../../services/carePlanService';
+import { fetchPatientRelationship, completeMeeting } from '../../services/relationshipService';
 
 import {
   IconDashboard, IconBell, IconActivity,
 } from '../../assets/icons/NavIcons';
 import {
   checkBreach,
-  fetchPatientGeofences,
-  fetchLatestPatientLocation,
-  subscribeToPatientLocation,
-  haversineMeters,
-  DEFAULT_GEOFENCE,
   type Coords,
   type GeofenceZone,
 } from '../../utils/geofenceUtils';
@@ -74,11 +74,35 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
     })), [patientTasks]);
 
   // ── Tab state ────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<CaregiverTab>('Home');
+  const [activeTab, setActiveTab] = useState<CaregiverTab>(route.params?.initialTab || 'Home');
+
+  useEffect(() => {
+    if (route.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+      navigation.setParams({ initialTab: undefined } as any);
+    }
+  }, [route.params?.initialTab]);
 
   // ── Routines & Care Plan states ──────────────────────────────────────────
   const [templatesList, setTemplatesList] = useState<any[]>([]);
   const [routinesLoading, setRoutinesLoading] = useState(true);
+  const [relStatus, setRelStatus] = useState<string | null>(null);
+  const [carePlan, setCarePlan] = useState<any | null>(null);
+
+  const loadRelationshipAndCarePlan = useCallback(async () => {
+    try {
+      const [rel, plan] = await Promise.all([
+        fetchPatientRelationship(patientId),
+        getCarePlan(patientId),
+      ]);
+      if (rel) {
+        setRelStatus(rel.status);
+      }
+      setCarePlan(plan);
+    } catch (err) {
+      console.warn('Failed to load relationship or care plan:', err);
+    }
+  }, [patientId]);
 
   // Load templates only — templates change rarely (user-triggered), no need to poll
   const loadTemplates = useCallback(async () => {
@@ -93,43 +117,47 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   // Load tasks for context (used by manageTasks) — called once on focus
   // We don't poll this because the patient's optimistic state would get clobbered.
   // The caregiver sees updates via the context's 10s poll from the patient's device.
-  const loadRoutines = useCallback(async () => {
+  // Load tasks for context (used by manageTasks) — called once on focus or on mutation refresh
+  const loadRoutines = useCallback(async (force = false) => {
     setRoutinesLoading(true);
     try {
       await Promise.all([
         loadTemplates(),
-        loadTasksForPatient(patientId),
+        loadTasksForPatient(patientId, force),
+        loadRelationshipAndCarePlan(),
       ]);
     } catch (err) {
       console.warn('Failed to load routines:', err);
     } finally {
       setRoutinesLoading(false);
     }
-  }, [patientId, loadTasksForPatient, loadTemplates]);
+  }, [patientId, loadTasksForPatient, loadTemplates, loadRelationshipAndCarePlan]);
 
-  // Refresh task statuses from DB every 10s for caregiver view — separate from loadRoutines
-  // Uses getTodaysTasks but merges via context so patient optimistic state is preserved
-  const refreshTaskStatuses = useCallback(async () => {
+  const handleCompleteMeeting = async () => {
     try {
-      await loadTasksForPatient(patientId);
-    } catch { /* silent */ }
-  }, [patientId, loadTasksForPatient]);
+      await completeMeeting(patientId);
+      Alert.alert('Meeting Completed', 'You can now start the structured Patient Assessment.');
+      void loadRelationshipAndCarePlan();
+    } catch (err) {
+      console.warn('Failed to complete meeting:', err);
+      Alert.alert('Error', 'Failed to mark meeting as completed.');
+    }
+  };
 
   useEffect(() => {
     if (!isFocused) return;
-    void loadRoutines();
-    // Poll for task status updates every 10 seconds (reduced from 4s)
-    const interval = setInterval(() => {
-      void refreshTaskStatuses();
-    }, 10_000);
-    return () => clearInterval(interval);
-  }, [isFocused, loadRoutines, refreshTaskStatuses]);
+    const shouldForce = !!(route.params as any)?.refresh;
+    void loadRoutines(shouldForce);
+    if (shouldForce) {
+      navigation.setParams({ refresh: undefined } as any);
+    }
+  }, [isFocused, (route.params as any)?.refresh, loadRoutines, navigation]);
 
   const handleDeleteTemplate = async (templateId: string) => {
     try {
       await deactivateRoutineTemplate(templateId);
       Alert.alert('Success', 'Routine template deleted successfully.');
-      void loadTemplates(); // only reload templates, not tasks
+      setTemplatesList(prev => prev.filter(t => t.id !== templateId));
     } catch (err) {
       console.warn('Failed to delete template:', err);
       Alert.alert('Error', 'Failed to delete routine template.');
@@ -167,33 +195,25 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const [showRoutineSummary,  setShowRoutineSummary]  = useState(false);
 
   // ── Geofence / location ──────────────────────────────────────────────────
-  const [batteryLevel,    setBatteryLevel]    = useState(82);
-  const [patientCoords,   setPatientCoords]   = useState<Coords | null>(null);
-  const [coordsTs,        setCoordsTs]        = useState(0);
-  const [zones,           setZones]           = useState<GeofenceZone[]>([]);
-  const [unackedAlerts,   setUnackedAlerts]   = useState(0);
-  const [hasRealLocation, setHasRealLocation] = useState(false);
-  const [hasRealZones,    setHasRealZones]    = useState(false);
+  const {
+    setActivePatientId,
+    coords: patientCoords,
+    coordsTs,
+    zones,
+    patientState,
+    refreshLocation,
+    refreshing,
+  } = usePatientTracking();
+
+  const { getUnackedCountForPatient } = useAlerts();
+  const unackedAlerts = getUnackedCountForPatient(patientId);
+  const hasRealLocation = !!patientCoords;
+  const hasRealZones = zones.length > 0;
+  const batteryLevel = patientState?.battery_pct ?? 82;
 
   useEffect(() => {
-    void fetchPatientGeofences(patientId).then((z) => { setZones(z); setHasRealZones(z.length > 0); });
-    setUnackedAlerts(0);
-  }, [patientId]);
-
-  useEffect(() => {
-    void fetchLatestPatientLocation(patientId).then((loc) => {
-      if (loc) { setPatientCoords({ latitude: loc.latitude, longitude: loc.longitude }); setCoordsTs(loc.recordedAt); setHasRealLocation(true); }
-    });
-  }, [patientId]);
-
-  useEffect(() => {
-    const unsub = subscribeToPatientLocation(patientId, (loc) => {
-      setPatientCoords({ latitude: loc.latitude, longitude: loc.longitude });
-      setCoordsTs(loc.recordedAt);
-      setHasRealLocation(true);
-    });
-    return unsub;
-  }, [patientId]);
+    setActivePatientId(patientId);
+  }, [patientId, setActivePatientId]);
 
   // ── Patient profile modal ────────────────────────────────────────────────
   const [showPatientProfile, setShowPatientProfile] = useState(false);
@@ -243,22 +263,90 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const batteryColor  = batteryLevel >= 50 ? C.safeText : batteryLevel >= 20 ? '#D97706' : C.error;
   const capsuleScrollY = useRef(new Animated.Value(0)).current;
 
-  const routineItems = useMemo(() =>
-    patientTasks.slice().sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(t => ({
-      key: t.id,
-      category: t.category,      // Structured category for icon mapping
-      iconName: t.iconName,      // Optional icon override from backend
-      emoji: t.icon,             // Legacy field during migration
-      title: t.title,
-      meta: t.description ? `${t.time} · ${t.description}` : t.time,
-      done: t.status === 'done',
-      status: t.status,
-    })), [patientTasks]);
+  const routineItems = useMemo(() => {
+    // 1. Sort all tasks chronologically using scheduledTimestamp
+    const chronoTasks = patientTasks.slice().sort((a, b) => {
+      const tA = a.scheduledTimestamp ? new Date(a.scheduledTimestamp).getTime() : 0;
+      const tB = b.scheduledTimestamp ? new Date(b.scheduledTimestamp).getTime() : 0;
+      return tA - tB;
+    });
+
+    const nowMs = Date.now();
+
+    // 2. Find the ID of the single active task
+    let activeTaskId: string | null = null;
+    const notDoneTasks = chronoTasks.filter(t => t.status !== 'done');
+    
+    const pastNotDone = notDoneTasks.filter(t => {
+      const ts = t.scheduledTimestamp ? new Date(t.scheduledTimestamp).getTime() : 0;
+      return ts <= nowMs;
+    });
+    
+    const futureNotDone = notDoneTasks.filter(t => {
+      const ts = t.scheduledTimestamp ? new Date(t.scheduledTimestamp).getTime() : 0;
+      return ts > nowMs;
+    });
+
+    if (pastNotDone.length > 0) {
+      activeTaskId = pastNotDone[pastNotDone.length - 1].id;
+    } else if (futureNotDone.length > 0) {
+      activeTaskId = futureNotDone[0].id;
+    }
+
+    // 3. Map to routine items with correct derived status
+    const mapped = chronoTasks.map(t => {
+      let derivedStatus: 'completed' | 'missed' | 'active' | 'upcoming' = 'upcoming';
+      if (t.status === 'done') {
+        derivedStatus = 'completed';
+      } else if (t.id === activeTaskId) {
+        derivedStatus = 'active';
+      } else {
+        const isPast = t.scheduledTimestamp ? new Date(t.scheduledTimestamp).getTime() <= nowMs : false;
+        if (t.status === 'missed' || t.status === 'overdue' || isPast) {
+          derivedStatus = 'missed';
+        } else {
+          derivedStatus = 'upcoming';
+        }
+      }
+
+      return {
+        key: t.id,
+        category: t.category,
+        iconName: t.iconName,
+        emoji: t.icon,
+        title: t.title,
+        meta: t.description ? `${t.time} · ${t.description}` : t.time,
+        done: t.status === 'done',
+        status: derivedStatus,
+        scheduledTime: t.scheduledTimestamp ? new Date(t.scheduledTimestamp).getTime() : 0,
+      };
+    });
+
+    // 4. Sort the mapped list by priority:
+    // Missed (0) -> Active (1) -> Upcoming (2) -> Completed (3).
+    // Within each status group, sort chronologically.
+    const statusOrder = {
+      missed: 0,
+      active: 1,
+      upcoming: 2,
+      completed: 3,
+    };
+
+    return mapped.sort((a, b) => {
+      const orderA = statusOrder[a.status];
+      const orderB = statusOrder[b.status];
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.scheduledTime - b.scheduledTime;
+    });
+  }, [patientTasks]);
 
   const activeRoutineIndex = useMemo(() => {
-    const i = routineItems.findIndex(r => r.status === 'pending' || r.status === 'unsure');
-    return i === -1 ? Math.max(routineItems.length - 1, 0) : i;
+    const idx = routineItems.findIndex(r => r.status === 'active');
+    return idx === -1 ? Math.max(routineItems.length - 1, 0) : idx;
   }, [routineItems]);
+
 
   const routineCallouts = useMemo(() => {
     const out: Array<{ id: string; emoji: string; title: string; message: string; severity: 'high' | 'medium' }> = [];
@@ -295,9 +383,8 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
         {/* Tab content */}
         {activeTab === 'Alerts' ? (
           <DashboardAlertsTab
-            nonRoutineAlerts={nonRoutineAlerts}
-            seenNonRoutineIds={seenNonRoutineIds}
-            onAcknowledge={(id) => setAcknowledgedIds(prev => new Set(prev).add(id))}
+            patientId={patientId}
+            patientName={patientName}
           />
         ) : activeTab === 'Manage' ? (
           <DashboardManageTab
@@ -334,6 +421,8 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             reminderSentKeys={reminderSentKeys}
             capsuleScrollY={capsuleScrollY}
             showRoutineSummary={showRoutineSummary}
+            patientState={patientState}
+            onRefreshLocation={refreshLocation}
             onShowPatientProfile={() => setShowPatientProfile(true)}
             onShowRoutineSummary={() => setShowRoutineSummary(true)}
             onDismissCallout={(id) => setDismissedCallouts(prev => new Set(prev).add(id))}
@@ -344,6 +433,11 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
               patientId, patientName,
               existingZone: zones[0] ? { id: zones[0].id, label: zones[0].label, center: zones[0].center, radiusM: zones[0].radiusM } : null,
             })}
+            relationshipStatus={relStatus}
+            carePlan={carePlan}
+            onNavigateAssessment={() => navigation.navigate('CaregiverAssessmentScreen', { patientId, patientName })}
+            onCompleteMeeting={handleCompleteMeeting}
+            onNavigateCareCircle={() => navigation.navigate('CaregiverCareCircleScreen', { patientId, patientName })}
           />
         )}
       </ScrollView>

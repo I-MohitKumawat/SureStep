@@ -29,7 +29,7 @@ function Stars({ rating }: { rating: number }) {
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   caregiver: CaregiverListing;
-  linkStatus: 'PENDING' | 'CONFIRMED' | 'SUSPENDED' | 'ENDED' | null;
+  linkStatus: string | null;
   onBack: () => void;
   onConfirm: (c: CaregiverListing) => void;
 };
@@ -40,46 +40,50 @@ export const CaregiverDetailView: React.FC<Props> = ({
   linkStatus,
   onBack,
   onConfirm,
-}) => (
-  <View style={d.root}>
-    {/* Navigation header */}
-    <View style={d.headerNav}>
-      <Pressable onPress={onBack} style={d.backBtn} hitSlop={15}>
-        <Text style={d.backText}>← Back</Text>
-      </Pressable>
-      <Text style={d.headerTitle}>Caregiver Details</Text>
-      <View style={{ width: 60 }} />
-    </View>
+}) => {
+  const isLinked = linkStatus === 'CONFIRMED' || linkStatus === 'ACCEPTED' || linkStatus === 'MEETING_COMPLETED' || linkStatus === 'ASSESSMENT_PENDING' || linkStatus === 'ACTIVE_CARE';
+  const isPending = linkStatus === 'PENDING' || linkStatus === 'REQUESTED';
 
-    <ScrollView
-      contentContainerStyle={d.scroll}
-      showsVerticalScrollIndicator={false}
-    >
+  return (
+    <View style={d.root}>
+      {/* Navigation header */}
+      <View style={d.headerNav}>
+        <Pressable onPress={onBack} style={d.backBtn} hitSlop={15}>
+          <Text style={d.backText}>← Back</Text>
+        </Pressable>
+        <Text style={d.headerTitle}>Caregiver Details</Text>
+        <View style={{ width: 60 }} />
+      </View>
 
-      {/* Hero */}
-      <View style={d.heroWrap}>
-        <View style={[
-          d.avatar,
-          linkStatus === 'CONFIRMED' && d.avatarConfirmed,
-          linkStatus === 'PENDING' && { borderColor: '#F59E0B', borderWidth: 3 }
-        ]}>
-          {caregiver.profile_photo_url ? (
-            <Image source={{ uri: caregiver.profile_photo_url }} style={d.avatarImage} />
-          ) : (
-            <Text style={d.avatarEmoji}>{caregiver.emoji || '👩‍⚕️'}</Text>
+      <ScrollView
+        contentContainerStyle={d.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* Hero */}
+        <View style={d.heroWrap}>
+          <View style={[
+            d.avatar,
+            isLinked && d.avatarConfirmed,
+            isPending && { borderColor: '#F59E0B', borderWidth: 3 }
+          ]}>
+            {caregiver.profile_photo_url ? (
+              <Image source={{ uri: caregiver.profile_photo_url }} style={d.avatarImage} />
+            ) : (
+              <Text style={d.avatarEmoji}>{caregiver.emoji || '👩‍⚕️'}</Text>
+            )}
+          </View>
+          {isLinked && (
+            <View style={d.confirmedBadge}>
+              <Text style={d.confirmedBadgeText}>✓  Your Active Caregiver</Text>
+            </View>
+          )}
+          {isPending && (
+            <View style={[d.confirmedBadge, { backgroundColor: '#F59E0B' }]}>
+              <Text style={d.confirmedBadgeText}>⏳  Request Pending Approval</Text>
+            </View>
           )}
         </View>
-        {linkStatus === 'CONFIRMED' && (
-          <View style={d.confirmedBadge}>
-            <Text style={d.confirmedBadgeText}>✓  Your Active Caregiver</Text>
-          </View>
-        )}
-        {linkStatus === 'PENDING' && (
-          <View style={[d.confirmedBadge, { backgroundColor: '#F59E0B' }]}>
-            <Text style={d.confirmedBadgeText}>⏳  Request Pending Approval</Text>
-          </View>
-        )}
-      </View>
 
       {/* Name + specialty */}
       <Text style={d.name}>{caregiver.name}</Text>
@@ -170,9 +174,9 @@ export const CaregiverDetailView: React.FC<Props> = ({
     </ScrollView>
 
     {/* Action button wrap */}
-    {linkStatus !== 'CONFIRMED' && (
+    {!isLinked && (
       <View style={d.buttonWrap}>
-        {linkStatus === 'PENDING' ? (
+        {isPending ? (
           <Pressable
             style={[d.confirmBtn, { backgroundColor: C.borderMid }]}
             disabled={true}
@@ -190,7 +194,8 @@ export const CaregiverDetailView: React.FC<Props> = ({
       </View>
     )}
   </View>
-);
+  );
+};
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const d = StyleSheet.create({

@@ -13,6 +13,31 @@ export type PatientRequest = {
   confirmed_at: string;
 };
 
+export const mapCaregiverRow = (row: any): CaregiverListing => ({
+  id: row.id,
+  name: row.name,
+  phone: row.phone,
+  specialty: row.specializations?.[0] || 'Caregiver',
+  patients: row.current_patient_count || row.max_patients || 0,
+  rating: row.rating ? parseFloat(row.rating) : 5.0,
+  fee: row.hourly_rate_inr ? `₹${parseFloat(row.hourly_rate_inr).toFixed(0)}/hr` : 'Contact for rates',
+  emoji: '👩‍⚕️',
+  bio: row.bio || '',
+  availability: row.availability_types?.join(', ') || 'Contact for availability',
+  location: row.city || '',
+  profile_photo_url: row.photo_url,
+  years_experience: row.years_of_experience,
+  specializations: row.specializations,
+  availability_types: row.availability_types,
+  hourly_rate: row.hourly_rate_inr,
+  daily_rate: row.daily_rate_inr,
+  about_me: row.bio,
+  languages_spoken: row.languages_spoken,
+  service_radius_km: row.service_radius_km,
+  patients_handled: row.current_patient_count || row.max_patients || 0,
+  status: row.status || null,
+});
+
 /**
  * Fetch the currently confirmed caregiver profile for a patient.
  */
@@ -21,7 +46,7 @@ export const fetchConfirmedCaregiver = async (patientPhone: string): Promise<Car
     const { data } = await apiClient.get(`/relationships/caregiver/confirmed`, {
       params: { patientPhone },
     });
-    return data.data || null;
+    return data.data ? mapCaregiverRow(data.data) : null;
   } catch (error) {
     console.warn('[relationshipService] fetchConfirmedCaregiver failed:', error);
     return null;
@@ -111,27 +136,28 @@ export const searchCaregivers = async (query: string): Promise<CaregiverListing[
   const rawListings = data.data?.caregivers || [];
   
   // Map backend database format to frontend CaregiverListing format
-  return rawListings.map((row: any) => ({
-    id: row.id,
-    name: row.name,
-    phone: row.phone,
-    specialty: row.specializations?.[0] || 'Caregiver',
-    patients: row.current_patient_count || 0,
-    rating: row.rating ? parseFloat(row.rating) : 5.0,
-    fee: row.hourly_rate_inr ? `₹${parseFloat(row.hourly_rate_inr).toFixed(0)}/hr` : 'Contact for rates',
-    emoji: '👩‍⚕️',
-    bio: row.bio || '',
-    availability: row.availability_types?.join(', ') || 'Contact for availability',
-    location: row.city || '',
-    profile_photo_url: row.photo_url,
-    years_experience: row.years_of_experience,
-    specializations: row.specializations,
-    availability_types: row.availability_types,
-    hourly_rate: row.hourly_rate_inr,
-    daily_rate: row.daily_rate_inr,
-    about_me: row.bio,
-    languages_spoken: row.languages_spoken,
-    service_radius_km: row.service_radius_km,
-    patients_handled: row.current_patient_count
-  }));
+  return rawListings.map((row: any) => mapCaregiverRow(row));
 };
+
+/**
+ * Mark in-person meeting completed.
+ */
+export const completeMeeting = async (patientId: string): Promise<any> => {
+  const { data } = await apiClient.post(`/relationships/patient/${patientId}/meet`);
+  return data;
+};
+
+/**
+ * Fetch specific caregiver-patient relationship (with status).
+ */
+export const fetchPatientRelationship = async (patientId: string): Promise<any> => {
+  try {
+    const { data } = await apiClient.get(`/relationships/patient/${patientId}/relationship`);
+    return data.data?.relationship || null;
+  } catch (error) {
+    console.warn('[relationshipService] fetchPatientRelationship failed:', error);
+    return null;
+  }
+};
+
+

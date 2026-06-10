@@ -1,495 +1,435 @@
 /**
- * FamilyDashboardScreen
- * Read-only view for family members linked to a patient.
- * Shows:
- *  - Live safety status (large, glanceable)
- *  - Embedded mini-map (tapable for full map)
- *  - Today's routine progress
- *  - Recent geofence alerts feed
- *  - Bottom nav: Home | Map | Alerts
+ * FamilyFeedScreen — Home dashboard for family members.
+ * Reads patient data from FamilyContext (no self-GPS tracking).
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
-// Navigation types migrated to src/types/navigation.types.ts
-import { useTasks } from '../../context/TaskContext';
+import { MapErrorBoundary } from '../../components/shared/MapErrorBoundary';
+import { isNativeMapDisabled } from '../../utils/mapConfig';
+import { MemberMarkerContent } from '../../components/shared/MemberMarkerContent';
+import { useFamilyContext } from '../../context/FamilyContext';
 import { useAuth } from '../../context/AuthContext';
-import { getSocket } from '../../services/socketClient';
-import { getAlerts } from '../../services/alertService';
-import type { FamilyStackParams } from '../../types/navigation.types';
-// supabase removed — all data now via src/services/ + Express API
+import { useTasks } from '../../context/TaskContext';
+import { usePatientTracking } from '../../context/PatientTrackingContext';
+import { fetchPatientGeofences, type GeofenceZone } from '../../utils/geofenceUtils';
+import { fetchPatientCareCircle, type CareCircleMember } from '../../services/geofenceService';
+import { RoutineCapsule, type RoutineItemData } from '../../components/shared/RoutineCapsule';
+import { connectSocket } from '../../services/socketClient';
+import apiClient from '../../services/apiClient';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import {
-  checkBreach,
-  fetchPatientGeofences,
-  writeLocationPing,
-  type Coords,
-  type GeofenceZone,
-  type BreachStatus,
-} from '../../utils/geofenceUtils';
-import type { GeofenceAlert } from '../../context/GeofenceContext';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { FamilyStackParams } from '../../types/navigation.types';
+
 
 type Props = NativeStackScreenProps<FamilyStackParams, 'FamilyFeedScreen'>;
-type FamilyTab = 'Home' | 'Map' | 'Alerts';
 
-// â”€â”€â”€ Safety status config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function safetyCard(status: BreachStatus['status'], coordsAgeS: number) {
-  if (coordsAgeS > 120 || status === 'no_signal') return {
-    bg: '#1F2937', border: '#374151', labelColor: '#D1D5DB',
-    badge: 'NO SIGNAL', badgeBg: '#374151', icon: '📵',
-    description: 'Cannot reach device. Please call the caregiver.',
-  };
-  switch (status) {
-    case 'safe': return {
-      bg: '#ECFDF5', border: '#6EE7B7', labelColor: '#065F46',
-      badge: 'SAFE', badgeBg: '#10B981', icon: '✅',
-      description: 'Patient is within their safe zone.',
-    };
-    case 'approaching': return {
-      bg: '#FFFBEB', border: '#FCD34D', labelColor: '#92400E',
-      badge: 'NEAR BOUNDARY', badgeBg: '#F59E0B', icon: '⚠️',
-      description: 'Patient is approaching the edge of their safe zone.',
-    };
-    case 'breach': return {
-      bg: '#FEF2F2', border: '#FCA5A5', labelColor: '#991B1B',
-      badge: 'OUTSIDE ZONE', badgeBg: '#EF4444', icon: '🚨',
-      description: 'Patient has left the safe zone. Caregiver has been alerted.',
-    };
-    default: return {
-      bg: C.surface, border: C.border, labelColor: C.textSecondary,
-      badge: 'LOCATING...', badgeBg: C.textMuted, icon: '📡',
-      description: 'Acquiring patient location...',
-    };
+function safetyConfig(state: string | null, sos: boolean) {
+  if (sos) return { bg: '#FEF2F2', border: '#FCA5A5', icon: 'alert-circle' as const, badge: 'SOS ACTIVE', badgeBg: '#EF4444', text: 'Emergency SOS has been triggered.', textColor: '#991B1B' };
+  switch (state) {
+    case 'SAFE':       return { bg: '#ECFDF5', border: '#6EE7B7', icon: 'checkmark-circle' as const, badge: 'SAFE',          badgeBg: '#10B981', text: 'Inside their safe zone.',              textColor: '#065F46' };
+    case 'APPROACHING':return { bg: '#FFFBEB', border: '#FCD34D', icon: 'warning' as const, badge: 'NEAR BOUNDARY', badgeBg: '#F59E0B', text: 'Approaching the edge of safe zone.',   textColor: '#92400E' };
+    case 'BREACH':     return { bg: '#FEF2F2', border: '#FCA5A5', icon: 'alert-circle' as const, badge: 'OUTSIDE ZONE',  badgeBg: '#EF4444', text: 'Left the safe zone. Caregiver alerted.', textColor: '#991B1B' };
+    case 'CRITICAL':   return { bg: '#FEF2F2', border: '#DC2626', icon: 'alert-circle' as const, badge: 'CRITICAL',       badgeBg: '#DC2626', text: 'Outside zone and stationary. Check immediately.', textColor: '#7F1D1D' };
+    default:           return { bg: C.surface, border: C.border,  icon: 'locate' as const, badge: 'LOCATING...',   badgeBg: C.textMuted, text: 'Acquiring location...', textColor: C.textSecondary };
   }
 }
 
-// â”€â”€â”€ Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const formatAge = (iso: string) => {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (diff < 1) return 'Just now';
+  if (diff < 60) return `${diff}m ago`;
+  return `${Math.floor(diff / 60)}h ago`;
+};
 
-export const FamilyFeedScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { user } = useAuth();
-  const params = (route.params ?? {}) as {
-    patientId?: string;
-    patientName?: string;
-    familyPhone?: string;
-  };
-  const patientPhone = params.patientId || 'demo-patient-phone';
-  const patientName = params.patientName || 'Patient';
-  const familyPhone = params.familyPhone || user?.phone || 'demo-family-phone';
 
-  const [activeTab,   setActiveTab]   = useState<FamilyTab>('Home');
-  const [coords,      setCoords]      = useState<Coords | null>(null);
-  const [coordsTs,    setCoordsTs]    = useState(0);
-  const [coordsAgeS,  setCoordsAgeS]  = useState(0);
-  const [zones,       setZones]       = useState<GeofenceZone[]>([]);
-  const [alerts,      setAlerts]      = useState<GeofenceAlert[]>([]);
-  const [mapReady,    setMapReady]    = useState(false);
-
-  const { tasks } = useTasks();
-  const fgSubRef    = useRef<Location.LocationSubscription | null>(null);
-  const ageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Patient tasks for routine progress
-  const patientTasks = useMemo(
-    () => tasks.filter((t: any) => t.patientId === patientPhone),
-    [tasks, patientPhone],
-  );
-  const completedCount = patientTasks.filter((t: any) => t.status === 'done').length;
-  const totalTasks     = patientTasks.length;
-  const routinePercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
-
-  // Breach status
-  const breachStatus: BreachStatus = coords && zones.length > 0
-    ? checkBreach(coords, zones)
-    : { status: 'no_signal' };
-  const card = safetyCard(breachStatus.status, coordsAgeS);
-
-  // ——— Load zones & alerts ——————————————————————————————————————————————————————
-  useEffect(() => {
-    void fetchPatientGeofences(patientPhone).then(setZones);
-
-    getAlerts(patientPhone)
-      .then((res) => {
-        const rawAlerts = res.data?.data || res.data || [];
-        const formatted: GeofenceAlert[] = rawAlerts.map((a: any) => ({
-          id: a.id,
-          patientId: a.patient_id || a.patientId,
-          geofenceId: a.geofence_id || a.geofenceId || null,
-          breachType: a.breach_type || a.breachType,
-          distanceM: Number(a.distance_m || a.distanceM || 0),
-          createdAt: a.created_at || a.createdAt,
-          acknowledgedAt: a.acknowledged_at || a.acknowledgedAt || null,
-        }));
-        setAlerts(formatted);
-      })
-      .catch((e) => console.warn('[FamilyFeedScreen] Load geofence alerts failed:', e));
-  }, [patientPhone]);
-
-  // ——— Age counter ——————————————————————————————————————————————————————————————
-  useEffect(() => {
-    ageTimerRef.current = setInterval(() => {
-      if (coordsTs > 0) setCoordsAgeS(Math.floor((Date.now() - coordsTs) / 1000));
-    }, 1000);
-    return () => { if (ageTimerRef.current) clearInterval(ageTimerRef.current); };
-  }, [coordsTs]);
-
-  // ——— Foreground location ——————————————————————————————————————————————————————
-  const startTracking = useCallback(async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') throw new Error('denied');
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const c: Coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      setCoords(c); setCoordsTs(Date.now());
-      void writeLocationPing({ patientId: patientPhone, coords: c, source: 'foreground' });
-
-      fgSubRef.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 20_000, distanceInterval: 10 },
-        (l) => {
-          const c2: Coords = { latitude: l.coords.latitude, longitude: l.coords.longitude };
-          setCoords(c2); setCoordsTs(Date.now());
-          void writeLocationPing({ patientId: patientPhone, coords: c2, source: 'foreground' });
-        },
-      );
-    } catch {
-      const fb = zones[0]?.center ?? { latitude: 12.9716, longitude: 77.5946 };
-      setCoords({ latitude: fb.latitude + 0.001, longitude: fb.longitude - 0.001 });
-      setCoordsTs(Date.now());
-    } finally {
-      setMapReady(true);
-    }
-  }, [patientPhone, zones]);
+export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
+  const { firebaseUser } = useAuth();
+  const { patient, isLoading, hasPatient } = useFamilyContext();
+  const { tasks, loadTasksForPatient } = useTasks();
+  const { setActivePatientId, coords, zones: trackingZones, setZones: setTrackingZones } = usePatientTracking();
+  const [zones,  setZones]  = useState<GeofenceZone[]>([]);
+  const [careCircle, setCareCircle] = useState<CareCircleMember[]>([]);
+  const [memberLocations, setMemberLocations] = useState<Record<string, {
+    id: string;
+    role: 'PATIENT' | 'CAREGIVER' | 'FAMILY';
+    photo_url: string | null;
+    name: string;
+    lat: number | null;
+    lng: number | null;
+    recorded_at: string | null;
+  }>>({});
+  const [activeFilter, setActiveFilter] = useState<'all' | 'done' | 'pending' | 'missed'>('all');
 
   useEffect(() => {
-    void startTracking();
-    return () => { fgSubRef.current?.remove(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!patient?.id) return;
+    setActivePatientId(patient.id);
+    void loadTasksForPatient(patient.id);
+    void fetchPatientGeofences(patient.id).then((zs) => {
+      setZones(zs);
+      setTrackingZones(zs);
+    });
+    void fetchPatientCareCircle(patient.id).then((members) => {
+      if (members) setCareCircle(members);
+    });
 
-  // ─── Realtime alerts ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
-    socket.emit('join:patient', patientPhone);
-    const handleNewAlert = (alert: any) => {
-      const formatted: GeofenceAlert = {
-        id: alert.id,
-        patientId: alert.patient_id || alert.patientId,
-        geofenceId: alert.geofence_id || alert.geofenceId || null,
-        breachType: alert.breach_type || alert.breachType,
-        distanceM: Number(alert.distance_m || alert.distanceM || 0),
-        createdAt: alert.created_at || alert.createdAt,
-        acknowledgedAt: alert.acknowledged_at || alert.acknowledgedAt || null,
-      };
-      setAlerts((prev) => [formatted, ...prev]);
+    const loadLocations = async () => {
+      try {
+        const locationsRes = await apiClient.get(`/location/patient/${patient.id}/care-circle-map`);
+        const { patient: patientData, caregiver, familyMembers } = locationsRes.data?.data ?? {};
+        const nextMap: any = {};
+        if (patientData && patientData.lat != null && patientData.lng != null) {
+          nextMap[patientData.id] = patientData;
+        }
+        if (caregiver && caregiver.lat != null && caregiver.lng != null) {
+          nextMap[caregiver.id] = caregiver;
+        }
+        if (familyMembers) {
+          for (const m of familyMembers) {
+            if (m.lat != null && m.lng != null) {
+              nextMap[m.id] = m;
+            }
+          }
+        }
+        setMemberLocations(nextMap);
+      } catch (err) {
+        console.warn('[FamilyFeedScreen] Failed to load care circle locations:', err);
+      }
     };
-    socket.on('alert:new', handleNewAlert);
+    void loadLocations();
+  }, [patient?.id, loadTasksForPatient, setActivePatientId, setTrackingZones]);
+
+  // Real-time WebSocket subscription for care circle location updates
+  useEffect(() => {
+    if (!firebaseUser || !patient?.id) return;
+    let socketRef: any;
+
+    const setupSocket = async () => {
+      try {
+        const token = await firebaseUser.getIdToken();
+        socketRef = connectSocket(token);
+        socketRef.emit('join:patient', patient.id);
+
+        const handleCareCircleLocationUpdate = (data: any) => {
+          if (data.patient_id !== patient.id) return;
+          const { member } = data;
+          if (member && member.lat != null && member.lng != null) {
+            setMemberLocations((prev) => ({
+              ...prev,
+              [member.id]: member,
+            }));
+          }
+        };
+
+        socketRef.on('care-circle:location-update', handleCareCircleLocationUpdate);
+
+        return () => {
+          if (socketRef) {
+            socketRef.off('care-circle:location-update', handleCareCircleLocationUpdate);
+          }
+        };
+      } catch (err) {
+        console.warn('FamilyFeedScreen socket setup failed:', err);
+      }
+    };
+
+    let cleanupFn: (() => void) | undefined;
+    void setupSocket().then((cleanup) => {
+      cleanupFn = cleanup;
+    });
 
     return () => {
-      socket.off('alert:new', handleNewAlert);
+      if (cleanupFn) cleanupFn();
     };
-  }, [patientPhone]);
+  }, [firebaseUser, patient?.id]);
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const formatAge = (iso: string) => {
-    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-    if (diff < 1) return 'Just now';
-    if (diff < 60) return `${diff} min ago`;
-    return `${Math.floor(diff / 60)} hr ago`;
-  };
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }}>
+        <ActivityIndicator size="large" color={C.primary} />
+      </View>
+    );
+  }
 
-      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <View style={styles.header}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarInitial}>{patientName[0]?.toUpperCase()}</Text>
-        </View>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={styles.headerLabel}>FAMILY VIEW</Text>
-          <Text style={styles.headerName}>{patientName}</Text>
-        </View>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.signOutBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.signOutText}>← Back</Text>
+  if (!hasPatient) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg, padding: 24 }}>
+        <Ionicons name="link-outline" size={64} color={C.textMuted} style={{ marginBottom: 16 }} />
+        <Text style={{ fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, marginBottom: 8, textAlign: 'center' }}>Not Linked Yet</Text>
+        <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.textSecondary, textAlign: 'center', marginBottom: 24 }}>You haven't joined a care circle yet.</Text>
+        <Pressable style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32 }} onPress={() => navigation.navigate('FamilyLinkPatientScreen')}>
+          <Text style={{ fontFamily: F.bold, fontSize: 16, color: '#fff' }}>Join a Care Circle</Text>
         </Pressable>
       </View>
+    );
+  }
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+  const p = patient!;
+  const cfg = safetyConfig(p.safety_state, p.sos_active);
+  const patientTasks = tasks.filter((t: any) => t.patientId === p.id);
+  const doneCount = patientTasks.filter((t: any) => t.status === 'done').length;
+  const pct = patientTasks.length > 0 ? Math.round((doneCount / patientTasks.length) * 100) : 0;
 
-        {activeTab === 'Home' && (
-          <>
-            {/* â”€â”€ Large safety card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <View style={[styles.safetyCard, { backgroundColor: card.bg, borderColor: card.border }]}>
-              <Text style={styles.safetyIcon}>{card.icon}</Text>
-              <View style={[styles.safetyBadge, { backgroundColor: card.badgeBg }]}>
-                <Text style={styles.safetyBadgeText}>{card.badge}</Text>
-              </View>
-              <Text style={[styles.safetyDescription, { color: card.labelColor }]}>
-                {card.description}
-              </Text>
-              {coordsAgeS > 0 && (
-                <Text style={styles.safetyAge}>Last updated {coordsAgeS}s ago</Text>
-              )}
-            </View>
+  const mapCenter = coords ?? zones[0]?.center ?? { latitude: 12.9716, longitude: 77.5946 };
 
-            {/* â”€â”€ Mini map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <Pressable
-              onPress={() => navigation.navigate('FamilyMapScreen', { patientId: patientPhone })}
-              style={styles.miniMapWrap}
-            >
-              {!mapReady ? (
-                <View style={styles.miniMapLoading}>
-                  <ActivityIndicator color={C.primary} />
-                </View>
-              ) : (
-                <MapView
-                  style={styles.miniMap}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                  rotateEnabled={false}
-                  pitchEnabled={false}
-                  pointerEvents="none"
-                  initialRegion={{
-                    ...(coords ?? zones[0]?.center ?? { latitude: 12.9716, longitude: 77.5946 }),
-                    latitudeDelta: 0.018, longitudeDelta: 0.018,
-                  }}
-                >
-                  {zones.filter((z) => z.isActive).map((z) => (
-                    <Circle
-                      key={z.id}
-                      center={z.center}
-                      radius={z.radiusM}
-                      fillColor="rgba(14,122,103,0.10)"
-                      strokeColor="rgba(14,122,103,0.45)"
-                      strokeWidth={2}
-                    />
-                  ))}
-                  {coords && (
-                    <Marker coordinate={coords}>
-                      <View style={[styles.miniMarker, { backgroundColor: breachStatus.status === 'breach' ? '#EF4444' : C.primary }]}>
-                        <Text style={styles.miniMarkerText}>{patientName[0]?.toUpperCase()}</Text>
-                      </View>
-                    </Marker>
-                  )}
-                </MapView>
-              )}
-              <View style={styles.miniMapOverlay}>
-                <Text style={styles.miniMapTap}>Tap to open full map ›</Text>
-              </View>
-            </Pressable>
+  const filteredTasks = patientTasks.filter((t: any) => {
+    if (activeFilter === 'done') return t.status === 'done';
+    if (activeFilter === 'missed') return t.status === 'missed' || t.status === 'overdue';
+    if (activeFilter === 'pending') return t.status !== 'done' && t.status !== 'missed' && t.status !== 'overdue';
+    return true;
+  });
 
-            {/* â”€â”€ Routine Progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <View style={styles.routineCard}>
-              <Text style={styles.sectionTitle}>📋  Today's Routine</Text>
-              <View style={styles.routineProgressRow}>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${routinePercent}%` as `${number}%` }]} />
-                </View>
-                <Text style={styles.progressText}>{completedCount}/{totalTasks}</Text>
-              </View>
-              {patientTasks.slice(0, 4).map((task: any) => (
-                <View key={task.id} style={styles.taskRow}>
-                  <View style={[
-                    styles.taskDot,
-                    task.status === 'done' ? styles.taskDotDone
-                    : task.status === 'missed' ? styles.taskDotMissed
-                    : styles.taskDotPending,
-                  ]} />
-                  <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
-                  <Text style={styles.taskTime}>{task.time}</Text>
-                </View>
-              ))}
-              {patientTasks.length === 0 && (
-                <Text style={styles.emptyText}>No routines set yet.</Text>
-              )}
-            </View>
-          </>
-        )}
-
-        {activeTab === 'Map' && (
-          <Pressable
-            style={styles.fullMapBtn}
-            onPress={() => navigation.navigate('FamilyMapScreen', {
-              patientId: patientPhone,
-            })}
-          >
-            <Text style={styles.fullMapBtnText}>Open Full Map</Text>
+  return (
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={s.screen}>
+      {/* Header */}
+      <View style={s.header}>
+        <View style={s.avatar}>
+          {p.photo_url ? (
+            <Image source={{ uri: p.photo_url }} style={s.avatarImage} />
+          ) : (
+            <Text style={s.avatarText}>{p.name[0]?.toUpperCase()}</Text>
+          )}
+        </View>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={s.headerLabel}>FAMILY VIEW</Text>
+          <Text style={s.headerName}>{p.name}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable onPress={() => navigation.navigate('NotificationHistoryScreen')} style={[s.settingsBtn, { marginRight: 4 }]}>
+            <Ionicons name="notifications-outline" size={22} color={C.textSecondary} />
           </Pressable>
-        )}
+          <Pressable onPress={() => navigation.navigate('FamilySettingsScreen')} style={s.settingsBtn}>
+            <Ionicons name="settings-outline" size={22} color={C.textSecondary} />
+          </Pressable>
+        </View>
+      </View>
 
-        {activeTab === 'Alerts' && (
-          <View style={styles.alertsList}>
-            <Text style={styles.sectionTitle}>🔔  Recent Alerts</Text>
-            {alerts.length === 0 ? (
-              <Text style={styles.emptyText}>No alerts — all clear! ✅</Text>
-            ) : (
-              alerts.map((alert) => (
-                <View
-                  key={alert.id}
-                  style={[
-                    styles.alertRow,
-                    alert.breachType === 'exit' ? styles.alertRowBreach : styles.alertRowEntry,
-                  ]}
-                >
-                  <Text style={styles.alertIcon}>
-                    {alert.breachType === 'exit' ? '🚨' : '✅'}
-                  </Text>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.alertTitle}>
-                      {alert.breachType === 'exit' ? 'Left safe zone' : 'Returned to safe zone'}
-                    </Text>
-                    {alert.breachType === 'exit' && (
-                      <Text style={styles.alertMeta}>{Math.round(alert.distanceM)} m beyond boundary</Text>
-                    )}
-                    <Text style={styles.alertTime}>{formatAge(alert.createdAt)}</Text>
-                  </View>
-                  {alert.acknowledgedAt && (
-                    <Text style={styles.alertAcked}>✓ Acked</Text>
-                  )}
-                </View>
-              ))
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* Safety Card */}
+        <View style={[s.safetyCard, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+          <View style={[s.badge, { backgroundColor: cfg.badgeBg, flexDirection: 'row', alignItems: 'center' }]}>
+            <Ionicons name={cfg.icon} size={14} color="#fff" style={{ marginRight: 6 }} />
+            <Text style={s.badgeText}>{cfg.badge}</Text>
+          </View>
+          <Text style={[s.safetyText, { color: cfg.textColor }]}>{cfg.text}</Text>
+          {p.current_zone_name && (
+            <View style={s.zoneLabelRow}>
+              <Ionicons name="location-outline" size={14} color={C.textMuted} style={{ marginRight: 4 }} />
+              <Text style={s.zoneLabel}>{p.current_zone_name}</Text>
+            </View>
+          )}
+          {/* Telemetry */}
+          <View style={s.telemetryRow}>
+            {p.battery_pct != null && (
+              <View style={s.chip}>
+                <Ionicons name="battery-full-outline" size={12} color={C.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={s.chipText}>{p.battery_pct}%</Text>
+              </View>
+            )}
+            {p.network_status && (
+              <View style={s.chip}>
+                <Ionicons name="cellular-outline" size={12} color={C.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={s.chipText}>{p.network_status}</Text>
+              </View>
+            )}
+            {p.computed_at && (
+              <View style={s.chip}>
+                <Ionicons name="time-outline" size={12} color={C.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={s.chipText}>{formatAge(p.computed_at)}</Text>
+              </View>
             )}
           </View>
-        )}
-      </ScrollView>
+        </View>
 
-      {/* â”€â”€ Bottom Nav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <View style={styles.bottomBar}>
-        {(['Home', 'Map', 'Alerts'] as FamilyTab[]).map((tab) => {
-          const isActive = activeTab === tab;
-          const icons: Record<FamilyTab, string> = { Home: '🏠', Map: '🗺️', Alerts: '🔔' };
-          return (
-            <Pressable key={tab} onPress={() => setActiveTab(tab)} style={styles.bottomTab}>
-              <Text style={[styles.bottomTabIcon, isActive && { opacity: 1 }]}>{icons[tab]}</Text>
-              <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>{tab}</Text>
-              {isActive && <View style={styles.activeIndicator} />}
+        {/* Mini Map */}
+        <View style={s.mapWrap}>
+          {isNativeMapDisabled() ? (
+            <Pressable
+              style={s.mapFallback}
+              onPress={() => navigation.navigate('FamilyMapScreen', { patientId: p.id })}
+            >
+              <Ionicons name="map-outline" size={36} color={C.textMuted} style={{ marginBottom: 6 }} />
+              <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.textPrimary }}>Tap to open map</Text>
             </Pressable>
-          );
-        })}
-      </View>
+          ) : (
+            <MapErrorBoundary>
+              <Pressable
+                style={s.expandBtn}
+                onPress={() => navigation.navigate('FamilyMapScreen', { patientId: p.id })}
+              >
+                <Ionicons name="expand-outline" size={18} color={C.primary} />
+              </Pressable>
+              <MapView
+                style={s.map}
+                scrollEnabled={true} zoomEnabled={true} rotateEnabled={true}
+                pitchEnabled={true}
+                initialRegion={{ ...mapCenter, latitudeDelta: 0.018, longitudeDelta: 0.018 }}
+              >
+                {zones.filter(z => z.isActive).map(z => (
+                  <Circle key={z.id} center={z.center} radius={z.radiusM}
+                    fillColor="rgba(14,122,103,0.10)" strokeColor="rgba(14,122,103,0.45)" strokeWidth={2} />
+                ))}
+                {coords && (
+                  <Marker coordinate={coords}>
+                    <MemberMarkerContent name={p.name} photoUrl={p.photo_url} role="PATIENT" />
+                  </Marker>
+                )}
+                {careCircle.map((member, index) => {
+                  const liveLoc = memberLocations[member.id];
+                  const hasLiveLocation = liveLoc && liveLoc.lat != null && liveLoc.lng != null;
+                  
+                  const lat = hasLiveLocation ? Number(liveLoc.lat) : (member.check_in_lat != null ? Number(member.check_in_lat) : null);
+                  const lng = hasLiveLocation ? Number(liveLoc.lng) : (member.check_in_lng != null ? Number(member.check_in_lng) : null);
+                  
+                  const isEstimated = lat == null || lng == null;
+                  if (isEstimated && !coords) {
+                    return null;
+                  }
+                  const finalLat = !isEstimated ? lat! : coords!.latitude + 0.0015 * (index + 1) * Math.sin(index * 2.0);
+                  const finalLng = !isEstimated ? lng! : coords!.longitude + 0.0015 * (index + 1) * Math.cos(index * 2.0);
+                  
+                  const isCaregiver = member.relationship_type === 'CAREGIVER';
+                  const markerRole = isCaregiver ? 'CAREGIVER' : 'FAMILY';
+
+                  return (
+                    <Marker key={member.id} coordinate={{ latitude: finalLat, longitude: finalLng }}>
+                      <MemberMarkerContent name={member.name} photoUrl={member.photo_url ?? null} role={markerRole} />
+                    </Marker>
+                  );
+                })}
+
+              </MapView>
+            </MapErrorBoundary>
+          )}
+          <View style={s.mapOverlay}>
+            <Text style={s.mapTap}>Pan & Zoom Map • Expand in Corner</Text>
+          </View>
+        </View>
+
+        {/* Routine Card */}
+        <View style={s.card}>
+          <View style={s.sectionHeader}>
+            <Ionicons name="clipboard-outline" size={18} color={C.primary} style={{ marginRight: 8 }} />
+            <Text style={s.sectionTitle}>Today's Routine</Text>
+          </View>
+
+          {/* Progress row */}
+          <View style={s.progressRow}>
+            <View style={s.progressBar}>
+              <View style={[s.progressFill, { width: `${pct}%` as `${number}%` }]} />
+            </View>
+            <Text style={s.progressText}>{doneCount}/{patientTasks.length}</Text>
+          </View>
+
+          {/* Status filters */}
+          {patientTasks.length > 0 && (
+            <View style={s.filterRow}>
+              {([
+                { key: 'all', label: 'All', count: patientTasks.length, activeBg: '#E2E8F0', activeText: '#1A1C1E', color: C.textMuted },
+                { key: 'done', label: 'Completed', count: patientTasks.filter(t => t.status === 'done').length, activeBg: '#DCFCE7', activeText: '#166534', color: '#22C55E' },
+                { key: 'pending', label: 'Pending', count: patientTasks.filter(t => t.status !== 'done' && t.status !== 'missed' && t.status !== 'overdue').length, activeBg: '#FFFBEB', activeText: '#92400E', color: '#F59E0B' },
+                { key: 'missed', label: 'Missed', count: patientTasks.filter(t => t.status === 'missed' || t.status === 'overdue').length, activeBg: '#FEE2E2', activeText: '#991B1B', color: '#EF4444' },
+              ] as const).map(f => {
+                const isActive = activeFilter === f.key;
+                return (
+                  <Pressable
+                    key={f.key}
+                    style={[s.filterBtn, isActive && { backgroundColor: f.activeBg }]}
+                    onPress={() => setActiveFilter(f.key)}
+                  >
+                    <Text style={[s.filterText, isActive && { color: f.activeText }]}>
+                      {f.label} ({f.count})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Capsules */}
+          {filteredTasks.length === 0 ? (
+            <Text style={s.emptyText}>No routines found.</Text>
+          ) : (
+            filteredTasks.map((t: any) => {
+              const item: RoutineItemData = {
+                key: t.id,
+                title: t.title,
+                category: t.category ?? 'custom',
+                status: t.status === 'done' ? 'completed' : (t.status === 'missed' || t.status === 'overdue' ? 'missed' : 'upcoming'),
+                meta: t.time,
+              };
+              return (
+                <RoutineCapsule
+                  key={t.id}
+                  item={item}
+                  readOnly={true}
+                />
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
     </ScreenContainer>
   );
 };
 
-// â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const styles = StyleSheet.create({
-  screen:        { backgroundColor: C.bg, paddingHorizontal: 0, paddingVertical: 0 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100 },
+const s = StyleSheet.create({
+  screen:  { backgroundColor: C.bg },
+  scroll:  { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 110 },
+  header:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.border },
+  avatar:  { width: 42, height: 42, borderRadius: 21, backgroundColor: C.primaryLight, borderWidth: 2, borderColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: 42, height: 42, borderRadius: 21 },
+  avatarText: { fontFamily: F.bold, fontSize: 18, color: C.primary },
+  headerLabel: { fontFamily: F.bold, fontSize: 10, letterSpacing: 1.1, color: C.primary },
+  headerName:  { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary },
+  settingsBtn: { padding: 8 },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.border,
-  },
-  avatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: C.primaryLight, borderWidth: 2, borderColor: C.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarInitial: { fontFamily: F.bold, fontSize: 18, color: C.primary },
-  headerLabel:   { fontFamily: F.bold, fontSize: 10, letterSpacing: 1.1, color: C.primary },
-  headerName:    { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary, marginTop: 1 },
-  signOutBtn:    { paddingHorizontal: 10, paddingVertical: 6 },
-  signOutText:   { fontFamily: F.bold, fontSize: 13, color: C.textSecondary },
+  safetyCard: { borderRadius: 20, borderWidth: 2, padding: 18, marginTop: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 3 }, shadowRadius: 10, elevation: 3 },
+  badge:      { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, alignSelf: 'flex-start', marginBottom: 8 },
+  badgeText:  { fontFamily: F.extraBold, fontSize: 12, color: '#fff', letterSpacing: 0.8 },
+  safetyText: { fontFamily: F.bold, fontSize: 15, lineHeight: 20, marginBottom: 4 },
+  zoneLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  zoneLabel:  { fontFamily: F.medium, fontSize: 13, color: C.textMuted },
+  telemetryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  chip:       { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  chipText:   { fontFamily: F.medium, fontSize: 11, color: C.textSecondary },
 
-  // Safety card
-  safetyCard: {
-    borderRadius: 24, borderWidth: 2,
-    paddingHorizontal: 20, paddingVertical: 22,
-    alignItems: 'center', marginTop: 16, marginBottom: 14,
-    shadowColor: '#000', shadowOpacity: 0.07, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4,
-  },
-  safetyIcon:        { fontSize: 54, marginBottom: 10 },
-  safetyBadge:       { borderRadius: 999, paddingHorizontal: 18, paddingVertical: 6, marginBottom: 10 },
-  safetyBadgeText:   { fontFamily: F.extraBold, fontSize: 14, color: '#fff', letterSpacing: 1.2 },
-  safetyDescription: { fontFamily: F.medium, fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  safetyAge:         { fontFamily: F.regular, fontSize: 11, color: '#9CA3AF', marginTop: 8 },
+  mapWrap:    { height: 170, borderRadius: 16, overflow: 'hidden', marginBottom: 14, borderWidth: 1, borderColor: C.border, position: 'relative' },
+  map:        { flex: 1 },
+  expandBtn:  { position: 'absolute', top: 10, right: 10, backgroundColor: '#FFFFFF', borderRadius: 8, width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, elevation: 3, zIndex: 10 },
+  mapFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
+  mapOverlay: { position: 'absolute', bottom: 10, left: 10, backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: C.border },
+  mapTap:     { fontFamily: F.bold, fontSize: 11, color: C.primary },
+  miniMarker: { width: 28, height: 28, borderRadius: 14, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  miniMarkerBreach: { backgroundColor: '#EF4444' },
+  miniMarkerText: { fontFamily: F.extraBold, fontSize: 11, color: '#fff' },
 
-  // Mini map
-  miniMapWrap: {
-    height: 180, borderRadius: 18, overflow: 'hidden',
-    marginBottom: 14, borderWidth: 1, borderColor: C.border,
-  },
-  miniMapLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface },
-  miniMap:        { flex: 1 },
-  miniMapOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)', paddingVertical: 7, alignItems: 'center',
-  },
-  miniMapTap: { fontFamily: F.bold, fontSize: 12, color: '#fff' },
-  miniMarker: {
-    width: 34, height: 34, borderRadius: 17,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2.5, borderColor: '#fff',
-  },
-  miniMarkerText: { fontFamily: F.extraBold, fontSize: 14, color: '#fff' },
+  card: { backgroundColor: C.surface, borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: C.border },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  sectionTitle: { fontFamily: F.extraBold, fontSize: 17, color: C.textPrimary },
+  
+  progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  progressBar: { flex: 1, height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginRight: 12, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: C.primary, borderRadius: 3 },
+  progressText: { fontFamily: F.bold, fontSize: 13, color: C.textSecondary },
 
-  // Routine card
-  routineCard:       { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 16, marginBottom: 14 },
-  sectionTitle:      { fontFamily: F.bold, fontSize: 16, color: C.textPrimary, marginBottom: 12 },
-  routineProgressRow:{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  progressBar:       { flex: 1, height: 8, borderRadius: 4, backgroundColor: C.border },
-  progressFill:      { height: 8, borderRadius: 4, backgroundColor: C.primary },
-  progressText:      { fontFamily: F.bold, fontSize: 13, color: C.primary },
-  taskRow:           { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  taskDot:           { width: 10, height: 10, borderRadius: 5 },
-  taskDotDone:       { backgroundColor: C.primary },
-  taskDotMissed:     { backgroundColor: '#EF4444' },
-  taskDotPending:    { backgroundColor: C.border },
-  taskTitle:         { flex: 1, fontFamily: F.medium, fontSize: 14, color: C.textPrimary },
-  taskTime:          { fontFamily: F.regular, fontSize: 12, color: C.textMuted },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  filterBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  filterText: { fontFamily: F.bold, fontSize: 11, color: C.textSecondary },
 
-  // Full map button
-  fullMapBtn: {
-    borderRadius: 16, backgroundColor: C.primary, marginTop: 20,
-    paddingVertical: 16, alignItems: 'center',
-  },
-  fullMapBtnText: { fontFamily: F.bold, fontSize: 16, color: '#fff' },
+  routineCapsule: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: 16, padding: 12, marginBottom: 10 },
+  routineIconCircle: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  routineInfo: { flex: 1, marginLeft: 12 },
+  routineTitle: { fontFamily: F.bold, fontSize: 14, color: C.textPrimary },
+  textCrossed: { textDecorationLine: 'line-through', opacity: 0.6 },
+  routineMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  routineTimeText: { fontFamily: F.medium, fontSize: 11 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginHorizontal: 6 },
+  statusLabel: { fontFamily: F.bold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  // Alerts
-  alertsList:  { marginTop: 4 },
-  alertRow:    {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, padding: 14, marginBottom: 10,
-    borderWidth: 1,
-  },
-  alertRowBreach: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
-  alertRowEntry:  { backgroundColor: '#ECFDF5', borderColor: '#6EE7B7' },
-  alertIcon:      { fontSize: 22 },
-  alertTitle:     { fontFamily: F.bold, fontSize: 14, color: C.textPrimary },
-  alertMeta:      { fontFamily: F.regular, fontSize: 12, color: '#EF4444', marginTop: 2 },
-  alertTime:      { fontFamily: F.regular, fontSize: 11, color: C.textMuted, marginTop: 3 },
-  alertAcked:     { fontFamily: F.bold, fontSize: 11, color: C.primary },
-
-  emptyText: { fontFamily: F.regular, fontSize: 14, color: C.textMuted, textAlign: 'center', paddingVertical: 20 },
-
-  // Bottom nav
-  bottomBar: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, height: 76,
-    backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
-    flexDirection: 'row', alignItems: 'center',
-  },
-  bottomTab:          { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, position: 'relative' },
-  bottomTabIcon:      { fontSize: 22, opacity: 0.55 },
-  bottomLabel:        { fontFamily: F.medium, fontSize: 10, color: C.textMuted, letterSpacing: 0.3, marginTop: 2 },
-  bottomLabelActive:  { fontFamily: F.bold, color: C.primary },
-  activeIndicator:    { position: 'absolute', bottom: 0, width: 18, height: 2.5, borderRadius: 2, backgroundColor: C.primary },
+  emptyText: { fontFamily: F.medium, fontSize: 13, color: C.textMuted, fontStyle: 'italic', textAlign: 'center', paddingVertical: 14 },
 });
