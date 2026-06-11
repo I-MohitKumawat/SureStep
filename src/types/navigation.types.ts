@@ -29,6 +29,7 @@ export type PatientStackParams = {
   ActivityPlayScreen:      { activityId: string };
   ActivityReportsScreen:   undefined;
   NotificationHistoryScreen: undefined;
+  PatientProfileScreen:    { patientId?: string } | undefined;
 };
 
 // ─── Caregiver Stack ──────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ export type CaregiverStackParams = {
   CaregiverTriageScreen:          undefined;
   CaregiverPatientDetailScreen:   { patientId: string; patientName: string; refresh?: boolean; initialTab?: 'Home' | 'Alerts' | 'Manage' };
   CaregiverAssessmentScreen:      { patientId: string; patientName: string; assessmentId?: string };
+  CaregiverAssessmentViewScreen:  { patientId: string; patientName: string };
   CaregiverPatientMapScreen:      { patientId: string; patientName?: string };
   CaregiverPatientLocationEditScreen: { patientId: string; patientName?: string };
   CaregiverPatientRoutinesScreen: { patientId: string; patientName: string };
@@ -63,6 +65,7 @@ export type CaregiverStackParams = {
   CaregiverSettingsScreen:        undefined;
   CaregiverCareCircleScreen:      { patientId: string; patientName: string };
   NotificationHistoryScreen:      undefined;
+  PatientProfileScreen:           { patientId: string };
 };
 
 // ─── Family Stack ─────────────────────────────────────────────────────────────
@@ -76,6 +79,7 @@ export type FamilyStackParams = {
   FamilyMessagesScreen:    { patientId?: string } | undefined;
   FamilySettingsScreen:    undefined;
   NotificationHistoryScreen: undefined;
+  PatientProfileScreen:    { patientId: string };
 };
 
 export type FamilyTabParams = {

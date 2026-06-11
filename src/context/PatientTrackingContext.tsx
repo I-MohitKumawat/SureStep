@@ -71,7 +71,7 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
 
         if (latestLoc) {
           setCoords({ latitude: latestLoc.latitude, longitude: latestLoc.longitude });
-          setCoordsTs(latestLoc.recordedAt);
+          setCoordsTs(fetchedState?.computed_at ? new Date(fetchedState.computed_at).getTime() : latestLoc.recordedAt);
           if (latestLoc.accuracyM !== undefined) setAccuracyM(latestLoc.accuracyM);
           if (latestLoc.speedKmh !== undefined) setSpeedKmh(latestLoc.speedKmh);
         } else if (fetchedState && fetchedState.last_known_lat != null && fetchedState.last_known_lng != null) {
@@ -110,12 +110,14 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
         const handleStateChange = (data: any) => {
           if (data.patient_id !== activePatientId) return;
 
+          const ts = data.computed_at ? new Date(data.computed_at).getTime() : Date.now();
+
           if (data.coords) {
             setCoords({ latitude: data.coords.latitude, longitude: data.coords.longitude });
-            setCoordsTs(Date.now());
+            setCoordsTs(ts);
           } else if (data.last_known_lat != null && data.last_known_lng != null) {
             setCoords({ latitude: data.last_known_lat, longitude: data.last_known_lng });
-            setCoordsTs(Date.now());
+            setCoordsTs(ts);
           }
 
           setPatientState((prev) => ({

@@ -37,6 +37,7 @@ import {
 } from '../../services/familyService';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/apiClient';
+import { relativeTime } from '../../utils/dateUtils';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import {
@@ -103,11 +104,7 @@ type RawTask = {
 function computeLastActivity(tasks: RawTask[]): string {
   const times = tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime());
   if (times.length === 0) return 'No activity yet';
-  const diffMin = Math.round((Date.now() - Math.max(...times)) / 60_000);
-  if (diffMin < 1)  return 'Just now';
-  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? 's' : ''} ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  return `${diffHr} hr${diffHr > 1 ? 's' : ''} ago`;
+  return relativeTime(Math.max(...times));
 }
 
 function deriveStatusLabel(
@@ -122,14 +119,7 @@ function deriveStatusLabel(
 
 function timeAgo(dateStr?: string | null): string {
   if (!dateStr) return '—';
-  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (s < 0) return 'Just now';
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  return relativeTime(dateStr);
 }
 
 function getAge(dobStr?: string | null): number | null {

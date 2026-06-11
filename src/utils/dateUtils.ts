@@ -9,14 +9,17 @@ export const formatDate = (iso: string): string => {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-/** Returns 'X MINS AGO', 'X HR AGO', or 'Just now' */
-export const relativeTime = (isoOrMs: string | number): string => {
+/** Returns relative time in lowercase format, e.g. '5 min ago', '2 hr ago', '1 d ago' */
+export const relativeTime = (isoOrMs?: string | number | null): string => {
+  if (!isoOrMs) return '—';
   const ms  = typeof isoOrMs === 'string' ? new Date(isoOrMs).getTime() : isoOrMs;
   const diff = Math.round((Date.now() - ms) / 60000);
   if (diff < 1)  return 'Just now';
-  if (diff < 60) return `${diff} MIN AGO`;
+  if (diff < 60) return `${diff} min ago`;
   const hr = Math.floor(diff / 60);
-  return `${hr} HR AGO`;
+  if (hr < 24) return `${hr} hr ago`;
+  const days = Math.floor(hr / 24);
+  return `${days} d ago`;
 };
 
 /** Returns HH:MM string from a Date or ISO string */

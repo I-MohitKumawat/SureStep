@@ -27,6 +27,7 @@ import { FamilySettingsScreen }    from '../screens/family/FamilySettingsScreen'
 import { FamilyBottomBar }         from '../components/shared/FamilyBottomBar';
 
 import { NotificationHistoryScreen } from '../screens/shared/NotificationHistoryScreen';
+import { PatientProfileScreen } from '../screens/shared/PatientProfileScreen';
 
 const Stack = createNativeStackNavigator<FamilyStackParams>();
 const Tab = createBottomTabNavigator<FamilyTabParams>();
@@ -59,6 +60,7 @@ const FamilyStack: React.FC = () => {
       <Stack.Screen name="FamilyTabs"              component={FamilyTabs} />
       <Stack.Screen name="FamilyStoriesScreen"     component={FamilyStoriesScreen} />
       <Stack.Screen name="NotificationHistoryScreen" component={NotificationHistoryScreen} />
+      <Stack.Screen name="PatientProfileScreen"    component={PatientProfileScreen} />
     </Stack.Navigator>
   );
 };

@@ -23,6 +23,7 @@ import { CaregiverPatientShiftsScreen }   from '../screens/caregiver/CaregiverPa
 import { CaregiverRoutineEditorScreen }   from '../screens/caregiver/CaregiverRoutineEditorScreen';
 import { CaregiverGeofenceEditorScreen }  from '../screens/caregiver/CaregiverGeofenceEditorScreen';
 import { CaregiverShiftHandoverScreen }   from '../screens/caregiver/CaregiverShiftHandoverScreen';
+import { CaregiverAssessmentViewScreen }  from '../screens/caregiver/CaregiverAssessmentViewScreen';
 import { CaregiverAlertFeedScreen }       from '../screens/caregiver/CaregiverAlertFeedScreen';
 import { CaregiverCalendarScreen }        from '../screens/caregiver/CaregiverCalendarScreen';
 import { CaregiverMessagesScreen }        from '../screens/caregiver/CaregiverMessagesScreen';
@@ -31,6 +32,7 @@ import { CaregiverProfileEditScreen }     from '../screens/caregiver/CaregiverPr
 import { CaregiverSettingsScreen }        from '../screens/caregiver/CaregiverSettingsScreen';
 import { CaregiverCareCircleScreen }      from '../screens/caregiver/CaregiverCareCircleScreen';
 import { NotificationHistoryScreen }      from '../screens/shared/NotificationHistoryScreen';
+import { PatientProfileScreen }           from '../screens/shared/PatientProfileScreen';
 
 const Stack = createNativeStackNavigator<CaregiverStackParams>();
 
@@ -39,6 +41,7 @@ const CaregiverStack: React.FC = () => (
     <Stack.Screen name="CaregiverTriageScreen"          component={CaregiverTriageScreen} />
     <Stack.Screen name="CaregiverPatientDetailScreen"   component={CaregiverPatientDetailScreen} />
     <Stack.Screen name="CaregiverAssessmentScreen"      component={CaregiverAssessmentScreen} />
+    <Stack.Screen name="CaregiverAssessmentViewScreen"  component={CaregiverAssessmentViewScreen} />
     <Stack.Screen name="CaregiverPatientMapScreen"      component={CaregiverPatientMapScreen} />
     <Stack.Screen name="CaregiverPatientLocationEditScreen" component={CaregiverPatientLocationEditScreen} />
     <Stack.Screen name="CaregiverPatientRoutinesScreen" component={CaregiverPatientRoutinesScreen} />
@@ -55,6 +58,7 @@ const CaregiverStack: React.FC = () => (
     <Stack.Screen name="CaregiverSettingsScreen"        component={CaregiverSettingsScreen} />
     <Stack.Screen name="CaregiverCareCircleScreen"      component={CaregiverCareCircleScreen} />
     <Stack.Screen name="NotificationHistoryScreen"      component={NotificationHistoryScreen} />
+    <Stack.Screen name="PatientProfileScreen"           component={PatientProfileScreen} />
   </Stack.Navigator>
 );
 

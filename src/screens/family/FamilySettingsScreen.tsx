@@ -40,9 +40,14 @@ export const FamilySettingsScreen: React.FC<Props> = ({ navigation }) => {
   const [freq,      setFreq]     = useState<'DAILY' | 'WEEKLY'>('DAILY');
 
   useEffect(() => {
-    getFamilyProfile()
-      .then((res) => {
-        const p = res.data?.data?.profile ?? null;
+    async function init() {
+      try {
+        const [profRes, settingsRes] = await Promise.all([
+          getFamilyProfile(),
+          apiClient.get('/notifications/settings').catch(() => null),
+        ]);
+
+        const p = profRes.data?.data?.profile ?? null;
         if (p) {
           setProfile(p);
           setWhatsapp(p.whatsapp_number ?? '');
@@ -53,9 +58,21 @@ export const FamilySettingsScreen: React.FC<Props> = ({ navigation }) => {
           setDigest(p.notify_on_daily_digest ?? true);
           setFreq(p.digest_frequency ?? 'DAILY');
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+
+        if (settingsRes?.data?.settings) {
+          const cats = settingsRes.data.settings.alert_categories || [];
+          setBreach(cats.includes('GEOFENCE'));
+          setSos(cats.includes('SOS'));
+          setCritical(cats.includes('ROUTINE'));
+          setDigest(cats.includes('DAILY_DIGEST'));
+        }
+      } catch (err) {
+        console.warn('Error loading family settings:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    void init();
   }, []);
 
   const { updateUser } = useAuth();
@@ -84,15 +101,27 @@ export const FamilySettingsScreen: React.FC<Props> = ({ navigation }) => {
         updateUser({ photo_url: remotePhotoUrl });
       }
 
-      await updateFamilyProfile({
-        relation_label:            relation || undefined,
-        whatsapp_number:           whatsapp || null,
-        notify_on_breach:          breach,
-        notify_on_sos:             sos,
-        notify_on_missed_critical: critical,
-        notify_on_daily_digest:    digest,
-        digest_frequency:          freq,
-      });
+      const cats: string[] = [];
+      if (breach) cats.push('GEOFENCE');
+      if (sos) cats.push('SOS');
+      if (critical) cats.push('ROUTINE');
+      if (digest) cats.push('DAILY_DIGEST');
+
+      await Promise.all([
+        updateFamilyProfile({
+          relation_label:            relation || undefined,
+          whatsapp_number:           whatsapp || null,
+          notify_on_breach:          breach,
+          notify_on_sos:             sos,
+          notify_on_missed_critical: critical,
+          notify_on_daily_digest:    digest,
+          digest_frequency:          freq,
+        }),
+        apiClient.put('/notifications/settings', {
+          alert_categories: cats,
+        }),
+      ]);
+
       Alert.alert('Saved', 'Your preferences have been updated.');
       void refresh();
     } catch (e: any) {
@@ -239,11 +268,20 @@ export const FamilySettingsScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={s.sectionTitle}>Care Circle</Text>
           <Text style={s.fieldLabel}>Linked Patient</Text>
           {patient ? (
-            <View style={s.patientRow}>
-              <View style={s.patientDot} />
-              <Text style={s.patientName}>{patient.name}</Text>
-              <View style={s.linkedBadge}><Text style={s.linkedBadgeText}>Confirmed</Text></View>
-            </View>
+            <>
+              <View style={s.patientRow}>
+                <View style={s.patientDot} />
+                <Text style={s.patientName}>{patient.name}</Text>
+                <View style={s.linkedBadge}><Text style={s.linkedBadgeText}>Confirmed</Text></View>
+              </View>
+              <Pressable
+                onPress={() => navigation.navigate('PatientProfileScreen', { patientId: patient.id })}
+                style={({ pressed }) => [s.pickerBtn, { marginTop: 12 }, pressed && { opacity: 0.82 }]}
+              >
+                <Text style={s.pickerBtnText}>View Patient Profile</Text>
+                <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
+              </Pressable>
+            </>
           ) : (
             <Text style={s.noPatient}>No patient linked.</Text>
           )}

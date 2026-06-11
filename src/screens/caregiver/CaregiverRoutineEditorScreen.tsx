@@ -18,6 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
+import { Feather } from '@expo/vector-icons';
+import { getCategoryIcon } from '../../components/shared/RoutineCapsule';
 import type { CaregiverStackParams } from '../../types/navigation.types';
 import { createRoutineTemplate, updateRoutineTemplate } from '../../services/taskService';
 
@@ -48,15 +50,13 @@ const DownIcon = () => (
 );
 
 const CATEGORIES = [
-  { label: 'Morning', emoji: '🍽️' },
-  { label: 'Medication', emoji: '💊' },
-  { label: 'Meal', emoji: '🍞' },
-  { label: 'Sleep', emoji: '🛌' },
-  { label: 'Hygiene', emoji: '🛁' },
-  { label: 'Exercise', emoji: '🚶' },
+  { label: 'Morning', icon: 'sun' },
+  { label: 'Medication', icon: 'activity' },
+  { label: 'Meal', icon: 'coffee' },
+  { label: 'Sleep', icon: 'moon' },
+  { label: 'Hygiene', icon: 'droplet' },
+  { label: 'Exercise', icon: 'zap' },
 ];
-
-const SUGGESTED_EMOJIS = ['🍽️', '💊', '🚶', '🛁', '🛌', '🏋️', '🩺', '📋', '☕', '🧘', '🚗', '💧'];
 const DAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
@@ -67,10 +67,7 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
   const [name, setName] = useState(mode === 'edit' && routine ? routine.title : '');
   const [category, setCategory] = useState(mode === 'edit' && routine ? routine.category || 'Morning' : 'Morning');
   
-  // Custom Any Emoji State
-  const [emojiInput, setEmojiInput] = useState(
-    mode === 'edit' && routine ? routine.icon_name || '📋' : '📋'
-  );
+
 
   // Recurrence state
   const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY'>(
@@ -211,7 +208,7 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
       title: cleanTitle,
       category,
       instructions_md: activeSteps.length > 0 ? JSON.stringify(activeSteps) : null,
-      icon_name: emojiInput.trim() || '📋',
+      icon_name: getCategoryIcon(category),
       recurrence_pattern: {
         type: recurrenceType,
         ...(recurrenceType === 'WEEKLY' ? { days: recurrenceDays } : {})
@@ -266,35 +263,6 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
           />
         </View>
 
-        {/* Emoji Selector */}
-        <View style={styles.formSection}>
-          <Text style={styles.label}>Icon / Emoji</Text>
-          <View style={styles.emojiInputRow}>
-            <View style={styles.emojiDisplayCircle}>
-              <Text style={styles.emojiDisplayVal}>{emojiInput || '📋'}</Text>
-            </View>
-            <TextInput
-              value={emojiInput}
-              onChangeText={setEmojiInput}
-              placeholder="Paste any emoji"
-              placeholderTextColor={C.textMuted}
-              style={styles.emojiTextInput}
-              maxLength={4}
-            />
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiSuggestions}>
-            {SUGGESTED_EMOJIS.map(emoji => (
-              <Pressable
-                key={emoji}
-                style={styles.emojiSuggestionBtn}
-                onPress={() => setEmojiInput(emoji)}
-              >
-                <Text style={styles.emojiSuggestionText}>{emoji}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-
         {/* Category Picker */}
         <View style={styles.formSection}>
           <Text style={styles.label}>Category</Text>
@@ -314,7 +282,12 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
                   style={[styles.categoryCard, active && styles.categoryCardActive]}
                   onPress={() => setCategory(cat.label)}
                 >
-                  <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                  <Feather 
+                    name={cat.icon as any} 
+                    size={22} 
+                    color={active ? C.primary : C.textSecondary} 
+                    style={{ marginBottom: 4 }} 
+                  />
                   <Text style={[styles.categoryText, active && styles.categoryTextActive]}>{cat.label}</Text>
                 </Pressable>
               );

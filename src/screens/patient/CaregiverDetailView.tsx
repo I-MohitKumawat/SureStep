@@ -10,6 +10,7 @@ import {
 
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
+import { Feather } from '@expo/vector-icons';
 import type { CaregiverListing } from './CaregiverSearchView';
 
 // ─── Star row (full detail version) ──────────────────────────────────────────
@@ -70,7 +71,7 @@ export const CaregiverDetailView: React.FC<Props> = ({
             {caregiver.profile_photo_url ? (
               <Image source={{ uri: caregiver.profile_photo_url }} style={d.avatarImage} />
             ) : (
-              <Text style={d.avatarEmoji}>{caregiver.emoji || '👩‍⚕️'}</Text>
+              <Feather name="user" size={48} color={C.textMuted} />
             )}
           </View>
           {isLinked && (
@@ -80,7 +81,7 @@ export const CaregiverDetailView: React.FC<Props> = ({
           )}
           {isPending && (
             <View style={[d.confirmedBadge, { backgroundColor: '#F59E0B' }]}>
-              <Text style={d.confirmedBadgeText}>⏳  Request Pending Approval</Text>
+              <Text style={d.confirmedBadgeText}>Request Pending Approval</Text>
             </View>
           )}
         </View>
@@ -94,11 +95,13 @@ export const CaregiverDetailView: React.FC<Props> = ({
         <View style={d.pill}>
           <Stars rating={caregiver.rating} />
         </View>
-        <View style={d.pill}>
-          <Text style={d.pillText}>👥 {caregiver.patients} patients</Text>
+        <View style={[d.pill, { flexDirection: 'row', alignItems: 'center' }]}>
+          <Feather name="users" size={14} color={C.textBody} style={{ marginRight: 6 }} />
+          <Text style={d.pillText}>{caregiver.patients} patients</Text>
         </View>
-        <View style={d.pill}>
-          <Text style={d.pillText}>💰 {caregiver.fee}</Text>
+        <View style={[d.pill, { flexDirection: 'row', alignItems: 'center' }]}>
+          <Feather name="dollar-sign" size={14} color={C.textBody} style={{ marginRight: 2 }} />
+          <Text style={d.pillText}>{caregiver.fee}</Text>
         </View>
       </View>
 
@@ -114,7 +117,9 @@ export const CaregiverDetailView: React.FC<Props> = ({
       <Text style={d.sectionLabel}>PROFESSIONAL DETAILS</Text>
 
       <View style={d.infoRow}>
-        <Text style={d.infoIcon}>🗓</Text>
+        <View style={d.infoIconWrap}>
+          <Feather name="calendar" size={18} color={C.primary} />
+        </View>
         <View style={d.infoTextWrap}>
           <Text style={d.infoLabel}>Availability</Text>
           <Text style={d.infoValue}>{caregiver.availability}</Text>
@@ -122,7 +127,9 @@ export const CaregiverDetailView: React.FC<Props> = ({
       </View>
 
       <View style={d.infoRow}>
-        <Text style={d.infoIcon}>📍</Text>
+        <View style={d.infoIconWrap}>
+          <Feather name="map-pin" size={18} color={C.primary} />
+        </View>
         <View style={d.infoTextWrap}>
           <Text style={d.infoLabel}>Location / Radius</Text>
           <Text style={d.infoValue}>
@@ -132,7 +139,9 @@ export const CaregiverDetailView: React.FC<Props> = ({
       </View>
 
       <View style={d.infoRow}>
-        <Text style={d.infoIcon}>💼</Text>
+        <View style={d.infoIconWrap}>
+          <Feather name="briefcase" size={18} color={C.primary} />
+        </View>
         <View style={d.infoTextWrap}>
           <Text style={d.infoLabel}>Experience</Text>
           <Text style={d.infoValue}>
@@ -142,7 +151,9 @@ export const CaregiverDetailView: React.FC<Props> = ({
       </View>
 
       <View style={d.infoRow}>
-        <Text style={d.infoIcon}>🗣</Text>
+        <View style={d.infoIconWrap}>
+          <Feather name="message-square" size={18} color={C.primary} />
+        </View>
         <View style={d.infoTextWrap}>
           <Text style={d.infoLabel}>Languages Spoken</Text>
           <Text style={d.infoValue}>
@@ -155,7 +166,9 @@ export const CaregiverDetailView: React.FC<Props> = ({
 
       {caregiver.specializations && caregiver.specializations.length > 0 && (
         <View style={d.infoRow}>
-          <Text style={d.infoIcon}>✨</Text>
+          <View style={d.infoIconWrap}>
+            <Feather name="star" size={18} color={C.primary} />
+          </View>
           <View style={d.infoTextWrap}>
             <Text style={d.infoLabel}>Specialties</Text>
             <View style={d.chipRow}>
@@ -346,7 +359,7 @@ const d = StyleSheet.create({
     gap: 12,
     marginBottom: 18,
   },
-  infoIcon: { fontSize: 20, marginTop: 2 },
+  infoIconWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   infoTextWrap: { flex: 1 },
   infoLabel: {
     fontFamily: F.bold,

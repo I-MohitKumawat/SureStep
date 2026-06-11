@@ -21,6 +21,7 @@ import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { fetchPatientGeofences, fetchBreachHistory, type Coords, type GeofenceZone } from '../../utils/geofenceUtils';
 import { connectSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
+import { relativeTime } from '../../utils/dateUtils';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -669,7 +670,7 @@ export const FamilyMapScreen: React.FC<Props> = ({ navigation, route }) => {
                 <View style={styles.metricCard}>
                   <Feather name="clock" size={18} color="#3B82F6" />
                   <Text style={styles.metricValue}>
-                    {coordsTs > 0 ? new Date(coordsTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                    {coordsTs > 0 ? relativeTime(coordsTs) : '--:--'}
                   </Text>
                   <Text style={styles.metricLabel}>Updated</Text>
                 </View>

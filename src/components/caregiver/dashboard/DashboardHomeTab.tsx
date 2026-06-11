@@ -19,6 +19,7 @@ import {
   checkBreach, haversineMeters,
   type Coords, type GeofenceZone,
 } from "../../../utils/geofenceUtils";
+import { relativeTime } from "../../../utils/dateUtils";
 
 type Props = {
   patientName: string;
@@ -53,8 +54,11 @@ type Props = {
   relationshipStatus?: string | null;
   carePlan?: any | null;
   onNavigateAssessment?: () => void;
+  onNavigateAssessmentView?: () => void;
   onCompleteMeeting?: () => Promise<void>;
   onNavigateCareCircle?: () => void;
+  familyCount?: number;
+  assignedCaregiver?: string;
 };
 
 const CAPSULE_HEIGHT = 84;
@@ -72,7 +76,8 @@ export const DashboardHomeTab: React.FC<Props> = ({
   onNavigateManage, onNavigateGeofenceMap, onNavigateGeofenceEditor,
   patientAge, patientPhoto,
   patientState, onRefreshLocation,
-  relationshipStatus, carePlan, onNavigateAssessment, onCompleteMeeting, onNavigateCareCircle,
+  relationshipStatus, carePlan, onNavigateAssessment, onNavigateAssessmentView, onCompleteMeeting, onNavigateCareCircle,
+  familyCount = 0, assignedCaregiver = '—',
 }) => {
   const [activeFilter, setActiveFilter] = useState<'missed' | 'pending' | 'completed' | null>(null);
 
@@ -169,25 +174,29 @@ export const DashboardHomeTab: React.FC<Props> = ({
           </Pressable>
           <View style={styles.newHeaderInfo}>
             <Text style={styles.newHeaderName} numberOfLines={1}>{patientName}</Text>
-            {/* 
-              BACKEND FETCH REQUIREMENT: Patient age. 
-              Calculated from patient's date of birth ('date_of_birth' in 'users' table). 
-              Currently, if DOB is unavailable, it defaults to Age 78 for mockup demonstration.
-            */}
-            <Text style={styles.newHeaderAge}>
-              {patientAge ? `Age ${patientAge}` : "Age 78"}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+              <Text style={styles.newHeaderAge}>
+                {patientAge ? `Age ${patientAge}` : "Age 78"}
+              </Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.textMuted, marginHorizontal: 6 }}>·</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.textSecondary }}>
+                Active
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              <Feather name="users" size={12} color={C.textMuted} style={{ marginRight: 5 }} />
+              <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.textSecondary }} numberOfLines={1}>
+                Circle: {assignedCaregiver} · {familyCount} family
+              </Text>
+            </View>
           </View>
         </View>
-        {/* 
-          BACKEND FETCH REQUIREMENT: Patient active/online state.
-          Currently static 'Active'. In production, this status pill should be computed by 
-          checking the patient's device connectivity state (e.g. websocket connections or last heartbeat timestamp).
-        */}
-        <View style={styles.newActiveBadge}>
-          <View style={styles.newActiveDot} />
-          <Text style={styles.newActiveText}>Active</Text>
-        </View>
+        <Pressable 
+          style={({ pressed }) => [{ backgroundColor: '#F1F5F9', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }, pressed && { opacity: 0.75 }]}
+          onPress={onNavigateCareCircle}
+        >
+          <Feather name="user-plus" size={16} color={C.textPrimary} />
+        </Pressable>
       </View>
 
       {/* ── Current Status Gradient Card ─────────────────────────── */}
@@ -251,43 +260,42 @@ export const DashboardHomeTab: React.FC<Props> = ({
             </Text>
           </View>
 
-          <View style={styles.statusCardBottom}>
-            <Feather name="clock" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.statusCardTimeText}>
-              {(() => {
-                if (!coordsTs) return "Last updated 2 min ago";
-                const diff = Math.round((Date.now() - coordsTs) / 60000);
-                if (diff < 1) return "Last updated Just now";
-                if (diff < 60) return `Last updated ${diff} min ago`;
-                const diffHr = Math.floor(diff / 60);
-                if (diffHr < 24) return `Last updated ${diffHr} hr ago`;
-                return `Last updated ${Math.floor(diffHr / 24)} days ago`;
-              })()}
-            </Text>
+          {/* Integrated Telemetry Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.25)', paddingTop: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Feather name="clock" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: '#FFFFFF' }}>
+                {(() => {
+                  if (!coordsTs) return "2 min ago";
+                  const diff = Math.round((Date.now() - coordsTs) / 60000);
+                  if (diff < 1) return "just now";
+                  if (diff < 60) return `${diff} min ago`;
+                  const diffHr = Math.floor(diff / 60);
+                  if (diffHr < 24) return `${diffHr} hr ago`;
+                  return `${Math.floor(diffHr / 24)} d ago`;
+                })()}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="battery-charging" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: '#FFFFFF' }}>
+                {patientState?.battery_pct != null ? `${patientState.battery_pct}%` : `${batteryLevel}%`}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons 
+                name={patientState?.network_status === 'Offline' ? 'cellular-outline' : 'cellular'} 
+                 size={14} 
+                 color="#FFFFFF" 
+                 style={{ marginRight: 5 }} 
+              />
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: '#FFFFFF' }}>
+                {patientState?.network_status || 'Offline'}
+              </Text>
+            </View>
           </View>
         </LinearGradient>
       </Pressable>
-
-      {/* ── Side-by-Side Indicators ──────────────────────────────── */}
-      <View style={styles.newIndicatorsRow}>
-        <View style={styles.newIndicatorChip}>
-          <Ionicons name="battery-charging" size={18} color="#18181B" style={{ marginRight: 8 }} />
-          <Text style={styles.newIndicatorText}>
-            {patientState?.battery_pct != null ? `${patientState.battery_pct}%` : `${batteryLevel}%`}
-          </Text>
-        </View>
-        <View style={styles.newIndicatorChip}>
-          <Ionicons 
-            name={patientState?.network_status === 'Offline' ? 'cellular-outline' : 'cellular'} 
-            size={18} 
-            color="#18181B" 
-            style={{ marginRight: 8 }} 
-          />
-          <Text style={styles.newIndicatorText}>
-            {patientState?.network_status || 'Offline'}
-          </Text>
-        </View>
-      </View>
 
       {/* ── Onboarding / Care Plan Card ───────────────────────────── */}
       {relationshipStatus && (
@@ -295,8 +303,9 @@ export const DashboardHomeTab: React.FC<Props> = ({
           {relationshipStatus === 'ACCEPTED' && (
             <View style={localStyles.cardInner}>
               <View style={localStyles.badgeRow}>
-                <View style={[localStyles.badge, { backgroundColor: '#DBEAFE' }]}>
-                  <Text style={[localStyles.badgeText, { color: '#1E40AF' }]}>👥 MEETING PENDING</Text>
+                <View style={[localStyles.badge, { backgroundColor: '#DBEAFE', flexDirection: 'row', alignItems: 'center' }]}>
+                  <Feather name="users" size={12} color="#1E40AF" style={{ marginRight: 6 }} />
+                  <Text style={[localStyles.badgeText, { color: '#1E40AF' }]}>MEETING PENDING</Text>
                 </View>
               </View>
               <Text style={localStyles.cardTitle}>Meet {patientName} In Person</Text>
@@ -315,8 +324,9 @@ export const DashboardHomeTab: React.FC<Props> = ({
           {(relationshipStatus === 'MEETING_COMPLETED' || relationshipStatus === 'ASSESSMENT_PENDING') && (
             <View style={localStyles.cardInner}>
               <View style={localStyles.badgeRow}>
-                <View style={[localStyles.badge, { backgroundColor: '#FEE2E2' }]}>
-                  <Text style={[localStyles.badgeText, { color: '#991B1B' }]}>📋 ASSESSMENT REQUIRED</Text>
+                <View style={[localStyles.badge, { backgroundColor: '#FEE2E2', flexDirection: 'row', alignItems: 'center' }]}>
+                  <Feather name="clipboard" size={12} color="#991B1B" style={{ marginRight: 6 }} />
+                  <Text style={[localStyles.badgeText, { color: '#991B1B' }]}>ASSESSMENT REQUIRED</Text>
                 </View>
               </View>
               <Text style={localStyles.cardTitle}>Structured Patient Assessment</Text>
@@ -340,15 +350,20 @@ export const DashboardHomeTab: React.FC<Props> = ({
 
           {relationshipStatus === 'ACTIVE_CARE' && carePlan && (
             <View style={localStyles.cardInner}>
-              <View style={localStyles.badgeRow}>
-                <View style={[localStyles.badge, { backgroundColor: '#D1FAE5' }]}>
-                  <Text style={[localStyles.badgeText, { color: '#065F46' }]}>💚 ACTIVE CARE PLAN</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="check-circle" size={16} color="#065F46" style={{ marginRight: 6 }} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#065F46' }}>Assessment Complete</Text>
                 </View>
-                <Text style={localStyles.versionText}>v{carePlan.assessment_version || 1}</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.textMuted }}>
+                  {carePlan.updated_at ? relativeTime(carePlan.updated_at) : 'Active'}
+                </Text>
               </View>
               <Text style={localStyles.cardTitle}>Care Plan & Goals</Text>
-              <Text style={localStyles.careGoalsText}>{carePlan.care_goals || 'No specific goals set.'}</Text>
-              
+              <Text style={localStyles.careGoalsText} numberOfLines={2}>
+                {carePlan.care_goals || 'No specific goals set.'}
+              </Text>
+
               <View style={localStyles.riskRow}>
                 {carePlan.risk_profile?.fall_risk && (
                   <View style={[localStyles.riskBadge, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
@@ -367,21 +382,11 @@ export const DashboardHomeTab: React.FC<Props> = ({
                 )}
               </View>
 
-              <Text style={localStyles.sectionLabel}>Monitoring Requirements</Text>
-              <Text style={localStyles.monitoringText}>{carePlan.monitoring_requirements || 'Standard GPS safety tracking.'}</Text>
-
               <Pressable 
-                style={({ pressed }) => [localStyles.secondaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={onNavigateAssessment}
+                style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 4 }]}
+                onPress={onNavigateAssessmentView}
               >
-                <Text style={localStyles.secondaryBtnText}>Update Assessment & Plan</Text>
-              </Pressable>
-
-              <Pressable 
-                style={({ pressed }) => [localStyles.secondaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={onNavigateCareCircle}
-              >
-                <Text style={localStyles.secondaryBtnText}>Manage Care Circle & Invites</Text>
+                <Text style={localStyles.primaryBtnText}>View Detailed Care Plan</Text>
               </Pressable>
             </View>
           )}

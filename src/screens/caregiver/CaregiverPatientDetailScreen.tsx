@@ -38,6 +38,9 @@ import {
 } from '../../services/taskService';
 import { getCarePlan } from '../../services/carePlanService';
 import { fetchPatientRelationship, completeMeeting } from '../../services/relationshipService';
+import { getCareCircleForPatient } from '../../services/familyService';
+import { getCategoryIcon } from '../../components/shared/RoutineCapsule';
+import { Feather } from '@expo/vector-icons';
 
 import {
   IconDashboard, IconBell, IconActivity,
@@ -88,19 +91,29 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const [routinesLoading, setRoutinesLoading] = useState(true);
   const [relStatus, setRelStatus] = useState<string | null>(null);
   const [carePlan, setCarePlan] = useState<any | null>(null);
+  const [familyCount, setFamilyCount] = useState(0);
+  const [assignedCaregiver, setAssignedCaregiver] = useState('—');
 
   const loadRelationshipAndCarePlan = useCallback(async () => {
     try {
-      const [rel, plan] = await Promise.all([
+      const [rel, plan, circleRes] = await Promise.all([
         fetchPatientRelationship(patientId),
         getCarePlan(patientId),
+        getCareCircleForPatient(patientId).catch(() => null),
       ]);
       if (rel) {
         setRelStatus(rel.status);
       }
       setCarePlan(plan);
+      if (circleRes?.data?.data?.members) {
+        const members = circleRes.data.data.members;
+        const families = members.filter((m: any) => m.role === 'FAMILY');
+        const caregiver = members.find((m: any) => m.role === 'CAREGIVER');
+        setFamilyCount(families.length);
+        setAssignedCaregiver(caregiver?.name || '—');
+      }
     } catch (err) {
-      console.warn('Failed to load relationship or care plan:', err);
+      console.warn('Failed to load relationship, care plan, or care circle:', err);
     }
   }, [patientId]);
 
@@ -423,7 +436,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             showRoutineSummary={showRoutineSummary}
             patientState={patientState}
             onRefreshLocation={refreshLocation}
-            onShowPatientProfile={() => setShowPatientProfile(true)}
+            onShowPatientProfile={() => navigation.navigate('PatientProfileScreen', { patientId })}
             onShowRoutineSummary={() => setShowRoutineSummary(true)}
             onDismissCallout={(id) => setDismissedCallouts(prev => new Set(prev).add(id))}
             onSendReminder={sendReminder}
@@ -436,8 +449,11 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             relationshipStatus={relStatus}
             carePlan={carePlan}
             onNavigateAssessment={() => navigation.navigate('CaregiverAssessmentScreen', { patientId, patientName })}
+            onNavigateAssessmentView={() => navigation.navigate('CaregiverAssessmentViewScreen', { patientId, patientName })}
             onCompleteMeeting={handleCompleteMeeting}
             onNavigateCareCircle={() => navigation.navigate('CaregiverCareCircleScreen', { patientId, patientName })}
+            familyCount={familyCount}
+            assignedCaregiver={assignedCaregiver}
           />
         )}
       </ScrollView>
@@ -492,7 +508,9 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
                     </View>
                     {filtered.map(t => (
                       <View key={t.id} style={[rSumStyles.taskRow, { backgroundColor: section.bg, borderColor: section.border }]}>
-                        <Text style={rSumStyles.taskEmoji}>{t.icon ?? '📋'}</Text>
+                        <View style={{ marginRight: 10, width: 24, alignItems: 'center', justifyContent: 'center' }}>
+                          <Feather name={getCategoryIcon(t.category) as any} size={18} color={section.textColor} />
+                        </View>
                         <View style={{ flex: 1 }}>
                           <Text style={[rSumStyles.taskTitle, { color: section.textColor }]}>{t.title}</Text>
                           <Text style={rSumStyles.taskMeta}>{t.time}{t.description ? ` · ${t.description}` : ''}</Text>
@@ -522,14 +540,16 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             <Text style={styles.profileModalName}>{patientDetails?.fullName ?? patientName}</Text>
             <View style={styles.profileModalDivider} />
             {([
-              { label: 'Date of Birth', value: patientDetails?.dob ?? '—',        emoji: '🎂' },
-              { label: 'Gender',        value: patientDetails?.gender ?? '—',      emoji: '👤' },
-              { label: 'City',          value: patientDetails?.city ?? '—',        emoji: '📍' },
-              { label: 'Language',      value: patientDetails?.language ?? 'English', emoji: '🌐' },
-              { label: 'Patient ID',    value: patientId,                           emoji: '🆔' },
+              { label: 'Date of Birth', value: patientDetails?.dob ?? '—',        icon: 'calendar' as const },
+              { label: 'Gender',        value: patientDetails?.gender ?? '—',      icon: 'user' as const },
+              { label: 'City',          value: patientDetails?.city ?? '—',        icon: 'map-pin' as const },
+              { label: 'Language',      value: patientDetails?.language ?? 'English', icon: 'globe' as const },
+              { label: 'Patient ID',    value: patientId,                           icon: 'hash' as const },
             ]).map(row => (
               <View key={row.label} style={styles.profileModalRow}>
-                <Text style={styles.profileModalRowEmoji}>{row.emoji}</Text>
+                <View style={{ marginRight: 12, width: 24, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name={row.icon} size={18} color={C.textSecondary} />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.profileModalRowLabel}>{row.label}</Text>
                   <Text style={styles.profileModalRowValue}>{row.value}</Text>

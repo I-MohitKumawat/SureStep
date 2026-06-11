@@ -21,6 +21,7 @@ import { connectSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
+import { relativeTime } from '../../utils/dateUtils';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { FamilyStackParams } from '../../types/navigation.types';
 
@@ -39,10 +40,7 @@ function safetyConfig(state: string | null, sos: boolean) {
 }
 
 const formatAge = (iso: string) => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (diff < 1) return 'Just now';
-  if (diff < 60) return `${diff}m ago`;
-  return `${Math.floor(diff / 60)}h ago`;
+  return relativeTime(iso);
 };
 
 

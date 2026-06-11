@@ -36,8 +36,9 @@ interface RoutineCapsuleProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const getCategoryIcon = (category: TaskCategory): string => {
-  switch (category) {
+export const getCategoryIcon = (category?: string): string => {
+  if (!category) return 'clipboard';
+  switch (category.toLowerCase()) {
     case 'medication':  return 'activity';
     case 'meal':        return 'coffee';
     case 'exercise':    return 'zap';

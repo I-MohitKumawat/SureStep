@@ -34,6 +34,7 @@ import {
 import { resolveActiveIncident, fetchPatientCareCircle, type CareCircleMember } from '../../services/geofenceService';
 import { connectSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
+import { relativeTime } from '../../utils/dateUtils';
 
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientMapScreen'>;
@@ -732,7 +733,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 <View style={styles.emergencyMetricCell}>
                   <Feather name="clock" size={14} color="#6B7280" />
                   <Text style={styles.emergencyMetricVal}>
-                    {coordsTs > 0 ? new Date(coordsTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                    {coordsTs > 0 ? relativeTime(coordsTs) : '--:--'}
                   </Text>
                   <Text style={styles.emergencyMetricLbl}>Updated</Text>
                 </View>
@@ -850,7 +851,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 <View style={styles.metricCard}>
                   <Feather name="clock" size={18} color="#3B82F6" />
                   <Text style={styles.metricValue}>
-                    {coordsTs > 0 ? new Date(coordsTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                    {coordsTs > 0 ? relativeTime(coordsTs) : '--:--'}
                   </Text>
                   <Text style={styles.metricLabel}>Updated</Text>
                 </View>

@@ -44,13 +44,13 @@ const RADIUS_MAX = 2000;
 const RADIUS_STEPS = [50, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000];
 
 const ZONE_PRESETS = [
-  { label: 'Home', icon: '🏠' },
-  { label: 'Clinic', icon: '🏥' },
-  { label: 'Park', icon: '🌳' },
-  { label: 'Pharmacy', icon: '💊' },
-  { label: 'Temple', icon: '🛕' },
-  { label: 'Market', icon: '🛒' },
-  { label: 'Other', icon: '📍' },
+  { label: 'Home', icon: 'home' },
+  { label: 'Clinic', icon: 'activity' },
+  { label: 'Park', icon: 'map' },
+  { label: 'Pharmacy', icon: 'heart' },
+  { label: 'Temple', icon: 'compass' },
+  { label: 'Market', icon: 'shopping-cart' },
+  { label: 'Other', icon: 'map-pin' },
 ];
 
 const DEFAULT_CENTER: Coords = { latitude: 12.9716, longitude: 77.5946 };
@@ -308,7 +308,7 @@ export const CaregiverGeofenceEditorScreen: React.FC<Props> = ({ navigation, rou
                       : { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' },
                   ]}
                 >
-                  <Text style={styles.presetIcon}>{p.icon}</Text>
+                  <Feather name={p.icon as any} size={14} color={active ? themeColor : '#4B5563'} style={{ marginRight: 6 }} />
                   <Text
                     style={[
                       styles.presetChipText,

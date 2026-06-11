@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import apiClient from '../../services/apiClient';
+import { getSocket } from '../../services/socketClient';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
@@ -69,6 +70,33 @@ export const NotificationHistoryScreen: React.FC = () => {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (socket) {
+      const handleNewNotification = (notif: any) => {
+        let parsedPayload = notif.payload;
+        if (typeof notif.payload === 'string') {
+          try {
+            parsedPayload = JSON.parse(notif.payload);
+          } catch {
+            parsedPayload = {};
+          }
+        }
+        const parsedNotif = { ...notif, payload: parsedPayload };
+        setNotifications((prev) => {
+          // Prevent duplicates
+          if (prev.some(n => n.id === parsedNotif.id)) return prev;
+          return [parsedNotif, ...prev];
+        });
+      };
+
+      socket.on('notification:new', handleNewNotification);
+      return () => {
+        socket.off('notification:new', handleNewNotification);
+      };
+    }
+  }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
