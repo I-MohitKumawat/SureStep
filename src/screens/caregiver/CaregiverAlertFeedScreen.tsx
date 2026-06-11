@@ -22,7 +22,7 @@ import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import { fetchCaregiverAlertFeed, acknowledgeAlert, type ApiAlert } from '../../services/geofenceService';
-import { connectSocket } from '../../services/socketClient';
+import { getSocket } from '../../services/socketClient';
 import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverAlertFeedScreen'>;
@@ -91,31 +91,30 @@ export const CaregiverAlertFeedScreen: React.FC<Props> = ({ navigation }) => {
 
   // ── WebSocket — listen for any patient alert in this caregiver's rooms ────
   useEffect(() => {
-    if (!firebaseUser) return;
-    void firebaseUser.getIdToken().then((t) => {
-      const socket = connectSocket(t);
-      const onNew = (data: any) => {
-        if (data.alert) {
-          setAlerts((prev) => [data.alert, ...prev.filter((a) => a.id !== data.alert.id)]);
-        }
-      };
-      const onAck = (data: any) => {
-        setAlerts((prev) =>
-          prev.map((a) =>
-            a.id === data.alert_id
-              ? { ...a, acknowledged_at: data.ts, acknowledged_by: data.acknowledged_by }
-              : a,
-          ),
-        );
-      };
-      socket.on('alert:new',          onNew);
-      socket.on('alert:acknowledged', onAck);
-      return () => {
-        socket.off('alert:new',          onNew);
-        socket.off('alert:acknowledged', onAck);
-      };
-    });
-  }, [firebaseUser]);
+    const socket = getSocket();
+    if (!socket) return;
+
+    const onNew = (data: any) => {
+      if (data.alert) {
+        setAlerts((prev) => [data.alert, ...prev.filter((a) => a.id !== data.alert.id)]);
+      }
+    };
+    const onAck = (data: any) => {
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === data.alert_id
+            ? { ...a, acknowledged_at: data.ts, acknowledged_by: data.acknowledged_by }
+            : a,
+        ),
+      );
+    };
+    socket.on('alert:new',          onNew);
+    socket.on('alert:acknowledged', onAck);
+    return () => {
+      socket.off('alert:new',          onNew);
+      socket.off('alert:acknowledged', onAck);
+    };
+  }, []);
 
   const handleAck = async (alertId: string) => {
     setAckingId(alertId);

@@ -32,7 +32,7 @@ import {
   type GeofenceZone,
 } from '../../utils/geofenceUtils';
 import { resolveActiveIncident, fetchPatientCareCircle, type CareCircleMember } from '../../services/geofenceService';
-import { connectSocket } from '../../services/socketClient';
+import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import { relativeTime } from '../../utils/dateUtils';
 
@@ -242,55 +242,36 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
 
   // Real-time WebSocket subscription for alert acknowledgment only
   useEffect(() => {
-    if (!firebaseUser) return;
-    let socketRef: any;
+    const socket = getSocket();
+    if (!socket || !patientId) return;
 
-    const setupSocket = async () => {
-      try {
-        const token = await firebaseUser.getIdToken();
-        socketRef = connectSocket(token);
-        socketRef.emit('join:patient', patientId);
+    socket.emit('join:patient', patientId);
 
-        const handleAlertAcknowledged = (ackData: any) => {
-          if (ackData.alert_id === breachAlertId) {
-            setResponding(true);
-          }
-        };
-
-        const handleCareCircleLocationUpdate = (data: any) => {
-          if (data.patient_id !== patientId) return;
-          const { member } = data;
-          if (member && member.lat != null && member.lng != null) {
-            setMemberLocations((prev) => ({
-              ...prev,
-              [member.id]: member,
-            }));
-          }
-        };
-
-        socketRef.on('alert:acknowledged', handleAlertAcknowledged);
-        socketRef.on('care-circle:location-update', handleCareCircleLocationUpdate);
-
-        return () => {
-          if (socketRef) {
-            socketRef.off('alert:acknowledged', handleAlertAcknowledged);
-            socketRef.off('care-circle:location-update', handleCareCircleLocationUpdate);
-          }
-        };
-      } catch (err) {
-        console.warn('Map socket setup failed:', err);
+    const handleAlertAcknowledged = (ackData: any) => {
+      if (ackData.alert_id === breachAlertId) {
+        setResponding(true);
       }
     };
 
-    let cleanupFn: (() => void) | undefined;
-    void setupSocket().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    const handleCareCircleLocationUpdate = (data: any) => {
+      if (data.patient_id !== patientId) return;
+      const { member } = data;
+      if (member && member.lat != null && member.lng != null) {
+        setMemberLocations((prev) => ({
+          ...prev,
+          [member.id]: member,
+        }));
+      }
+    };
+
+    socket.on('alert:acknowledged', handleAlertAcknowledged);
+    socket.on('care-circle:location-update', handleCareCircleLocationUpdate);
 
     return () => {
-      if (cleanupFn) cleanupFn();
+      socket.off('alert:acknowledged', handleAlertAcknowledged);
+      socket.off('care-circle:location-update', handleCareCircleLocationUpdate);
     };
-  }, [firebaseUser, patientId, breachAlertId]);
+  }, [patientId, breachAlertId]);
 
   // Turn off tracksViewChanges after it has been enabled to freeze marker rendering and save battery
   useEffect(() => {

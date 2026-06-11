@@ -8,9 +8,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { CaregiverStackParams } from '../types/navigation.types';
 
 import { PatientStateProvider } from '../context/PatientStateContext';
-import { PatientTrackingProvider } from '../context/PatientTrackingContext';
 import { TaskProvider }         from '../context/TaskContext';
-import { AlertProvider }        from '../context/AlertContext';
 
 import { CaregiverTriageScreen }          from '../screens/caregiver/CaregiverTriageScreen';
 import { CaregiverPatientDetailScreen }   from '../screens/caregiver/CaregiverPatientDetailScreen';
@@ -67,13 +65,9 @@ const CaregiverStack: React.FC = () => (
 );
 
 export const CaregiverNavigator: React.FC = () => (
-  <AlertProvider>
-    <PatientStateProvider>
-      <PatientTrackingProvider>
-        <TaskProvider>
-          <CaregiverStack />
-        </TaskProvider>
-      </PatientTrackingProvider>
-    </PatientStateProvider>
-  </AlertProvider>
+  <PatientStateProvider>
+    <TaskProvider>
+      <CaregiverStack />
+    </TaskProvider>
+  </PatientStateProvider>
 );

@@ -30,6 +30,8 @@ import { AuthProvider }         from './context/AuthContext';
 import { CaregiverProvider }    from './context/CaregiverContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { NotificationBanner }   from './components/shared/NotificationBanner';
+import { AlertProvider }        from './context/AlertContext';
+import { PatientTrackingProvider } from './context/PatientTrackingContext';
 import { RoleNavigator }        from './navigation/RoleNavigator';
 import { useInterFonts }        from './theme/fonts';
 import { C } from './theme/colors';
@@ -69,13 +71,19 @@ const AppShell: React.FC = () => {
     <GestureHandlerRootView style={s.root}>
       <ThemeProvider>
         <AuthProvider>
-          <CaregiverProvider>
-            <NotificationProvider>
-              <SafeAreaProvider>
-                <AppShellInner />
-              </SafeAreaProvider>
-            </NotificationProvider>
-          </CaregiverProvider>
+          <PatientTrackingProvider>
+            <AlertProvider>
+              <CaregiverProvider>
+                <NotificationProvider>
+                  <SafeAreaProvider>
+                    <NavigationContainer>
+                      <RoleNavigator />
+                    </NavigationContainer>
+                  </SafeAreaProvider>
+                </NotificationProvider>
+              </CaregiverProvider>
+            </AlertProvider>
+          </PatientTrackingProvider>
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

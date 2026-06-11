@@ -19,7 +19,7 @@ import { useFamilyContext } from '../../context/FamilyContext';
 import { useAuth } from '../../context/AuthContext';
 import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { fetchPatientGeofences, fetchBreachHistory, type Coords, type GeofenceZone } from '../../utils/geofenceUtils';
-import { connectSocket } from '../../services/socketClient';
+import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import { relativeTime } from '../../utils/dateUtils';
 import { C } from '../../theme/colors';
@@ -227,47 +227,28 @@ export const FamilyMapScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Real-time WebSocket subscription for care circle location updates
   useEffect(() => {
-    if (!firebaseUser || !patientId) return;
-    let socketRef: any;
+    const socket = getSocket();
+    if (!socket || !patientId) return;
 
-    const setupSocket = async () => {
-      try {
-        const token = await firebaseUser.getIdToken();
-        socketRef = connectSocket(token);
-        socketRef.emit('join:patient', patientId);
+    socket.emit('join:patient', patientId);
 
-        const handleCareCircleLocationUpdate = (data: any) => {
-          if (data.patient_id !== patientId) return;
-          const { member } = data;
-          if (member && member.lat != null && member.lng != null) {
-            setMemberLocations((prev) => ({
-              ...prev,
-              [member.id]: member,
-            }));
-          }
-        };
-
-        socketRef.on('care-circle:location-update', handleCareCircleLocationUpdate);
-
-        return () => {
-          if (socketRef) {
-            socketRef.off('care-circle:location-update', handleCareCircleLocationUpdate);
-          }
-        };
-      } catch (err) {
-        console.warn('FamilyMapScreen socket setup failed:', err);
+    const handleCareCircleLocationUpdate = (data: any) => {
+      if (data.patient_id !== patientId) return;
+      const { member } = data;
+      if (member && member.lat != null && member.lng != null) {
+        setMemberLocations((prev) => ({
+          ...prev,
+          [member.id]: member,
+        }));
       }
     };
 
-    let cleanupFn: (() => void) | undefined;
-    void setupSocket().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    socket.on('care-circle:location-update', handleCareCircleLocationUpdate);
 
     return () => {
-      if (cleanupFn) cleanupFn();
+      socket.off('care-circle:location-update', handleCareCircleLocationUpdate);
     };
-  }, [firebaseUser, patientId]);
+  }, [patientId]);
 
   const handleRefresh = useCallback(async () => {
     await refreshLocation();

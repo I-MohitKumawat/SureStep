@@ -17,7 +17,7 @@ import * as taskService from '../services/taskService';
 import { enqueue, flush, hasPendingTaskUpdate } from '../utils/offlineQueue';
 import type { TaskCategory, TaskPriority } from '../types/enums';
 import { useAuth } from './AuthContext';
-import { connectSocket } from '../services/socketClient';
+import { getSocket } from '../services/socketClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -171,55 +171,35 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time WebSocket subscriptions for task events
   useEffect(() => {
-    if (!firebaseUser) return;
-    let socketRef: any;
+    const socket = getSocket();
+    if (!socket || !firebaseUser) return;
 
-    const setupSocket = async () => {
-      try {
-        const token = await firebaseUser.getIdToken();
-        socketRef = connectSocket(token);
-
-        const handleTaskUpdate = (data: any) => {
-          if (!data || !data.task) return;
-          const updatedTask = mapBackendTaskToFrontend(data.task);
-          setTasks((prev) => {
-            const exists = prev.some((t) => t.id === updatedTask.id);
-            if (exists) {
-              return prev.map((t) => (t.id === updatedTask.id ? updatedTask : t));
-            } else {
-              return [...prev, updatedTask];
-            }
-          });
-        };
-
-        const handleTaskDelete = (data: any) => {
-          if (!data || !data.taskId) return;
-          setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
-        };
-
-        socketRef.on('task:update', handleTaskUpdate);
-        socketRef.on('task:change', handleTaskUpdate);
-        socketRef.on('task:delete', handleTaskDelete);
-
-        return () => {
-          if (socketRef) {
-            socketRef.off('task:update', handleTaskUpdate);
-            socketRef.off('task:change', handleTaskUpdate);
-            socketRef.off('task:delete', handleTaskDelete);
-          }
-        };
-      } catch (err) {
-        console.warn('[TaskContext] WebSocket setup failed:', err);
-      }
+    const handleTaskUpdate = (data: any) => {
+      if (!data || !data.task) return;
+      const updatedTask = mapBackendTaskToFrontend(data.task);
+      setTasks((prev) => {
+        const exists = prev.some((t) => t.id === updatedTask.id);
+        if (exists) {
+          return prev.map((t) => (t.id === updatedTask.id ? updatedTask : t));
+        } else {
+          return [...prev, updatedTask];
+        }
+      });
     };
 
-    let cleanupFn: (() => void) | undefined;
-    void setupSocket().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    const handleTaskDelete = (data: any) => {
+      if (!data || !data.taskId) return;
+      setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
+    };
+
+    socket.on('task:update', handleTaskUpdate);
+    socket.on('task:change', handleTaskUpdate);
+    socket.on('task:delete', handleTaskDelete);
 
     return () => {
-      if (cleanupFn) cleanupFn();
+      socket.off('task:update', handleTaskUpdate);
+      socket.off('task:change', handleTaskUpdate);
+      socket.off('task:delete', handleTaskDelete);
     };
   }, [firebaseUser]);
 

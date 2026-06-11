@@ -11,7 +11,7 @@ import type { Coords, GeofenceZone } from '../utils/geofenceUtils';
 import type { ApiPatientState } from '../services/geofenceService';
 import { fetchPatientState, requestLocationRefresh } from '../services/geofenceService';
 import { fetchLatestPatientLocation, fetchPatientGeofences } from '../utils/geofenceUtils';
-import { connectSocket } from '../services/socketClient';
+import { getSocket } from '../services/socketClient';
 import { useAuth } from './AuthContext';
 
 type PatientTrackingContextValue = {
@@ -98,92 +98,72 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
 
   // 2. Real-time WebSocket subscriptions scoped to activePatientId
   useEffect(() => {
-    if (!firebaseUser || !activePatientId) return;
-    let socketRef: any;
+    const socket = getSocket();
+    if (!socket || !activePatientId) return;
 
-    const setupSocket = async () => {
-      try {
-        const token = await firebaseUser.getIdToken();
-        socketRef = connectSocket(token);
-        socketRef.emit('join:patient', activePatientId);
+    socket.emit('join:patient', activePatientId);
 
-        const handleStateChange = (data: any) => {
-          if (data.patient_id !== activePatientId) return;
+    const handleStateChange = (data: any) => {
+      if (data.patient_id !== activePatientId) return;
 
-          const ts = data.computed_at ? new Date(data.computed_at).getTime() : Date.now();
+      const ts = data.computed_at ? new Date(data.computed_at).getTime() : Date.now();
 
-          if (data.coords) {
-            setCoords({ latitude: data.coords.latitude, longitude: data.coords.longitude });
-            setCoordsTs(ts);
-          } else if (data.last_known_lat != null && data.last_known_lng != null) {
-            setCoords({ latitude: data.last_known_lat, longitude: data.last_known_lng });
-            setCoordsTs(ts);
-          }
+      if (data.coords) {
+        setCoords({ latitude: data.coords.latitude, longitude: data.coords.longitude });
+        setCoordsTs(ts);
+      } else if (data.last_known_lat != null && data.last_known_lng != null) {
+        setCoords({ latitude: data.last_known_lat, longitude: data.last_known_lng });
+        setCoordsTs(ts);
+      }
 
-          setPatientState((prev) => ({
-            patient_id:       activePatientId,
-            location_state:   data.location_state   ?? prev?.location_state   ?? 'NO_SIGNAL',
-            safety_state:     data.safety_state     ?? prev?.safety_state     ?? 'SAFE',
-            routine_state:    data.routine_state    ?? prev?.routine_state    ?? 'ON_TRACK',
-            engagement_state: data.engagement_state ?? prev?.engagement_state ?? 'NO_INTERACTION',
-            last_known_lat:   data.last_known_lat   ?? prev?.last_known_lat   ?? null,
-            last_known_lng:   data.last_known_lng   ?? prev?.last_known_lng   ?? null,
-            last_known_zone_id: data.last_known_zone_id ?? prev?.last_known_zone_id ?? null,
-            current_zone_name: data.current_zone_name ?? prev?.current_zone_name ?? null,
-            last_ping_at:     data.computed_at      ?? prev?.last_ping_at     ?? null,
-            stationary_since: prev?.stationary_since ?? null,
-            sos_active:       data.sos_active       ?? prev?.sos_active       ?? false,
-            computed_at:      data.computed_at      ?? prev?.computed_at      ?? new Date().toISOString(),
-            battery_pct:      data.battery_pct      ?? prev?.battery_pct      ?? null,
-            network_status:   data.network_status   ?? prev?.network_status   ?? null,
-          }));
+      setPatientState((prev) => ({
+        patient_id:       activePatientId,
+        location_state:   data.location_state   ?? prev?.location_state   ?? 'NO_SIGNAL',
+        safety_state:     data.safety_state     ?? prev?.safety_state     ?? 'SAFE',
+        routine_state:    data.routine_state    ?? prev?.routine_state    ?? 'ON_TRACK',
+        engagement_state: data.engagement_state ?? prev?.engagement_state ?? 'NO_INTERACTION',
+        last_known_lat:   data.last_known_lat   ?? prev?.last_known_lat   ?? null,
+        last_known_lng:   data.last_known_lng   ?? prev?.last_known_lng   ?? null,
+        last_known_zone_id: data.last_known_zone_id ?? prev?.last_known_zone_id ?? null,
+        current_zone_name: data.current_zone_name ?? prev?.current_zone_name ?? null,
+        last_ping_at:     data.computed_at      ?? prev?.last_ping_at     ?? null,
+        stationary_since: prev?.stationary_since ?? null,
+        sos_active:       data.sos_active       ?? prev?.sos_active       ?? false,
+        computed_at:      data.computed_at      ?? prev?.computed_at      ?? new Date().toISOString(),
+        battery_pct:      data.battery_pct      ?? prev?.battery_pct      ?? null,
+        network_status:   data.network_status   ?? prev?.network_status   ?? null,
+      }));
 
-          const accuracyVal = data.accuracy !== undefined ? data.accuracy : data.accuracy_m;
-          if (accuracyVal !== undefined && accuracyVal !== null) {
-            setAccuracyM(accuracyVal);
-          }
+      const accuracyVal = data.accuracy !== undefined ? data.accuracy : data.accuracy_m;
+      if (accuracyVal !== undefined && accuracyVal !== null) {
+        setAccuracyM(accuracyVal);
+      }
 
-          const speedVal = data.speed !== undefined ? data.speed : data.speed_kmh;
-          if (speedVal !== undefined && speedVal !== null) {
-            setSpeedKmh(speedVal);
-          }
-        };
-
-        const handleGeofencesChange = (data: any) => {
-          if (data.patientId !== activePatientId) return;
-          fetchPatientGeofences(activePatientId)
-            .then((fetchedZones) => {
-              if (fetchedZones) setZones(fetchedZones);
-            })
-            .catch((err) => {
-              console.warn('[PatientTrackingContext] Failed to refetch zones on socket event:', err);
-            });
-        };
-
-        socketRef.on('state:change', handleStateChange);
-        socketRef.on('geofences:change', handleGeofencesChange);
-
-        // Keep local cleanup function bound to the listener instance to avoid removing unrelated listeners
-        return () => {
-          if (socketRef) {
-            socketRef.off('state:change', handleStateChange);
-            socketRef.off('geofences:change', handleGeofencesChange);
-          }
-        };
-      } catch (err) {
-        console.warn('[PatientTrackingContext] WebSocket setup failed:', err);
+      const speedVal = data.speed !== undefined ? data.speed : data.speed_kmh;
+      if (speedVal !== undefined && speedVal !== null) {
+        setSpeedKmh(speedVal);
       }
     };
 
-    let cleanupFn: (() => void) | undefined;
-    void setupSocket().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    const handleGeofencesChange = (data: any) => {
+      if (data.patientId !== activePatientId) return;
+      fetchPatientGeofences(activePatientId)
+        .then((fetchedZones) => {
+          if (fetchedZones) setZones(fetchedZones);
+        })
+        .catch((err) => {
+          console.warn('[PatientTrackingContext] Failed to refetch zones on socket event:', err);
+        });
+    };
+
+    socket.on('state:change', handleStateChange);
+    socket.on('geofences:change', handleGeofencesChange);
 
     return () => {
-      if (cleanupFn) cleanupFn();
+      socket.off('state:change', handleStateChange);
+      socket.off('geofences:change', handleGeofencesChange);
     };
-  }, [firebaseUser, activePatientId]);
+  }, [activePatientId]);
 
   // 3. Centralized location and state refresh loop
   const refreshLocation = useCallback(async () => {
