@@ -14,6 +14,9 @@ import { CognitionProvider }    from '../context/CognitionContext';
 import { FamiliarityProvider }  from '../context/FamiliarityContext';
 import { CaregiverProvider }    from '../context/CaregiverContext';
 
+import { ReminderProvider }      from '../context/ReminderContext';
+import { ReminderOverlay }       from '../components/shared/ReminderOverlay';
+
 import { PatientHomeScreen }       from '../screens/patient/PatientHomeScreen';
 import { PatientGamesScreen }      from '../screens/patient/PatientGamesScreen';
 import { PatientStoriesScreen }    from '../screens/patient/PatientStoriesScreen';
@@ -25,7 +28,9 @@ import { PatientAiScreen }         from '../screens/patient/PatientAiScreen';
 import { ActivityDetailScreen }    from '../screens/patient/ActivityDetailScreen';
 import { ActivityPlayScreen }      from '../screens/patient/ActivityPlayScreen';
 import { ActivityReportsScreen }   from '../screens/patient/ActivityReportsScreen';
-import { NotificationHistoryScreen } from '../screens/shared/NotificationHistoryScreen';
+import { NotificationHistoryScreen }  from '../screens/shared/NotificationHistoryScreen';
+import { NotificationSettingsScreen } from '../screens/shared/NotificationSettingsScreen';
+import { NotificationTestScreen }     from '../screens/shared/NotificationTestScreen';
 import { PatientProfileScreen }    from '../screens/shared/PatientProfileScreen';
 
 const Stack = createNativeStackNavigator<PatientStackParams>();
@@ -43,7 +48,9 @@ const PatientStack: React.FC = () => (
     <Stack.Screen name="ActivityDetailScreen"    component={ActivityDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="ActivityPlayScreen"      component={ActivityPlayScreen}   options={{ animation: 'slide_from_bottom' }} />
     <Stack.Screen name="ActivityReportsScreen"   component={ActivityReportsScreen} options={{ animation: 'slide_from_right' }} />
-    <Stack.Screen name="NotificationHistoryScreen" component={NotificationHistoryScreen} />
+    <Stack.Screen name="NotificationHistoryScreen"  component={NotificationHistoryScreen} />
+    <Stack.Screen name="NotificationSettingsScreen" component={NotificationSettingsScreen} />
+    <Stack.Screen name="NotificationTestScreen"     component={NotificationTestScreen} />
     <Stack.Screen name="PatientProfileScreen"    component={PatientProfileScreen} />
   </Stack.Navigator>
 );
@@ -54,7 +61,10 @@ export const PatientNavigator: React.FC = () => (
       <VoiceProvider>
         <TaskProvider>
           <CaregiverProvider>
-            <PatientStack />
+            <ReminderProvider>
+              <PatientStack />
+              <ReminderOverlay />
+            </ReminderProvider>
           </CaregiverProvider>
         </TaskProvider>
       </VoiceProvider>

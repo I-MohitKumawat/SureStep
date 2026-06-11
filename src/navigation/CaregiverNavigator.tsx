@@ -32,6 +32,8 @@ import { CaregiverProfileEditScreen }     from '../screens/caregiver/CaregiverPr
 import { CaregiverSettingsScreen }        from '../screens/caregiver/CaregiverSettingsScreen';
 import { CaregiverCareCircleScreen }      from '../screens/caregiver/CaregiverCareCircleScreen';
 import { NotificationHistoryScreen }      from '../screens/shared/NotificationHistoryScreen';
+import { NotificationSettingsScreen }     from '../screens/shared/NotificationSettingsScreen';
+import { NotificationTestScreen }         from '../screens/shared/NotificationTestScreen';
 import { PatientProfileScreen }           from '../screens/shared/PatientProfileScreen';
 
 const Stack = createNativeStackNavigator<CaregiverStackParams>();
@@ -58,6 +60,8 @@ const CaregiverStack: React.FC = () => (
     <Stack.Screen name="CaregiverSettingsScreen"        component={CaregiverSettingsScreen} />
     <Stack.Screen name="CaregiverCareCircleScreen"      component={CaregiverCareCircleScreen} />
     <Stack.Screen name="NotificationHistoryScreen"      component={NotificationHistoryScreen} />
+    <Stack.Screen name="NotificationSettingsScreen"     component={NotificationSettingsScreen} />
+    <Stack.Screen name="NotificationTestScreen"         component={NotificationTestScreen} />
     <Stack.Screen name="PatientProfileScreen"           component={PatientProfileScreen} />
   </Stack.Navigator>
 );

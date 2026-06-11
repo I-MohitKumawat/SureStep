@@ -22,6 +22,11 @@ import { setFirebaseTokenResolver, clearFirebaseTokenResolver } from '../service
 import { getMe } from '../services/userService';
 import { bootstrapFcmToken } from '../services/fcmTokenService';
 import locationService from '../services/locationService';
+import {
+  requestBackgroundLocationPermission,
+  startBackgroundLocationUpdates,
+  stopBackgroundLocationUpdates,
+} from '../services/backgroundLocationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,6 +113,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setStatus('authenticated');
           // Register FCM device token now that we have an authenticated session
           void bootstrapFcmToken();
+          // For patients: start background location tracking
+          if (dbUser.role === 'PATIENT') {
+            void (async () => {
+              const granted = await requestBackgroundLocationPermission();
+              if (granted) await startBackgroundLocationUpdates();
+            })();
+          }
         }
       } catch (err: any) {
         // If getMe fails for ANY reason (404 = new user, network error, etc.),
@@ -144,6 +156,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setFirebaseUser(null);
       setUser(null);
       setStatus('unauthenticated');
+      // Stop patient background location on logout
+      void stopBackgroundLocationUpdates();
     }
   }, []);
 

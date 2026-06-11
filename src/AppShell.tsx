@@ -28,10 +28,30 @@ import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider }        from './theme/ThemeContext';
 import { AuthProvider }         from './context/AuthContext';
 import { CaregiverProvider }    from './context/CaregiverContext';
-import { NotificationProvider } from './context/NotificationContext';
+import { NotificationProvider, useNotifications } from './context/NotificationContext';
+import { NotificationBanner }   from './components/shared/NotificationBanner';
 import { RoleNavigator }        from './navigation/RoleNavigator';
 import { useInterFonts }        from './theme/fonts';
 import { C } from './theme/colors';
+
+/** Inner shell — reads NotificationContext for the banner. */
+const AppShellInner: React.FC = () => {
+  const { banner, dismissBanner } = useNotifications();
+  return (
+    <>
+      <NavigationContainer>
+        <RoleNavigator />
+      </NavigationContainer>
+      <NotificationBanner
+        visible={banner.visible}
+        title={banner.title}
+        body={banner.body}
+        type={banner.type}
+        onDismiss={dismissBanner}
+      />
+    </>
+  );
+};
 
 const AppShell: React.FC = () => {
   const fontsLoaded = useInterFonts();
@@ -52,9 +72,7 @@ const AppShell: React.FC = () => {
           <CaregiverProvider>
             <NotificationProvider>
               <SafeAreaProvider>
-                <NavigationContainer>
-                  <RoleNavigator />
-                </NavigationContainer>
+                <AppShellInner />
               </SafeAreaProvider>
             </NotificationProvider>
           </CaregiverProvider>
