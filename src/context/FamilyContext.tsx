@@ -92,12 +92,12 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // ─── Real-time socket subscriptions ──────────────────────────────────────
   useEffect(() => {
     const socket = getSocket();
-    if (!socket || !patientIdRef.current) return;
+    if (!socket || !patient?.id) return;
 
-    socket.emit('join:patient', patientIdRef.current);
+    socket.emit('join:patient', patient.id);
 
     const handleStateChange = (data: any) => {
-      if (data.patient_id !== patientIdRef.current) return;
+      if (data.patient_id !== patient.id) return;
       updateLocalPatientState({
         safety_state:    data.safety_state,
         location_state:  data.location_state,
@@ -110,9 +110,19 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     };
 
+    const handleRelationshipChange = (data: any) => {
+      console.log('[FamilyContext] relationship:change received:', data);
+      void refresh();
+    };
+
     socket.on('state:change', handleStateChange);
-    return () => { socket.off('state:change', handleStateChange); };
-  }, [patient?.id, updateLocalPatientState]);
+    socket.on('relationship:change', handleRelationshipChange);
+
+    return () => {
+      socket.off('state:change', handleStateChange);
+      socket.off('relationship:change', handleRelationshipChange);
+    };
+  }, [patient?.id, updateLocalPatientState, refresh]);
 
   return (
     <FamilyContext.Provider

@@ -17,7 +17,7 @@ import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { fetchPatientGeofences, type GeofenceZone } from '../../utils/geofenceUtils';
 import { fetchPatientCareCircle, type CareCircleMember } from '../../services/geofenceService';
 import { RoutineCapsule, type RoutineItemData } from '../../components/shared/RoutineCapsule';
-import { connectSocket } from '../../services/socketClient';
+import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
@@ -48,7 +48,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
   const { firebaseUser } = useAuth();
   const { patient, isLoading, hasPatient } = useFamilyContext();
   const { tasks, loadTasksForPatient } = useTasks();
-  const { setActivePatientId, coords, zones: trackingZones, setZones: setTrackingZones } = usePatientTracking();
+  const { setActivePatientId, coords, zones: trackingZones, setZones: setTrackingZones, patientState } = usePatientTracking();
   const [zones,  setZones]  = useState<GeofenceZone[]>([]);
   const [careCircle, setCareCircle] = useState<CareCircleMember[]>([]);
   const [memberLocations, setMemberLocations] = useState<Record<string, {
@@ -102,47 +102,28 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
 
   // Real-time WebSocket subscription for care circle location updates
   useEffect(() => {
-    if (!firebaseUser || !patient?.id) return;
-    let socketRef: any;
+    const socket = getSocket();
+    if (!socket || !patient?.id) return;
 
-    const setupSocket = async () => {
-      try {
-        const token = await firebaseUser.getIdToken();
-        socketRef = connectSocket(token);
-        socketRef.emit('join:patient', patient.id);
+    socket.emit('join:patient', patient.id);
 
-        const handleCareCircleLocationUpdate = (data: any) => {
-          if (data.patient_id !== patient.id) return;
-          const { member } = data;
-          if (member && member.lat != null && member.lng != null) {
-            setMemberLocations((prev) => ({
-              ...prev,
-              [member.id]: member,
-            }));
-          }
-        };
-
-        socketRef.on('care-circle:location-update', handleCareCircleLocationUpdate);
-
-        return () => {
-          if (socketRef) {
-            socketRef.off('care-circle:location-update', handleCareCircleLocationUpdate);
-          }
-        };
-      } catch (err) {
-        console.warn('FamilyFeedScreen socket setup failed:', err);
+    const handleCareCircleLocationUpdate = (data: any) => {
+      if (data.patient_id !== patient.id) return;
+      const { member } = data;
+      if (member && member.lat != null && member.lng != null) {
+        setMemberLocations((prev) => ({
+          ...prev,
+          [member.id]: member,
+        }));
       }
     };
 
-    let cleanupFn: (() => void) | undefined;
-    void setupSocket().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    socket.on('care-circle:location-update', handleCareCircleLocationUpdate);
 
     return () => {
-      if (cleanupFn) cleanupFn();
+      socket.off('care-circle:location-update', handleCareCircleLocationUpdate);
     };
-  }, [firebaseUser, patient?.id]);
+  }, [patient?.id]);
 
 
   if (isLoading) {
@@ -167,7 +148,15 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   const p = patient!;
-  const cfg = safetyConfig(p.safety_state, p.sos_active);
+  // Read safety/telemetry from patientState (PatientTrackingContext) falling back to local family patient state
+  const safetyState = patientState?.safety_state ?? p.safety_state;
+  const sosActive = patientState?.sos_active ?? p.sos_active;
+  const currentZoneName = patientState?.current_zone_name ?? p.current_zone_name;
+  const batteryPct = patientState?.battery_pct ?? p.battery_pct;
+  const networkStatus = patientState?.network_status ?? p.network_status;
+  const computedAt = patientState?.computed_at ?? p.computed_at;
+
+  const cfg = safetyConfig(safetyState, sosActive);
   const patientTasks = tasks.filter((t: any) => t.patientId === p.id);
   const doneCount = patientTasks.filter((t: any) => t.status === 'done').length;
   const pct = patientTasks.length > 0 ? Math.round((doneCount / patientTasks.length) * 100) : 0;
@@ -214,30 +203,30 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={s.badgeText}>{cfg.badge}</Text>
           </View>
           <Text style={[s.safetyText, { color: cfg.textColor }]}>{cfg.text}</Text>
-          {p.current_zone_name && (
+          {currentZoneName && (
             <View style={s.zoneLabelRow}>
               <Ionicons name="location-outline" size={14} color={C.textMuted} style={{ marginRight: 4 }} />
-              <Text style={s.zoneLabel}>{p.current_zone_name}</Text>
+              <Text style={s.zoneLabel}>{currentZoneName}</Text>
             </View>
           )}
           {/* Telemetry */}
           <View style={s.telemetryRow}>
-            {p.battery_pct != null && (
+            {batteryPct != null && (
               <View style={s.chip}>
                 <Ionicons name="battery-full-outline" size={12} color={C.textSecondary} style={{ marginRight: 4 }} />
-                <Text style={s.chipText}>{p.battery_pct}%</Text>
+                <Text style={s.chipText}>{batteryPct}%</Text>
               </View>
             )}
-            {p.network_status && (
+            {networkStatus && (
               <View style={s.chip}>
                 <Ionicons name="cellular-outline" size={12} color={C.textSecondary} style={{ marginRight: 4 }} />
-                <Text style={s.chipText}>{p.network_status}</Text>
+                <Text style={s.chipText}>{networkStatus}</Text>
               </View>
             )}
-            {p.computed_at && (
+            {computedAt && (
               <View style={s.chip}>
                 <Ionicons name="time-outline" size={12} color={C.textSecondary} style={{ marginRight: 4 }} />
-                <Text style={s.chipText}>{formatAge(p.computed_at)}</Text>
+                <Text style={s.chipText}>{formatAge(computedAt)}</Text>
               </View>
             )}
           </View>

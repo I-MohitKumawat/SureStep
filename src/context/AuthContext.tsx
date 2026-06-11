@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import type { UserRoleType } from '../types/enums';
 import { setFirebaseTokenResolver, clearFirebaseTokenResolver } from '../services/apiClient';
+import { connectSocket, disconnectSocket, setSocketTokenResolver } from '../services/socketClient';
 import { getMe } from '../services/userService';
 import { bootstrapFcmToken } from '../services/fcmTokenService';
 import locationService from '../services/locationService';
@@ -70,6 +71,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!fbUser) {
         // Signed out — clear everything
         clearFirebaseTokenResolver();
+        disconnectSocket();
         setFirebaseUser(null);
         setUser(null);
         setStatus('unauthenticated');
@@ -79,7 +81,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Signed in — wire up the Axios token resolver so every request carries
       // a fresh Firebase ID token automatically.
       setFirebaseUser(fbUser);
-      setFirebaseTokenResolver(() => getIdToken(fbUser));
+      const resolver = () => getIdToken(fbUser);
+      setFirebaseTokenResolver(resolver);
+      setSocketTokenResolver(resolver);
 
       // Now load the user's DB profile from the backend.
       try {
@@ -105,6 +109,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             role:      dbUser.role as UserRoleType,
             photo_url: dbUser.photo_url || undefined,
           });
+          // Connect socket first to avoid races
+          try {
+            const token = await resolver();
+            if (token) connectSocket(token);
+          } catch (tokenErr) {
+            console.warn('[AuthContext] Failed to resolve token for socket connection:', tokenErr);
+          }
           setStatus('authenticated');
           // Register FCM device token now that we have an authenticated session
           void bootstrapFcmToken();
@@ -126,8 +137,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return unsubscribe; // Clean up the listener on unmount
   }, []);
 
-  const login = useCallback((authUser: AuthUser) => {
+  const login = useCallback(async (authUser: AuthUser) => {
     setUser(authUser);
+    try {
+      const fbUser = getAuth().currentUser;
+      if (fbUser) {
+        const token = await fbUser.getIdToken();
+        if (token) connectSocket(token);
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Failed to connect socket on login:', err);
+    }
     setStatus('authenticated');
   }, []);
 
@@ -141,6 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('[AuthContext] Sign out error:', err);
     } finally {
       clearFirebaseTokenResolver();
+      disconnectSocket();
       setFirebaseUser(null);
       setUser(null);
       setStatus('unauthenticated');
@@ -152,7 +173,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const mockToken = `mock-dev-${role.toLowerCase()}-token`;
     
     // Set token resolver
-    setFirebaseTokenResolver(() => Promise.resolve(mockToken));
+    const resolver = () => Promise.resolve(mockToken);
+    setFirebaseTokenResolver(resolver);
+    setSocketTokenResolver(resolver);
 
     try {
       // Call backend to auto-provision / login the mock user
@@ -171,6 +194,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role:      dbUser?.role as UserRoleType,
         photo_url: dbUser?.photo_url || undefined,
       });
+      connectSocket(mockToken);
       setStatus('authenticated');
     } catch (err: any) {
       console.warn('[AuthContext] loginDevMode getMe failed, setting local mock state:', err?.message);
@@ -181,6 +205,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         name: `Demo ${role.charAt(0) + role.slice(1).toLowerCase()}`,
         role,
       });
+      connectSocket(mockToken);
       setStatus('authenticated');
     }
   }, []);

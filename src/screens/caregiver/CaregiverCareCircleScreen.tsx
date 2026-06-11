@@ -25,6 +25,7 @@ import {
   revokeInviteCode,
   type CareCircleMember,
 } from '../../services/familyService';
+import { getSocket } from '../../services/socketClient';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverCareCircleScreen'>;
 
@@ -150,6 +151,22 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleRelationshipChange = (data: any) => {
+      console.log('[CaregiverCareCircleScreen] relationship:change event received', data);
+      void loadData();
+    };
+
+    socket.on('relationship:change', handleRelationshipChange);
+
+    return () => {
+      socket.off('relationship:change', handleRelationshipChange);
+    };
   }, [loadData]);
 
   const handleGenerate = async () => {

@@ -24,9 +24,10 @@ import { CaregiverDetailView } from './CaregiverDetailView';
 import { PatientActivitiesView } from './PatientActivitiesScreen';
 import { useAuth } from '../../hooks/useAuth';
 import { useCaregiver } from '../../hooks/useCaregiver';
+import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { AiFab } from '../../components/shared/AiAssistantFab';
 import { writeLocationPing } from '../../utils/geofenceUtils';
-import { connectSocket, getSocket } from '../../services/socketClient';
+import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import type { PatientStackParams } from '../../types/navigation.types';
 import messaging from '@react-native-firebase/messaging';
@@ -63,6 +64,7 @@ function parseTaskTimeToToday(timeStr: string): Date {
 export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const { status, user, firebaseUser } = useAuth();
   const { tasks, loadTasksForPatient, updateTaskStatus } = useTasks();
+  const { setActivePatientId } = usePatientTracking();
   const isFocused = useIsFocused();
   // Accept initialTab from route params (from Games/Activities/Family screens)
   const initialTab = (route.params as any)?.initialTab as BottomTab | undefined;
@@ -303,12 +305,13 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 
-  // Start adaptive background location tracking
+  // Start adaptive background location tracking and sync active patient ID
   useEffect(() => {
     if (patientId) {
       void startBackgroundTracking(patientId);
+      setActivePatientId(patientId);
     }
-  }, [patientId]);
+  }, [patientId, setActivePatientId]);
 
   // Listen for foreground FCM location request push notifications
   useEffect(() => {
@@ -335,99 +338,92 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ─── Real-time WebSocket connection for location refresh requests ──────────────────
   useEffect(() => {
-    if (!firebaseUser || !patientId) return;
-    let socketRef: any;
+    const socket = getSocket();
+    if (!socket || !patientId) return;
 
-    void firebaseUser.getIdToken().then((token) => {
-      socketRef = connectSocket(token);
-      socketRef.emit('join:patient', patientId);
+    socket.emit('join:patient', patientId);
 
-      const handleLocationRequest = async () => {
-        console.log('[Patient] Received location refresh request from caregiver');
-        try {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          await writeLocationPing({
-            patientId,
-            coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
-            accuracyM: loc.coords.accuracy ?? undefined,
-            source: 'foreground',
-          });
-          console.log('[Patient] Successfully published fresh location ping');
-        } catch (err) {
-          console.warn('[Patient] Failed to get/publish fresh location fix:', err);
-        }
-      };
-
-      socketRef.on('location:request', handleLocationRequest);
-
-      const handleStateChange = (data: any) => {
-        console.log('[Patient] Safety state change received via WebSocket:', data);
-        const inEmergency =
-          data?.safety_status === 'WANDERING' ||
-          data?.safety_status === 'CRITICAL' ||
-          data?.safety_status === 'UNSAFE' ||
-          data?.sos_active === true;
-        void updateBackgroundTrackingMode(patientId, inEmergency);
-      };
-
-      socketRef.on('state:change', handleStateChange);
-
-      const handleRelationshipChange = (data: any) => {
-        console.log('[Patient] Relationship change received via WebSocket:', data);
-        if (patientId) {
-          void reloadCaregiver(patientId, true);
-        }
-      };
-
-      socketRef.on('relationship:change', handleRelationshipChange);
-
-      const handleReminderActive = (data: any) => {
-        console.log('[Patient] Reminder active received:', data.reminder);
-        setActiveReminder(data.reminder);
-      };
-      socketRef.on('reminder:active', handleReminderActive);
-
-      const handleReminderSnoozed = (data: any) => {
-        console.log('[Patient] Reminder snoozed received:', data.reminderId);
-        setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-      };
-      socketRef.on('reminder:snoozed', handleReminderSnoozed);
-
-      const handleReminderCompleted = (data: any) => {
-        console.log('[Patient] Reminder completed received:', data.reminderId);
-        setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-        void loadTasksForPatient(patientId);
-      };
-      socketRef.on('reminder:completed', handleReminderCompleted);
-
-      const handleReminderSkipped = (data: any) => {
-        console.log('[Patient] Reminder skipped received:', data.reminderId);
-        setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-        void loadTasksForPatient(patientId);
-      };
-      socketRef.on('reminder:skipped', handleReminderSkipped);
-
-      const handleReminderMissed = (data: any) => {
-        console.log('[Patient] Reminder missed received:', data.reminderId);
-        setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-        void loadTasksForPatient(patientId);
-      };
-      socketRef.on('reminder:missed', handleReminderMissed);
-    });
-
-    return () => {
-      if (socketRef) {
-        socketRef.off('location:request');
-        socketRef.off('state:change');
-        socketRef.off('relationship:change');
-        socketRef.off('reminder:active');
-        socketRef.off('reminder:snoozed');
-        socketRef.off('reminder:completed');
-        socketRef.off('reminder:skipped');
-        socketRef.off('reminder:missed');
+    const handleLocationRequest = async () => {
+      console.log('[Patient] Received location refresh request from caregiver');
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        await writeLocationPing({
+          patientId,
+          coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
+          accuracyM: loc.coords.accuracy ?? undefined,
+          source: 'foreground',
+        });
+        console.log('[Patient] Successfully published fresh location ping');
+      } catch (err) {
+        console.warn('[Patient] Failed to get/publish fresh location fix:', err);
       }
     };
-  }, [firebaseUser, patientId, reloadCaregiver, loadTasksForPatient]);
+
+    const handleStateChange = (data: any) => {
+      console.log('[Patient] Safety state change received via WebSocket:', data);
+      const inEmergency =
+        data?.safety_status === 'WANDERING' ||
+        data?.safety_status === 'CRITICAL' ||
+        data?.safety_status === 'UNSAFE' ||
+        data?.sos_active === true;
+      void updateBackgroundTrackingMode(patientId, inEmergency);
+    };
+
+    const handleRelationshipChange = (data: any) => {
+      console.log('[Patient] Relationship change received via WebSocket:', data);
+      if (patientId) {
+        void reloadCaregiver(patientId, true);
+      }
+    };
+
+    const handleReminderActive = (data: any) => {
+      console.log('[Patient] Reminder active received:', data.reminder);
+      setActiveReminder(data.reminder);
+    };
+
+    const handleReminderSnoozed = (data: any) => {
+      console.log('[Patient] Reminder snoozed received:', data.reminderId);
+      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
+    };
+
+    const handleReminderCompleted = (data: any) => {
+      console.log('[Patient] Reminder completed received:', data.reminderId);
+      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
+      void loadTasksForPatient(patientId);
+    };
+
+    const handleReminderSkipped = (data: any) => {
+      console.log('[Patient] Reminder skipped received:', data.reminderId);
+      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
+      void loadTasksForPatient(patientId);
+    };
+
+    const handleReminderMissed = (data: any) => {
+      console.log('[Patient] Reminder missed received:', data.reminderId);
+      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
+      void loadTasksForPatient(patientId);
+    };
+
+    socket.on('location:request', handleLocationRequest);
+    socket.on('state:change', handleStateChange);
+    socket.on('relationship:change', handleRelationshipChange);
+    socket.on('reminder:active', handleReminderActive);
+    socket.on('reminder:snoozed', handleReminderSnoozed);
+    socket.on('reminder:completed', handleReminderCompleted);
+    socket.on('reminder:skipped', handleReminderSkipped);
+    socket.on('reminder:missed', handleReminderMissed);
+
+    return () => {
+      socket.off('location:request', handleLocationRequest);
+      socket.off('state:change', handleStateChange);
+      socket.off('relationship:change', handleRelationshipChange);
+      socket.off('reminder:active', handleReminderActive);
+      socket.off('reminder:snoozed', handleReminderSnoozed);
+      socket.off('reminder:completed', handleReminderCompleted);
+      socket.off('reminder:skipped', handleReminderSkipped);
+      socket.off('reminder:missed', handleReminderMissed);
+    };
+  }, [patientId, reloadCaregiver, loadTasksForPatient]);
 
   // Load confirmed caregiver on focus or mount
   React.useEffect(() => {

@@ -34,7 +34,7 @@ import {
 } from '../utils/geofenceUtils';
 import { startBackgroundTracking, primeZonesCache } from '../utils/locationTask';
 import { fetchAlerts, type ApiAlert } from '../services/geofenceService';
-import { connectSocket, getSocket } from '../services/socketClient';
+import { getSocket } from '../services/socketClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,9 +166,8 @@ export function GeofenceProvider({
 
   // ── WebSocket subscription ────────────────────────────────────────────────
   useEffect(() => {
-    if (!accessToken) return;
-
-    const socket = connectSocket(accessToken);
+    const socket = getSocket();
+    if (!socket) return;
 
     // Real-time location/state updates from server-side awareness engine
     const onStateChange = (data: any) => {
@@ -215,7 +214,7 @@ export function GeofenceProvider({
       socket.off('alert:acknowledged', onAlertAck);
       socket.off('sos:triggered',     onSOS);
     };
-  }, [accessToken, patientId]);
+  }, [patientId]);
 
   // ── Foreground location subscription ────────────────────────────────────
   const startForegroundTracking = useCallback(async () => {

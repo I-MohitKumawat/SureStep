@@ -23,84 +23,41 @@ import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import { AlertCard, type AlertSeverity } from '../../components/alerts/AlertCard';
 import type { AlertProgressStatus } from '../../components/alerts/StatusProgression';
-import { useAuth } from '../../context/AuthContext';
-import {
-  fetchAlerts,
-  acknowledgeAlert,
-  respondAlert,
-  resolveActiveIncident,
-  type ApiAlert,
-} from '../../services/geofenceService';
-import { connectSocket } from '../../services/socketClient';
+import { useAlerts } from '../../context/AlertContext';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientAlertsScreen'>;
 type FilterTab = 'active' | 'acknowledged' | 'resolved';
 
-const getSeverityLabel = (sev: string): AlertSeverity => {
-  if (sev === 'CRITICAL' || sev === 'URGENT') return 'URGENT';
-  if (sev === 'WARNING') return 'WARNING';
-  return 'INFO';
-};
-
-const getStatusLabel = (stat?: string): AlertProgressStatus => {
-  if (stat === 'ACKNOWLEDGED') return 'acknowledged';
-  if (stat === 'RESPONDING') return 'responding';
-  if (stat === 'RESOLVED') return 'resolved';
-  return 'new';
-};
-
-const formatAlertTitle = (type: string) => {
-  if (type === 'SOS_TRIGGERED') return 'Emergency – SOS Triggered';
-  if (type === 'GEOFENCE_BREACH') return 'Geofence Breach';
-  if (type === 'BATTERY_LOW') return 'Battery Low';
-  return 'Safety Alert';
-};
-
-const formatAlertDescription = (alert: ApiAlert, patientName: string) => {
-  if (alert.alert_type === 'SOS_TRIGGERED') {
-    return `${patientName} triggered an SOS emergency signal. Help is required immediately.`;
-  }
-  if (alert.alert_type === 'GEOFENCE_BREACH') {
-    const dist = alert.distance_from_zone_m ? `${Math.round(alert.distance_from_zone_m)}m` : '';
-    return `${patientName} has exited the safe boundary ${dist ? `and is ${dist} away` : ''}.`;
-  }
-  if (alert.alert_type === 'BATTERY_LOW') {
-    return `${patientName}'s device battery is critically low.`;
-  }
-  return `An alert of type ${alert.alert_type} was generated for ${patientName}.`;
-};
-
-const formatTimestamp = (dateStr: string) => {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch (_) {
-    return dateStr;
-  }
-};
-
 export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, route }) => {
   const { patientId, patientName, relationshipType } = route.params as any;
-  const { firebaseUser } = useAuth();
 
   const canResolve = !relationshipType || relationshipType === 'CAREGIVER' || relationshipType === 'GUARDIAN';
 
   const [activeTab, setActiveTab] = useState<FilterTab>('active');
-  const [alerts, setAlerts] = useState<ApiAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const {
+    getAlertsForPatient,
+    getUnackedCountForPatient,
+    acknowledgeAlert,
+    respondToAlert,
+    resolveAlert,
+    fetchPatientAlerts,
+  } = useAlerts();
+
+  const alerts = useMemo(() => {
+    return getAlertsForPatient(patientId);
+  }, [getAlertsForPatient, patientId]);
+
+  const activeAlertsCount = useMemo(() => {
+    return getUnackedCountForPatient(patientId);
+  }, [getUnackedCountForPatient, patientId]);
+
   // Load alerts from backend
   const loadAlerts = useCallback(async () => {
-    try {
-      const data = await fetchAlerts(patientId);
-      if (data && data.alerts) {
-        setAlerts(data.alerts);
-      }
-    } catch (err) {
-      console.warn('[AlertsScreen] Failed to fetch alerts:', err);
-    }
-  }, [patientId]);
+    await fetchPatientAlerts(patientId);
+  }, [patientId, fetchPatientAlerts]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -114,100 +71,14 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
     loadAlerts().finally(() => setLoading(false));
   }, [loadAlerts]);
 
-  // Socket connection and real-time synchronizer
-  useEffect(() => {
-    let socketRef: any;
-    let active = true;
-    const setupSocket = async () => {
-      try {
-        const token = await firebaseUser?.getIdToken();
-        if (!active) return;
-        if (token) {
-          socketRef = connectSocket(token);
-          socketRef.emit('join:patient', patientId);
-        }
-
-        if (socketRef) {
-          socketRef.on('alert:updated', ({ alert }: { alert: ApiAlert }) => {
-            if (alert && alert.patient_id === patientId) {
-              setAlerts(prev => {
-                const idx = prev.findIndex(a => a.id === alert.id);
-                if (idx !== -1) {
-                  const next = [...prev];
-                  next[idx] = alert;
-                  return next;
-                } else {
-                  return [alert, ...prev];
-                }
-              });
-            }
-          });
-
-          socketRef.on('sos:triggered', ({ alert }: { alert: ApiAlert }) => {
-            if (alert && alert.patient_id === patientId) {
-              setAlerts(prev => {
-                if (prev.some(a => a.id === alert.id)) return prev;
-                return [alert, ...prev];
-              });
-            }
-          });
-        }
-      } catch (err) {
-        console.warn('[AlertsScreen] Socket subscription setup failed:', err);
-      }
-    };
-
-    setupSocket();
-    return () => {
-      active = false;
-      if (socketRef) {
-        socketRef.off('alert:updated');
-        socketRef.off('sos:triggered');
-      }
-    };
-  }, [patientId, firebaseUser]);
-
-  // Count active alerts (status !== 'RESOLVED')
-  const activeAlertsCount = useMemo(() => {
-    return alerts.filter(a => a.status !== 'RESOLVED' && a.status !== 'RESPONDING').length;
-  }, [alerts]);
-
   // Filter alerts by tab
   const filteredAlerts = useMemo(() => {
     return alerts.filter(a => {
-      if (activeTab === 'active') return a.status === 'OPEN' || !a.status;
-      if (activeTab === 'acknowledged') return a.status === 'ACKNOWLEDGED' || a.status === 'RESPONDING';
-      return a.status === 'RESOLVED';
+      if (activeTab === 'active') return a.status === 'new';
+      if (activeTab === 'acknowledged') return a.status === 'acknowledged' || a.status === 'responding';
+      return a.status === 'resolved';
     });
   }, [alerts, activeTab]);
-
-  // Action Button Handlers
-  const handleAcknowledge = async (id: string) => {
-    try {
-      const updated = await acknowledgeAlert(id);
-      setAlerts(prev => prev.map(a => a.id === id ? updated : a));
-    } catch (err) {
-      console.warn('[AlertsScreen] Acknowledge error:', err);
-    }
-  };
-
-  const handleRespond = async (id: string) => {
-    try {
-      const updated = await respondAlert(id);
-      setAlerts(prev => prev.map(a => a.id === id ? updated : a));
-    } catch (err) {
-      console.warn('[AlertsScreen] Respond error:', err);
-    }
-  };
-
-  const handleResolve = async (id: string) => {
-    try {
-      await resolveActiveIncident(patientId);
-      await loadAlerts();
-    } catch (err) {
-      console.warn('[AlertsScreen] Resolve error:', err);
-    }
-  };
 
   // Render loader if first-time loading
   if (loading && alerts.length === 0) {
@@ -294,17 +165,17 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
         renderItem={({ item }) => (
           <AlertCard
             id={item.id}
-            title={formatAlertTitle(item.alert_type)}
-            description={formatAlertDescription(item, patientName)}
-            timestamp={formatTimestamp(item.created_at)}
-            severity={getSeverityLabel(item.severity)}
-            status={getStatusLabel(item.status)}
+            title={item.title}
+            description={item.description}
+            timestamp={item.timestamp}
+            severity={item.severity}
+            status={item.status}
             patientName={patientName}
-            responderName={item.responder_name}
-            responderRole={item.responder_role}
-            onAcknowledge={handleAcknowledge}
-            onRespond={handleRespond}
-            onResolve={canResolve ? handleResolve : undefined}
+            responderName={item.responderName}
+            responderRole={item.responderRole}
+            onAcknowledge={acknowledgeAlert}
+            onRespond={respondToAlert}
+            onResolve={canResolve ? resolveAlert : undefined}
           />
         )}
         contentContainerStyle={styles.listContainer}

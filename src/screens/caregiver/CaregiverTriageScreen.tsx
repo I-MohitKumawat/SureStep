@@ -46,7 +46,7 @@ import {
   IconSettings,
 } from '../../assets/icons/NavIcons';
 import { Ionicons } from '@expo/vector-icons';
-import { connectSocket } from '../../services/socketClient';
+import { getSocket } from '../../services/socketClient';
 import { fetchCaregiverAlertFeed, type ApiAlert } from '../../services/geofenceService';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverTriageScreen'>;
@@ -548,9 +548,10 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
 
   // ── WebSocket subscription per patient ─────────────────────────────────────────
   React.useEffect(() => {
-    if (!firebaseUser) return;
+    const socket = getSocket();
+    if (!socket) return;
     let active = true;
-    let socketInstance: any = null;
+
     const refreshData = () => {
       if (caregiverPhone) {
         void loadPatients(caregiverPhone);
@@ -565,36 +566,28 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
       }
     };
 
-    void firebaseUser.getIdToken().then((token) => {
-      if (!active) return;
-      const socket = connectSocket(token);
-      socketInstance = socket;
-
-      const ids = patientIds.split(',').filter(Boolean);
-      ids.forEach((patientId) => {
-        socket.emit('join:patient', { patientId });
-      });
-
-      socket.on('state:change', refreshData);
-      socket.on('alert:new', refreshData);
-      socket.on('alert:acknowledged', refreshData);
-      socket.on('geofences:change', refreshData);
-      socket.on('task:change', refreshData);
-      socket.on('relationship:change', handleRelationshipChange);
+    const ids = patientIds.split(',').filter(Boolean);
+    ids.forEach((patientId) => {
+      socket.emit('join:patient', patientId);
     });
+
+    socket.on('state:change', refreshData);
+    socket.on('alert:new', refreshData);
+    socket.on('alert:acknowledged', refreshData);
+    socket.on('geofences:change', refreshData);
+    socket.on('task:change', refreshData);
+    socket.on('relationship:change', handleRelationshipChange);
 
     return () => {
       active = false;
-      if (socketInstance) {
-        socketInstance.off('state:change', refreshData);
-        socketInstance.off('alert:new', refreshData);
-        socketInstance.off('alert:acknowledged', refreshData);
-        socketInstance.off('geofences:change', refreshData);
-        socketInstance.off('task:change', refreshData);
-        socketInstance.off('relationship:change', handleRelationshipChange);
-      }
+      socket.off('state:change', refreshData);
+      socket.off('alert:new', refreshData);
+      socket.off('alert:acknowledged', refreshData);
+      socket.off('geofences:change', refreshData);
+      socket.off('task:change', refreshData);
+      socket.off('relationship:change', handleRelationshipChange);
     };
-  }, [firebaseUser, patientIds, caregiverPhone, loadPendingRequests]);
+  }, [patientIds, caregiverPhone, loadPatients, loadPendingRequests]);
 
   // ── Total alert count for nav badge ───────────────────────────────────────────
   const totalAlertCount = useMemo(() => {

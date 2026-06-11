@@ -12,8 +12,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { FamilyStackParams, FamilyTabParams } from '../types/navigation.types';
 
 import { PatientStateProvider }    from '../context/PatientStateContext';
-import { PatientTrackingProvider } from '../context/PatientTrackingContext';
-import { AlertProvider }           from '../context/AlertContext';
 import { FamilyProvider, useFamilyContext } from '../context/FamilyContext';
 import { TaskProvider }            from '../context/TaskContext';
 
@@ -66,15 +64,11 @@ const FamilyStack: React.FC = () => {
 };
 
 export const FamilyNavigator: React.FC = () => (
-  <AlertProvider>
-    <PatientStateProvider>
-      <PatientTrackingProvider>
-        <TaskProvider>
-          <FamilyProvider>
-            <FamilyStack />
-          </FamilyProvider>
-        </TaskProvider>
-      </PatientTrackingProvider>
-    </PatientStateProvider>
-  </AlertProvider>
+  <PatientStateProvider>
+    <TaskProvider>
+      <FamilyProvider>
+        <FamilyStack />
+      </FamilyProvider>
+    </TaskProvider>
+  </PatientStateProvider>
 );

@@ -21,9 +21,16 @@ type Socket = {
   emit:       (event: string, ...args: any[]) => void;
   disconnect: () => void;
   connected:  boolean;
+  auth?:      any;
+  connect?:   () => void;
 };
 
 let socket: Socket | null = null;
+let _getFirebaseToken: (() => Promise<string | null>) | null = null;
+
+export const setSocketTokenResolver = (resolver: () => Promise<string | null>) => {
+  _getFirebaseToken = resolver;
+};
 
 export const connectSocket = (accessToken: string): Socket => {
   if (socket?.connected) return socket;
@@ -32,7 +39,7 @@ export const connectSocket = (accessToken: string): Socket => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { io } = require('socket.io-client') as { io: (url: string, opts: object) => Socket };
-    const rawUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+    const rawUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
     const socketUrl = rawUrl.replace('/api/v1', '');
     console.log('[socketClient] Connecting to WebSocket URL:', socketUrl);
     socket = io(socketUrl, {
@@ -41,6 +48,21 @@ export const connectSocket = (accessToken: string): Socket => {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay:    1000,
+    });
+
+    socket.on('connect_error', async (err: any) => {
+      if (err.message === 'UNAUTHORIZED' && _getFirebaseToken) {
+        console.log('[socketClient] Connection unauthorized, refreshing token...');
+        try {
+          const token = await _getFirebaseToken();
+          if (token && socket) {
+            socket.auth = { token };
+            socket.connect?.();
+          }
+        } catch (e) {
+          console.error('[socketClient] Failed to refresh token on connect_error:', e);
+        }
+      }
     });
   } catch {
     console.warn('[socketClient] socket.io-client not installed — WebSocket disabled');

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator, Alert, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View,
+  StyleSheet, Text, TextInput, View, Clipboard, Modal, Animated, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
@@ -14,6 +14,7 @@ import { redeemInviteCode, requestAccessByPhone, getAccessStatus } from '../../s
 import { useFamilyContext } from '../../context/FamilyContext';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
+import { getSocket } from '../../services/socketClient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { FamilyStackParams } from '../../types/navigation.types';
 
@@ -30,6 +31,62 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
   const [error,     setError]     = useState<string | null>(null);
   const [success,   setSuccess]   = useState<string | null>(null);
 
+  // Scanner modal states
+  const [showScanner, setShowScanner] = useState(false);
+  const [modalCode, setModalCode] = useState('');
+  const [clipboardCode, setClipboardCode] = useState<string | null>(null);
+  const [isScannedSuccess, setIsScannedSuccess] = useState(false);
+
+  // Animated laser line positioning
+  const scanLineAnim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (showScanner) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanLineAnim, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scanLineAnim, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      scanLineAnim.setValue(0);
+    }
+  }, [showScanner, scanLineAnim]);
+
+  const translateY = scanLineAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [4, 212], // Size of viewfinder - laser height
+  });
+
+  // Read clipboard when scanner opens
+  useEffect(() => {
+    if (showScanner) {
+      setIsScannedSuccess(false);
+      const checkClipboard = async () => {
+        try {
+          const content = await Clipboard.getString();
+          if (content && content.trim().length >= 4 && content.trim().length <= 8) {
+            setClipboardCode(content.trim().toUpperCase());
+          } else {
+            setClipboardCode(null);
+          }
+        } catch (err) {
+          console.warn('Failed to read clipboard:', err);
+        }
+      };
+      void checkClipboard();
+    }
+  }, [showScanner]);
+
+  // Real-time access status listener and fallback polling loop
   useEffect(() => {
     let active = true;
     const checkStatus = async () => {
@@ -50,11 +107,21 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
         console.warn('Failed to fetch family access status:', err);
       }
     };
+
     void checkStatus();
+
+    const socket = getSocket();
+    if (socket) {
+      socket.on('relationship:change', checkStatus);
+    }
+
     const interval = setInterval(checkStatus, 5000);
     return () => {
       active = false;
       clearInterval(interval);
+      if (socket) {
+        socket.off('relationship:change', checkStatus);
+      }
     };
   }, [navigation, refresh]);
 
@@ -68,6 +135,47 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
     } catch (e: any) {
       setError(e?.response?.data?.error?.message ?? 'Invalid or expired code. Please check and try again.');
     } finally { setLoading(false); }
+  };
+
+  const handleUseClipboard = async () => {
+    if (!clipboardCode) return;
+    setIsScannedSuccess(true);
+    setLoading(true);
+    setTimeout(async () => {
+      try {
+        await redeemInviteCode(clipboardCode);
+        await refresh();
+        setShowScanner(false);
+        navigation.replace('FamilyFeedScreen');
+      } catch (e: any) {
+        setIsScannedSuccess(false);
+        Alert.alert('Scan Failed', e?.response?.data?.error?.message ?? 'Invalid code.');
+      } finally {
+        setLoading(false);
+      }
+    }, 1200);
+  };
+
+  const handleModalSubmit = async () => {
+    if (modalCode.trim().length < 4) {
+      Alert.alert('Invalid Code', 'Please enter a valid code.');
+      return;
+    }
+    setIsScannedSuccess(true);
+    setLoading(true);
+    setTimeout(async () => {
+      try {
+        await redeemInviteCode(modalCode.trim().toUpperCase());
+        await refresh();
+        setShowScanner(false);
+        navigation.replace('FamilyFeedScreen');
+      } catch (e: any) {
+        setIsScannedSuccess(false);
+        Alert.alert('Scan Failed', e?.response?.data?.error?.message ?? 'Invalid code.');
+      } finally {
+        setLoading(false);
+      }
+    }, 1200);
   };
 
   const handleRequestByPhone = async () => {
@@ -139,7 +247,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
               autoCorrect={false}
             />
             <Pressable
-              style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
+              style={[s.primaryBtn, loading && s.primaryBtnDisabled, { marginBottom: 12 }]}
               onPress={handleRedeemCode}
               disabled={loading}
             >
@@ -147,6 +255,17 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={s.primaryBtnText}>Link with Code</Text>
               }
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                s.scanQrBtn,
+                pressed && { opacity: 0.8 }
+              ]}
+              onPress={() => setShowScanner(true)}
+            >
+              <Ionicons name="camera-outline" size={20} color={C.primary} style={{ marginRight: 8 }} />
+              <Text style={s.scanQrBtnText}>Scan QR Code</Text>
             </Pressable>
           </View>
         )}
@@ -224,6 +343,111 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Simulated QR Scanner Viewfinder Modal */}
+      <Modal
+        visible={showScanner}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowScanner(false)}
+      >
+        <View style={s.scannerModalContainer}>
+          <SafeAreaView style={s.scannerSafeArea}>
+            {/* Header */}
+            <View style={s.scannerHeader}>
+              <Pressable
+                onPress={() => setShowScanner(false)}
+                style={s.scannerCloseBtn}
+              >
+                <Ionicons name="close" size={26} color="#FFFFFF" />
+              </Pressable>
+              <Text style={s.scannerTitle}>Scan Patient QR Code</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            {/* Viewfinder Area */}
+            <View style={s.viewfinderContainer}>
+              {/* Semi-transparent overlays around the viewfinder */}
+              <View style={s.overlayTop} />
+              <View style={s.viewfinderRow}>
+                <View style={s.overlaySide} />
+                <View style={[s.viewfinder, isScannedSuccess && s.viewfinderSuccess]}>
+                  {/* Four Corner Brackets */}
+                  <View style={[s.cornerBracket, s.topLeftCorner]} />
+                  <View style={[s.cornerBracket, s.topRightCorner]} />
+                  <View style={[s.cornerBracket, s.bottomLeftCorner]} />
+                  <View style={[s.cornerBracket, s.bottomRightCorner]} />
+                  
+                  {/* Laser Scan Line */}
+                  <Animated.View
+                    style={[
+                      s.scanLaser,
+                      { transform: [{ translateY }] }
+                    ]}
+                  />
+
+                  {isScannedSuccess && (
+                    <View style={s.successOverlay}>
+                      <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+                      <Text style={s.modalSuccessText}>Code Detected!</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={s.overlaySide} />
+              </View>
+              <View style={s.overlayBottom}>
+                <Text style={s.scannerInstruction}>
+                  Align QR code within the frame to scan
+                </Text>
+              </View>
+            </View>
+
+            {/* Interactive Clipboard/Input Controls at the bottom */}
+            <View style={s.scannerControls}>
+              {clipboardCode ? (
+                <Pressable
+                  style={s.clipboardPill}
+                  onPress={handleUseClipboard}
+                >
+                  <Ionicons name="clipboard-outline" size={16} color="#3B82F6" style={{ marginRight: 6 }} />
+                  <Text style={s.clipboardText} numberOfLines={1}>
+                    Use clipboard code: {clipboardCode}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={s.checkingClipboardText}>
+                  Copy code to clipboard to auto-simulate scan
+                </Text>
+              )}
+
+              {/* Manual Input inline field inside Modal */}
+              <View style={s.scannerInputRow}>
+                <TextInput
+                  style={s.scannerTextInput}
+                  value={modalCode}
+                  onChangeText={(v) => setModalCode(v.toUpperCase())}
+                  placeholder="Or enter 6-character code"
+                  placeholderTextColor="#9CA3AF"
+                  maxLength={8}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                <Pressable
+                  style={[s.scannerSubmitBtn, !modalCode.trim() && s.scannerSubmitBtnDisabled]}
+                  onPress={handleModalSubmit}
+                  disabled={!modalCode.trim() || loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={s.scannerSubmitBtnText}>Submit</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -303,4 +527,203 @@ const s = StyleSheet.create({
   infoBox:   { backgroundColor: C.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.border, marginTop: 8 },
   infoInner: { flexDirection: 'row', alignItems: 'flex-start' },
   infoText:  { fontFamily: F.regular, fontSize: 12, color: C.textMuted, lineHeight: 18, flex: 1 },
+
+  scanQrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  scanQrBtnText: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.primary,
+  },
+  scannerModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+  },
+  scannerSafeArea: {
+    flex: 1,
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  scannerCloseBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  scannerTitle: {
+    fontFamily: F.bold,
+    fontSize: 18,
+    color: '#FFFFFF',
+  },
+  viewfinderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overlayTop: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  viewfinderRow: {
+    flexDirection: 'row',
+    height: 220,
+  },
+  overlaySide: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  viewfinder: {
+    width: 220,
+    height: 220,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'transparent',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  viewfinderSuccess: {
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  overlayBottom: {
+    flex: 1.2,
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    alignItems: 'center',
+    paddingTop: 16,
+  },
+  scannerInstruction: {
+    fontFamily: F.medium,
+    fontSize: 14,
+    color: '#D1D5DB',
+  },
+  cornerBracket: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderColor: '#3B82F6',
+  },
+  topLeftCorner: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+  },
+  topRightCorner: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+  },
+  bottomLeftCorner: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+  },
+  bottomRightCorner: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+  },
+  scanLaser: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    height: 3,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.8,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 8,
+  },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSuccessText: {
+    fontFamily: F.bold,
+    fontSize: 16,
+    color: '#10B981',
+    marginTop: 8,
+  },
+  scannerControls: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  clipboardPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    maxWidth: '100%',
+  },
+  clipboardText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#2563EB',
+  },
+  checkingClipboardText: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 20,
+  },
+  scannerInputRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  scannerTextInput: {
+    flex: 1,
+    backgroundColor: '#1F2937',
+    borderWidth: 1.5,
+    borderColor: '#374151',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    color: '#FFFFFF',
+    fontFamily: F.medium,
+    fontSize: 15,
+  },
+  scannerSubmitBtn: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scannerSubmitBtnDisabled: {
+    opacity: 0.5,
+  },
+  scannerSubmitBtnText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
 });
