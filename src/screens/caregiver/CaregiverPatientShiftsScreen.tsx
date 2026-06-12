@@ -1,8 +1,9 @@
 ﻿import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet } from 'react-native';
 export const CaregiverPatientShiftsScreen: React.FC = () => (
   <View style={s.wrap}>
-    <Text style={s.emoji}>🚧</Text>
+    <Ionicons name="construct-outline" size={48} color="#6B7280" style={{ marginBottom: 16 }} />
     <Text style={s.title}>CaregiverPatientShiftsScreen</Text>
     <Text style={s.sub}>Coming soon</Text>
   </View>

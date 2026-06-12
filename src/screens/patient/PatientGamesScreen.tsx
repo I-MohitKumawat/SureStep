@@ -264,7 +264,7 @@ function WordFinderGame({ onDone }: { onDone: () => void }) {
     <View>
       <View style={styles.scoreBadgeRow}>
         <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>📋 {progress.length}/{target.length} letters</Text></View>
-        {progress === target && <View style={[styles.scoreBadge, { backgroundColor: '#D1FAE5' }]}><Text style={[styles.scoreBadgeText, { color: '#065F46' }]}>🎉 Correct!</Text></View>}
+        {progress === target && <View style={[styles.scoreBadge, { backgroundColor: '#D1FAE5' }]}><Text style={[styles.scoreBadgeText, { color: '#065F46' }]}>✓ Correct!</Text></View>}
       </View>
       <Text style={styles.gameHint}>Tap letters in order to spell: <Text style={{ color: C.primary }}>{target}</Text></Text>
       <View style={styles.lettersRow}>
@@ -313,7 +313,7 @@ function ColorSortGame({ onDone }: { onDone: () => void }) {
     <View>
       <View style={styles.scoreBadgeRow}>
         <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>â­ Score: {score}/{items.length}</Text></View>
-        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{done ? 'Done! 🎉' : `Q ${idx + 1}/${items.length}`}</Text></View>
+        <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{done ? 'Completed!' : `Q ${idx + 1}/${items.length}`}</Text></View>
       </View>
       <Text style={styles.gameHint}>What colour is the dot?</Text>
       <View style={styles.sortItem}>

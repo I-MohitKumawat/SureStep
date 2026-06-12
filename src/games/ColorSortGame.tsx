@@ -41,7 +41,7 @@ export function ColorSortGame({ onDone, onScoreUpdate }: GameProps) {
     <View>
       <View style={s.scoreRow}>
         <View style={s.badge}><Text style={s.badgeText}>⭐ Score: {score}/{items.length}</Text></View>
-        <View style={s.badge}><Text style={s.badgeText}>{done ? 'Done! 🎉' : `Q ${idx + 1}/${items.length}`}</Text></View>
+        <View style={s.badge}><Text style={s.badgeText}>{done ? 'Completed!' : `Q ${idx + 1}/${items.length}`}</Text></View>
       </View>
       <Text style={s.hint}>What colour is the dot?</Text>
       <View style={s.sortItem}>

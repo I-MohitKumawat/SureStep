@@ -14,6 +14,7 @@ import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
 import { useAuth } from '../../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'RoleSelectionScreen'>;
 
@@ -54,9 +55,9 @@ function StepIndicator({
 
 // ─── Role Card ───────────────────────────────────────────────────────────────
 function RoleCard({
-  emoji, title, description, selected, onPress,
+  icon, title, description, selected, onPress,
 }: {
-  emoji: string; title: string; description: string; selected: boolean; onPress: () => void;
+  icon: keyof typeof Ionicons.glyphMap; title: string; description: string; selected: boolean; onPress: () => void;
 }) {
   return (
     <Pressable
@@ -68,7 +69,7 @@ function RoleCard({
       ]}
     >
       <View style={[rc.bubble, selected && rc.bubbleSelected]}>
-        <Text style={rc.emoji}>{emoji}</Text>
+        <Ionicons name={icon} size={24} color={selected ? C.primary : C.textMuted} />
       </View>
 
       <View style={rc.textWrap}>
@@ -134,21 +135,21 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
           {/* Role cards */}
           <View style={s.cards}>
             <RoleCard
-              emoji="👵"
+              icon="heart-outline"
               title="I'm a Patient"
               description="Track daily routines and stay connected."
               selected={selectedRole === 'PATIENT'}
               onPress={() => setSelectedRole('PATIENT')}
             />
             <RoleCard
-              emoji="👩‍⚕️"
+              icon="medkit-outline"
               title="I'm a Caregiver"
               description="Manage patients and monitor safety."
               selected={selectedRole === 'CAREGIVER'}
               onPress={() => setSelectedRole('CAREGIVER')}
             />
             <RoleCard
-              emoji="👪"
+              icon="people-outline"
               title="I'm a Family Member"
               description="Observe, support, and stay informed."
               selected={selectedRole === 'FAMILY'}

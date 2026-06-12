@@ -16,6 +16,7 @@ export const styles = StyleSheet.create({
     borderRadius: 28,
     paddingBottom: 28,
     flexDirection: 'column',
+    flexShrink: 1,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 8 },
