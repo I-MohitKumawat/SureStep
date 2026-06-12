@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { PatientStackParams } from '../../types/navigation.types';
+import { Ionicons } from '@expo/vector-icons';
 
 type Nav = NativeStackNavigationProp<PatientStackParams>;
 
@@ -28,13 +29,7 @@ export const AiFab: React.FC<{ onPress?: () => void }> = ({ onPress }) => {
       accessibilityLabel="Ask AI"
       accessibilityRole="button"
     >
-      {/* Gemini-style 2Ã—2 sparkle cluster */}
-      <View style={styles.sparkleGrid}>
-        <Text style={styles.sparkBig}>âœ¦</Text>
-        <Text style={styles.sparkSmall}>âœ¦</Text>
-        <Text style={styles.sparkSmall}>âœ¦</Text>
-        <Text style={styles.sparkTiny}>âœ¦</Text>
-      </View>
+      <Ionicons name="sparkles" size={24} color="#fff" style={{ marginBottom: 1 }} />
       <Text style={styles.label}>Ask AI</Text>
     </Pressable>
   );

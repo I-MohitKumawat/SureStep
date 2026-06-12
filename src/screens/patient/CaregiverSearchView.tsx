@@ -10,6 +10,7 @@ import {
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import { searchCaregivers } from '../../services/relationshipService';
+import { Ionicons } from '@expo/vector-icons';
 
 export type CaregiverListing = {
   id: string; name: string; specialty: string; patients: number;
@@ -158,18 +159,18 @@ export const CaregiverSearchView: React.FC<Props> = ({ onSelect }) => {
                       {c.profile_photo_url
                         ? <Image source={{ uri: c.profile_photo_url }} style={s.avatar} />
                         : <View style={s.avatarFallback}>
-                            <Text style={s.avatarEmoji}>{c.emoji || '🧑‍⚕️'}</Text>
+                            <Ionicons name="person-outline" size={20} color={C.textMuted} />
                           </View>
                       }
                       {c.emergency_response && (
-                        <View style={s.emergencyDot}><Text style={{ fontSize: 8 }}>🚨</Text></View>
+                        <View style={[s.emergencyDot, { alignItems: 'center', justifyContent: 'center' }]}><Ionicons name="alert" size={8} color="#FFFFFF" /></View>
                       )}
                     </View>
 
                     <View style={s.info}>
                       <View style={s.nameRow}>
                         <Text style={s.name} numberOfLines={1}>{c.name}</Text>
-                        {c.can_assist_nearby && <Text style={s.nearbyBadge}>📍 Nearby</Text>}
+                        {c.can_assist_nearby && <Text style={s.nearbyBadge}><Ionicons name="location-sharp" size={10} color="#059669" /> Nearby</Text>}
                       </View>
                       <Text style={s.location} numberOfLines={1}>
                         {[c.location, c.service_radius_km ? `${c.service_radius_km}km radius` : null].filter(Boolean).join(' · ')}

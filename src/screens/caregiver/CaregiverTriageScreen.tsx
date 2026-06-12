@@ -699,7 +699,7 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
       {activeTab === 'Alerts' && (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PATIENT ALERTS</Text>
+            <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PATIENT NOTIFICATIONS</Text>
           </View>
 
           {/* ── Patient request section ────────────────────────────────────── */}
@@ -830,7 +830,7 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                     <View style={l3Styles.countRow}>
                       <View style={l3Styles.countChip}>
                         <Text style={l3Styles.countChipNum}>{totalAlerts}</Text>
-                        <Text style={l3Styles.countChipLabel}> Total Alerts</Text>
+                        <Text style={l3Styles.countChipLabel}> Notifications</Text>
                       </View>
                       {criticalCount > 0 && (
                         <View style={[l3Styles.countChip, l3Styles.countChipCrit]}>
@@ -914,13 +914,13 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
           {/* Read-only identity fields */}
           <Text style={settingsStyles.sectionHeading}>Account</Text>
           {([
-            { label: 'Phone Number', value: caregiverPhone ?? '—', emoji: '📞' },
-            { label: 'Role',         value: 'Caregiver',           emoji: '🧑‍⚕️' },
-            { label: 'Account Type', value: 'Standard',            emoji: '📊' },
-          ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
+            { label: 'Phone Number', value: caregiverPhone ?? '—', icon: 'call-outline' },
+            { label: 'Role',         value: 'Caregiver',           icon: 'person-outline' },
+            { label: 'Account Type', value: 'Standard',            icon: 'card-outline' },
+          ] as Array<{ label: string; value: string; icon: any }>).map((row) => (
             <View key={row.label} style={settingsStyles.fieldRow}>
               <View style={settingsStyles.fieldEmojiWrap}>
-                <Text style={settingsStyles.fieldEmoji}>{row.emoji}</Text>
+                <Ionicons name={row.icon} size={18} color={C.primary} />
               </View>
               <View style={settingsStyles.fieldTextWrap}>
                 <Text style={settingsStyles.fieldLabel}>{row.label}</Text>
@@ -934,13 +934,13 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
           {/* Preferences */}
           <Text style={settingsStyles.sectionHeading}>Preferences</Text>
           {([
-            { label: 'Notifications', value: 'Enabled', emoji: '🔔' },
-            { label: 'Language',      value: 'English', emoji: '🌐' },
-            { label: 'App Version',   value: '1.0.0',   emoji: 'â„¹ï¸'  },
-          ] as Array<{ label: string; value: string; emoji: string }>).map((row) => (
+            { label: 'Notifications', value: 'Enabled', icon: 'notifications-outline' },
+            { label: 'Language',      value: 'English', icon: 'globe-outline' },
+            { label: 'App Version',   value: '1.0.0',   icon: 'information-circle-outline' },
+          ] as Array<{ label: string; value: string; icon: any }>).map((row) => (
             <View key={row.label} style={settingsStyles.fieldRow}>
               <View style={settingsStyles.fieldEmojiWrap}>
-                <Text style={settingsStyles.fieldEmoji}>{row.emoji}</Text>
+                <Ionicons name={row.icon} size={18} color={C.primary} />
               </View>
               <View style={settingsStyles.fieldTextWrap}>
                 <Text style={settingsStyles.fieldLabel}>{row.label}</Text>
@@ -968,7 +968,7 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                   <IconComponent active={isActive} />
                 </View>
                 <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                  {tab}{tab === 'Alerts' && totalAlertCount > 0
+                  {tab === 'Home' ? 'Dashboard' : (tab === 'Alerts' ? 'Notifications' : tab)}{tab === 'Alerts' && totalAlertCount > 0
                   ? ` (${totalAlertCount})`
                   : ''}
                 </Text>

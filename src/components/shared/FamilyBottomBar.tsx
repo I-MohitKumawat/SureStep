@@ -40,7 +40,7 @@ export const FamilyBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation
                 color={isActive ? C.primary : C.textMuted}
               />
               <Text style={[styles.label, isActive && styles.labelActive]}>
-                {tab.name}
+                {tab.name === 'Home' ? 'Dashboard' : (tab.name === 'Alerts' ? 'Notifications' : tab.name)}
               </Text>
               {isActive && <View style={styles.activeIndicator} />}
             </Pressable>

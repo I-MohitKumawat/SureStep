@@ -118,23 +118,7 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
                 <Text style={styles.ctaTextOutline}>Create Account</Text>
               </Pressable>
 
-              <View style={styles.devContainer}>
-                <Text style={styles.devTitle}>🛠 DEVELOPER BYPASS OPTIONS</Text>
-                <View style={styles.devRow}>
-                  <Pressable
-                    onPress={() => void loginDevMode('PATIENT')}
-                    style={({ pressed }) => [styles.devBtn, pressed && styles.devBtnPressed]}
-                  >
-                    <Text style={styles.devBtnText}>Demo Patient</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void loginDevMode('CAREGIVER')}
-                    style={({ pressed }) => [styles.devBtn, pressed && styles.devBtnPressed]}
-                  >
-                    <Text style={styles.devBtnText}>Demo Caregiver</Text>
-                  </Pressable>
-                </View>
-              </View>
+
             </>
           )}
 
@@ -375,50 +359,5 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  devContainer: {
-    width: '100%',
-    marginTop: 18,
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  devTitle: {
-    fontFamily: F.bold,
-    fontSize: 11,
-    color: C.textMuted,
-    letterSpacing: 1.0,
-    marginBottom: 8,
-  },
-  devRow: {
-    flexDirection: 'row',
-    gap: 8,
-    width: '100%',
-  },
-  devBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: C.surface,
-    borderWidth: 1.5,
-    borderColor: C.borderMid,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  devBtnPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
-  },
-  devBtnText: {
-    fontFamily: F.bold,
-    fontSize: 13,
-    color: C.textPrimary,
-  },
+
 });

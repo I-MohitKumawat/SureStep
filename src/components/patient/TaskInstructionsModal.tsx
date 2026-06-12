@@ -3,6 +3,9 @@ import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { styles } from './patientStyles';
 import { getTaskMeta } from '../../utils/patientUtils';
 import type { Task } from './RoutineCard';
+import { getTaskIconInfo } from './RoutineCard';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { C } from '../../theme/colors';
 
 type Props = {
   visible: boolean;
@@ -17,7 +20,7 @@ export const TaskInstructionsModal: React.FC<Props> = ({
 }) => {
   if (!task) return null;
   const meta = getTaskMeta(task.title);
-  const displayEmoji = task.icon ?? meta.emoji;
+  const iconInfo = getTaskIconInfo(task);
 
   const renderSteps = (instructionsMd: string | undefined) => {
     if (!instructionsMd) {
@@ -76,7 +79,11 @@ export const TaskInstructionsModal: React.FC<Props> = ({
           </View>
 
           <View style={styles.detailIllustration}>
-            <Text style={styles.detailEmoji}>{displayEmoji}</Text>
+            {iconInfo.library === 'Feather' ? (
+              <Feather name={iconInfo.name as any} size={46} color={C.primary} />
+            ) : (
+              <Ionicons name={iconInfo.name as any} size={46} color={C.primary} />
+            )}
           </View>
 
           <Text style={styles.detailTitle}>{task.title}</Text>

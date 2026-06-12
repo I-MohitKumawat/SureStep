@@ -350,7 +350,7 @@ export function getRecommendations(): Activity[] {
 // â”€â”€â”€ Badge definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const BADGES: Record<string, { icon: string; label: string; desc: string }> = {
-  'first-play':     { icon: '🎉', label: 'First Step',      desc: 'Completed your first activity' },
+  'first-play':     { icon: 'award', label: 'First Step',      desc: 'Completed your first activity' },
   'week-streak':    { icon: '🔥', label: 'Week Warrior',    desc: '7-day activity streak' },
   'memory-master':  { icon: '🧠', label: 'Memory Master',   desc: 'Completed all memory games' },
   'chill-champion': { icon: '🌿', label: 'Chill Champion',  desc: 'Completed all relaxing activities' },

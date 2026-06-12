@@ -25,7 +25,7 @@ export function WordFinderGame({ onDone, onScoreUpdate }: GameProps) {
     <View>
       <View style={s.scoreRow}>
         <View style={s.badge}><Text style={s.badgeText}>📝 {progress.length}/{target.length} letters</Text></View>
-        {progress === target && <View style={[s.badge, { backgroundColor: '#D1FAE5' }]}><Text style={[s.badgeText, { color: '#065F46' }]}>🎉 Correct!</Text></View>}
+        {progress === target && <View style={[s.badge, { backgroundColor: '#D1FAE5' }]}><Text style={[s.badgeText, { color: '#065F46' }]}>✓ Correct!</Text></View>}
       </View>
       <Text style={s.hint}>Tap letters in order to spell: <Text style={{ color: C.primary }}>{target}</Text></Text>
       <View style={s.lettersRow}>

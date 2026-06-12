@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   Animated,
   Modal,
@@ -47,11 +48,11 @@ function HUD({
       {/* Top row: exit — title — pause */}
       <View style={hud.topRow}>
         <Pressable onPress={onExit} style={hud.iconBtn} hitSlop={10}>
-          <Text style={hud.iconBtnText}>❌</Text>
+          <Ionicons name="close" size={16} color={C.textPrimary} />
         </Pressable>
         <Text style={hud.title} numberOfLines={1}>{activity.title}</Text>
         <Pressable onPress={onPause} style={hud.iconBtn} hitSlop={10}>
-          <Text style={hud.iconBtnText}>{paused ? 'â–¶' : 'â¸'}</Text>
+          <Text style={hud.iconBtnText}>{paused ? 'play' : 'pause'}</Text>
         </Pressable>
       </View>
 
@@ -119,7 +120,7 @@ function ResultOverlay({
     <Modal transparent animationType="fade" visible>
       <View style={res.overlay}>
         <Animated.View style={[res.card, { transform: [{ scale: scaleAnim }] }]}>
-          <Text style={res.emoji}>🎉</Text>
+          <Ionicons name="trophy-outline" size={60} color="#F59E0B" style={{ marginBottom: 10 }} />
           <Text style={res.heading}>Amazing Work!</Text>
           <View style={res.scoreBox}>
             <Text style={res.scoreNum}>{score}</Text>
@@ -127,7 +128,7 @@ function ResultOverlay({
           </View>
           {/* Single restart button */}
           <Pressable onPress={onRestart} style={res.restartBtn}>
-            <Text style={res.restartText}>â†º  Play Again</Text>
+            <Text style={res.restartText}>Play Again</Text>
           </Pressable>
           <Pressable onPress={onExit} style={res.exitBtn}>
             <Text style={res.exitText}>â† Back to Activities</Text>
@@ -163,7 +164,7 @@ function PauseOverlay({ onResume, onExit }: { onResume: () => void; onExit: () =
           <Text style={pause.title}>Paused</Text>
           <Text style={pause.hint}>Take a breath — you're doing great!</Text>
           <Pressable onPress={onResume} style={pause.resumeBtn}>
-            <Text style={pause.resumeText}>â–¶  Resume</Text>
+            <Text style={pause.resumeText}>Resume</Text>
           </Pressable>
           <Pressable onPress={onExit} style={pause.exitBtn}>
             <Text style={pause.exitText}>Exit Activity</Text>
@@ -315,7 +316,7 @@ function GameBody({
     case 'breathing-exercise': return <NatureSoundsActivity {...props} />;
     default: return (
       <View style={{ padding: 32, alignItems: 'center' }}>
-        <Text style={{ fontSize: 40, marginBottom: 12 }}>🌟</Text>
+        <Ionicons name="sparkles-outline" size={48} color={C.textMuted} style={{ marginBottom: 12 }} />
         <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textSecondary, textAlign: 'center' }}>
           Activity coming soon!
         </Text>

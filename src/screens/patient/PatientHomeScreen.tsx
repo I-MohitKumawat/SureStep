@@ -432,7 +432,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
                 {confirmedCaregiver.profile_photo_url ? (
                   <Image source={{ uri: confirmedCaregiver.profile_photo_url }} style={styles.caregiverAvatar} />
                 ) : (
-                  <Text style={{ fontSize: 36 }}>{confirmedCaregiver.emoji || '👩‍⚕️'}</Text>
+                  <Ionicons name="person-circle-outline" size={42} color={C.primary} />
                 )}
                 <View>
                   <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
@@ -444,7 +444,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             <View style={styles.mainRoutineCard}>
               <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>PENDING REQUEST</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 }}>
-                <Text style={{ fontSize: 36 }}>⏳</Text>
+                <Ionicons name="time-outline" size={36} color="#F59E0B" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
                   <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
@@ -458,7 +458,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             </View>
           ) : (
             <View style={[styles.mainRoutineCard, { alignItems: 'center', paddingVertical: 32 }]}>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>👨‍👩‍👧</Text>
+              <Ionicons name="people-outline" size={48} color={C.textMuted} style={{ marginBottom: 12 }} />
               <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textPrimary, textAlign: 'center', marginBottom: 6 }}>No caregiver linked yet</Text>
               <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, textAlign: 'center' }}>
                 Go to the Search tab to find and link a caregiver.
@@ -472,41 +472,93 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
         <PatientActivitiesView navigation={navigation} />
 
       ) : activeTab === 'Search' && hasLinkedCaregiver ? (
-        // -- Confirmed Caregiver Profile Card ---------------------------------
+        // -- Redesigned Caregiver Profile ---------------------------------
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerCard}>
-            <View>
-              <Text style={styles.greetingOverline}>YOUR CAREGIVER</Text>
-              <Text style={[styles.greetingName, { fontSize: 28 }]}>{confirmedCaregiver.name}</Text>
-              <Text style={styles.greetingDate}>{confirmedCaregiver.specialty}</Text>
+          {/* Hero Profile Card */}
+          <View style={[styles.mainRoutineCard, { paddingVertical: 24, alignItems: 'center', marginBottom: 16 }]}>
+            <View style={styles.caregiverProfileAvatarWrap}>
+              {confirmedCaregiver.profile_photo_url ? (
+                <Image source={{ uri: confirmedCaregiver.profile_photo_url }} style={styles.caregiverProfileAvatarImage} />
+              ) : (
+                <Ionicons name="person-outline" size={54} color={C.textMuted} />
+              )}
             </View>
-            <View style={[styles.caregiverTile, { backgroundColor: '#e8f5e9' }]}>
-              <Text style={styles.caregiverIcon}>{confirmedCaregiver.emoji || '🧑‍⚕️'}</Text>
+
+            {/* Verification Badge */}
+            <View style={styles.verificationBadge}>
+              <Ionicons name="checkmark-circle" size={14} color="#065F46" style={{ marginRight: 4 }} />
+              <Text style={styles.verificationBadgeText}>Verified Care Partner</Text>
+            </View>
+
+            <Text style={styles.caregiverProfileName}>{confirmedCaregiver.name}</Text>
+            <Text style={styles.caregiverProfileSpecialty}>{confirmedCaregiver.specialty || 'Professional Caregiver'}</Text>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              <Ionicons name="location-outline" size={14} color={C.textMuted} style={{ marginRight: 4 }} />
+              <Text style={styles.caregiverProfileLocation}>{confirmedCaregiver.location || 'Bangalore, India'}</Text>
             </View>
           </View>
 
-          <View style={[styles.mainRoutineCard, { marginBottom: 12 }]}>
-            <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>CONTACT DETAILS</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 18, marginRight: 10 }}>📞</Text>
-              <View>
-                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.textSecondary }}>Phone Number</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.textPrimary }}>{confirmedCaregiver.id || 'Not available'}</Text>
+          {/* Quick Stats Rows */}
+          <View style={[styles.mainRoutineCard, { marginBottom: 16 }]}>
+            <Text style={styles.caregiverProfileSectionLabel}>PROFESSIONAL INFO</Text>
+            
+            <View style={styles.caregiverProfileRow}>
+              <View style={styles.caregiverProfileIconWrap}>
+                <Ionicons name="briefcase-outline" size={18} color={C.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.caregiverProfileFieldLabel}>Experience</Text>
+                <Text style={styles.caregiverProfileFieldValue}>
+                  {confirmedCaregiver.years_experience ? `${confirmedCaregiver.years_experience} Years of Professional Care` : 'Not specified'}
+                </Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, marginRight: 10 }}>📍</Text>
-              <View>
-                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.textSecondary }}>Location</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.textPrimary }}>{confirmedCaregiver.location || 'Bangalore, India'}</Text>
+
+            <View style={styles.caregiverProfileRow}>
+              <View style={styles.caregiverProfileIconWrap}>
+                <Ionicons name="language-outline" size={18} color={C.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.caregiverProfileFieldLabel}>Languages Spoken</Text>
+                <Text style={styles.caregiverProfileFieldValue}>
+                  {confirmedCaregiver.languages_spoken && confirmedCaregiver.languages_spoken.length > 0
+                    ? confirmedCaregiver.languages_spoken.join(', ')
+                    : 'English'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.caregiverProfileRow}>
+              <View style={styles.caregiverProfileIconWrap}>
+                <Ionicons name="call-outline" size={18} color={C.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.caregiverProfileFieldLabel}>Phone Number</Text>
+                <Text style={styles.caregiverProfileFieldValue}>{confirmedCaregiver.phone || 'Not provided'}</Text>
               </View>
             </View>
           </View>
 
+          {/* Specializations (rendered as chips) */}
+          {confirmedCaregiver.specializations && confirmedCaregiver.specializations.length > 0 && (
+            <View style={[styles.mainRoutineCard, { marginBottom: 16 }]}>
+              <Text style={styles.caregiverProfileSectionLabel}>SPECIALIZATIONS</Text>
+              <View style={styles.caregiverProfileChipRow}>
+                {confirmedCaregiver.specializations.map((spec) => (
+                  <View key={spec} style={styles.caregiverProfileChip}>
+                    <Text style={styles.caregiverProfileChipText}>{spec}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Bio */}
           <View style={styles.mainRoutineCard}>
-            <Text style={[styles.sectionTitle, { marginBottom: 8, fontSize: 14, letterSpacing: 0.6 }]}>BIO</Text>
-            <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.textSecondary, lineHeight: 20 }}>
-              {confirmedCaregiver.bio || 'No bio available.'}
+            <Text style={styles.caregiverProfileSectionLabel}>ABOUT</Text>
+            <Text style={styles.caregiverProfileBioText}>
+              {confirmedCaregiver.bio || 'No description available.'}
             </Text>
           </View>
         </ScrollView>
@@ -878,6 +930,7 @@ const styles = StyleSheet.create({
     width: '100%', backgroundColor: C.bg,
     borderRadius: 28, paddingBottom: 28,
     flexDirection: 'column',
+    flexShrink: 1,
     shadowColor: '#000', shadowOpacity: 0.2, shadowOffset: { width: 0, height: 8 }, shadowRadius: 24, elevation: 20,
   },
   detailHeader: {
@@ -1355,5 +1408,111 @@ const styles = StyleSheet.create({
     fontFamily: F.bold,
     fontSize: 11,
     color: '#FFFFFF',
+  },
+  caregiverProfileAvatarWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: C.primary,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  caregiverProfileAvatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  verificationBadgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: '#065F46',
+    letterSpacing: 0.3,
+  },
+  caregiverProfileName: {
+    fontFamily: F.extraBold,
+    fontSize: 24,
+    color: C.textPrimary,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  caregiverProfileSpecialty: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.primary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  caregiverProfileLocation: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: C.textSecondary,
+  },
+  caregiverProfileSectionLabel: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    color: C.textMuted,
+    marginBottom: 12,
+  },
+  caregiverProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  caregiverProfileIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  caregiverProfileFieldLabel: {
+    fontFamily: F.medium,
+    fontSize: 11,
+    color: C.textMuted,
+    letterSpacing: 0.4,
+  },
+  caregiverProfileFieldValue: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.textPrimary,
+    marginTop: 1,
+  },
+  caregiverProfileChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  caregiverProfileChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: C.primaryLight,
+  },
+  caregiverProfileChipText: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: C.primary,
+  },
+  caregiverProfileBioText: {
+    fontFamily: F.regular,
+    fontSize: 14,
+    color: C.textSecondary,
+    lineHeight: 22,
   },
 });
