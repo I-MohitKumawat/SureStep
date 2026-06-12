@@ -64,13 +64,13 @@ export async function registerNotificationCategories(): Promise<void> {
     },
     {
       identifier: 'SNOOZE',
-      buttonTitle: '⏰ Snooze 10 min',
+      buttonTitle: '⏰ Snooze 5 min',
       options: { isDestructive: false, isAuthenticationRequired: false },
     },
     {
-      identifier: 'SKIP',
-      buttonTitle: 'Skip',
-      options: { isDestructive: true, isAuthenticationRequired: false },
+      identifier: 'VIEW_INSTRUCTIONS',
+      buttonTitle: '📖 View Instructions',
+      options: { isDestructive: false, isAuthenticationRequired: false },
     },
   ]);
 }
@@ -97,6 +97,7 @@ export async function scheduleLocalReminder(reminder: ReminderLog): Promise<void
     const now = new Date();
 
     const identifier = await Notifications.scheduleNotificationAsync({
+      identifier: reminder.id,
       content: {
         title: reminder.title,
         body: reminder.body ?? 'Time for your scheduled reminder.',
@@ -164,16 +165,17 @@ export async function scheduleTestAlarm(delaySeconds = 5): Promise<string> {
  */
 export function buildReminderActionFromResponse(
   response: Notifications.NotificationResponse,
-): { reminderId: string; action: 'COMPLETE' | 'SNOOZE' | 'SKIP'; snoozeMinutes?: number } | null {
+): { reminderId: string; action: 'COMPLETE' | 'SNOOZE' | 'SKIP' | 'OPEN' | 'VIEW_INSTRUCTIONS'; snoozeMinutes?: number } | null {
   const data = response.notification.request.content.data as any;
   const reminderId = data?.reminderId;
   if (!reminderId) return null;
 
   const actionId = response.actionIdentifier;
   if (actionId === 'COMPLETE') return { reminderId, action: 'COMPLETE' };
-  if (actionId === 'SNOOZE')   return { reminderId, action: 'SNOOZE', snoozeMinutes: 10 };
+  if (actionId === 'SNOOZE')   return { reminderId, action: 'SNOOZE', snoozeMinutes: 5 };
   if (actionId === 'SKIP')     return { reminderId, action: 'SKIP' };
+  if (actionId === 'VIEW_INSTRUCTIONS') return { reminderId, action: 'VIEW_INSTRUCTIONS' };
 
-  // User tapped the notification body (no action button) — treat as complete
-  return { reminderId, action: 'COMPLETE' };
+  // User tapped the notification body (no action button) — treat as open
+  return { reminderId, action: 'OPEN' };
 }

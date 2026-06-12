@@ -38,10 +38,10 @@ import { C } from './theme/colors';
 
 /** Inner shell — reads NotificationContext for the banner. */
 const AppShellInner: React.FC = () => {
-  const { banner, dismissBanner } = useNotifications();
+  const { banner, dismissBanner, navigationRef } = useNotifications();
   return (
     <>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <RoleNavigator />
       </NavigationContainer>
       <NotificationBanner
@@ -76,9 +76,7 @@ const AppShell: React.FC = () => {
               <CaregiverProvider>
                 <NotificationProvider>
                   <SafeAreaProvider>
-                    <NavigationContainer>
-                      <RoleNavigator />
-                    </NavigationContainer>
+                    <AppShellInner />
                   </SafeAreaProvider>
                 </NotificationProvider>
               </CaregiverProvider>

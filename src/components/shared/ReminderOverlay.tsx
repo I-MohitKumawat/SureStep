@@ -7,13 +7,10 @@
  *
  * Actions:
  *   ✅ Complete  — marks done, dismisses overlay
- *   ⏰ Snooze    — 5 / 10 / 15 min options
- *   ✕  Skip     — marks skipped, dismisses overlay
- *
- * Escalation badge: shown when escalation_level > 0 (reminder has been
- * re-notified by the backend sweep engine).
+ *   ⏰ Snooze    — snoozes for 5 minutes
+ *   📖 Instructions — opens scrollable visual instructions modal
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -21,42 +18,147 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  Vibration,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { useReminders } from '../../context/ReminderContext';
-import { C, patientC, SOS_RED } from '../../theme/colors';
+import { useTasks } from '../../context/TaskContext';
+import { TaskInstructionsModal } from '../patient/TaskInstructionsModal';
+import type { Task } from '../patient/RoutineCard';
+import { C, patientC } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
-const SNOOZE_OPTIONS = [5, 10, 15] as const;
-
 export const ReminderOverlay: React.FC = () => {
-  const { activeReminder, completeReminder, snoozeReminder, skipReminder } = useReminders();
+  const {
+    activeReminder,
+    completeReminder,
+    snoozeReminder,
+    showInstructionsOnOpen,
+    setShowInstructionsOnOpen,
+  } = useReminders();
+  const { tasks } = useTasks();
+
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const scale   = useRef(new Animated.Value(0.85)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
+  // Alarm Sound and Vibration Management
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const vibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopAlarmEffects = useCallback(async () => {
+    // Stop vibration
+    Vibration.cancel();
+    if (vibrationIntervalRef.current) {
+      clearInterval(vibrationIntervalRef.current);
+      vibrationIntervalRef.current = null;
+    }
+
+    // Stop audio
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+      } catch (err) {
+        console.warn('[AlarmEffects] Failed to stop/unload sound:', err);
+      }
+      soundRef.current = null;
+    }
+  }, []);
+
+  const startAlarmEffects = useCallback(async () => {
+    await stopAlarmEffects();
+
+    // 1. Start Repeating Vibration
+    const vibrationPattern = [1000, 1000]; // Vibrate 1s, pause 1s
+    Vibration.vibrate(vibrationPattern, true);
+
+    vibrationIntervalRef.current = setInterval(() => {
+      Vibration.vibrate(vibrationPattern, true);
+    }, 4000);
+
+    // 2. Play Alarm Sound
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav' },
+        { isLooping: true, volume: 1.0 }
+      );
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (err) {
+      console.warn('[AlarmEffects] Failed to load/play alarm sound:', err);
+    }
+  }, [stopAlarmEffects]);
+
   useEffect(() => {
     if (activeReminder) {
-      setShowSnoozeMenu(false);
       setLoadingAction(null);
+      void startAlarmEffects();
+
+      if (showInstructionsOnOpen) {
+        setShowInstructions(true);
+        setShowInstructionsOnOpen(false);
+      }
+
       Animated.parallel([
         Animated.spring(scale,   { toValue: 1, useNativeDriver: true, damping: 18, stiffness: 280 }),
         Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
       ]).start();
     } else {
+      void stopAlarmEffects();
+
       Animated.parallel([
         Animated.timing(scale,   { toValue: 0.85, duration: 200, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 0,    duration: 200, useNativeDriver: true }),
       ]).start();
     }
-  }, [activeReminder]);
+
+    return () => {
+      void stopAlarmEffects();
+    };
+  }, [activeReminder, startAlarmEffects, stopAlarmEffects, scale, opacity]);
 
   if (!activeReminder) return null;
 
   const isEscalated = activeReminder.escalation_level > 0;
+  const isRoutine = activeReminder.reference_type === 'ROUTINE';
+
+  // Find corresponding task in task context
+  const matchingTask = activeReminder.reference_id
+    ? tasks.find((t) => t.id === activeReminder.reference_id)
+    : null;
+
+  // Build fallback task object for TaskInstructionsModal if needed
+  const taskForInstructions: Task | null = matchingTask
+    ? {
+        id: matchingTask.id,
+        title: matchingTask.title,
+        time: matchingTask.time,
+        icon: matchingTask.icon,
+        state: matchingTask.status === 'pending' ? null : (matchingTask.status as any),
+        instructionsMd: matchingTask.instructionsMd,
+        description: matchingTask.description,
+      }
+    : {
+        id: activeReminder.reference_id || activeReminder.id,
+        title: activeReminder.title,
+        time: new Date(activeReminder.scheduled_at).toLocaleTimeString('en-US', {
+          hour: 'numeric', minute: '2-digit', hour12: true,
+        }),
+        icon: '🕒',
+        state: null,
+        instructionsMd: activeReminder.body || '',
+        description: activeReminder.body || '',
+      };
 
   const handleComplete = async () => {
     setLoadingAction('complete');
@@ -66,19 +168,10 @@ export const ReminderOverlay: React.FC = () => {
     setLoadingAction(null);
   };
 
-  const handleSnooze = async (minutes: number) => {
-    setShowSnoozeMenu(false);
-    setLoadingAction(`snooze_${minutes}`);
+  const handleSnoozeDirect = async () => {
+    setLoadingAction('snooze');
     try {
-      await snoozeReminder(activeReminder.id, minutes);
-    } catch { /* already logged */ }
-    setLoadingAction(null);
-  };
-
-  const handleSkip = async () => {
-    setLoadingAction('skip');
-    try {
-      await skipReminder(activeReminder.id);
+      await snoozeReminder(activeReminder.id, 5); // default to 5 minutes snooze
     } catch { /* already logged */ }
     setLoadingAction(null);
   };
@@ -145,52 +238,47 @@ export const ReminderOverlay: React.FC = () => {
             </Text>
           </Pressable>
 
-          {/* Snooze + Skip row */}
+          {/* Snooze + Instructions row */}
           <View style={styles.secondaryRow}>
             {/* Snooze */}
-            <View style={styles.snoozeWrapper}>
-              <Pressable
-                style={({ pressed }) => [styles.snoozeBtn, pressed && styles.btnPressed]}
-                onPress={() => setShowSnoozeMenu((v) => !v)}
-                disabled={!!loadingAction}
-              >
-                <Ionicons name="time-outline" size={18} color={patientC.primary} />
-                <Text style={styles.snoozeBtnText}>Snooze</Text>
-                <Ionicons
-                  name={showSnoozeMenu ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={patientC.primary}
-                />
-              </Pressable>
-
-              {showSnoozeMenu && (
-                <View style={styles.snoozeMenu}>
-                  {SNOOZE_OPTIONS.map((min) => (
-                    <Pressable
-                      key={min}
-                      style={({ pressed }) => [styles.snoozeOption, pressed && styles.btnPressed]}
-                      onPress={() => handleSnooze(min)}
-                    >
-                      <Text style={styles.snoozeOptionText}>{min} min</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Skip */}
             <Pressable
-              style={({ pressed }) => [styles.skipBtn, pressed && styles.btnPressed]}
-              onPress={handleSkip}
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.btnPressed]}
+              onPress={handleSnoozeDirect}
               disabled={!!loadingAction}
             >
-              <Text style={styles.skipBtnText}>
-                {loadingAction === 'skip' ? 'Skipping…' : 'Skip'}
+              <Ionicons name="time-outline" size={18} color={patientC.primary} />
+              <Text style={styles.secondaryBtnText}>
+                {loadingAction === 'snooze' ? 'Snoozing…' : 'Snooze (5m)'}
               </Text>
             </Pressable>
+
+            {/* View Instructions */}
+            {isRoutine && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  { backgroundColor: patientC.soft },
+                  pressed && styles.btnPressed
+                ]}
+                onPress={() => setShowInstructions(true)}
+                disabled={!!loadingAction}
+              >
+                <Ionicons name="book-outline" size={18} color={patientC.primary} />
+                <Text style={styles.secondaryBtnText}>Instructions</Text>
+              </Pressable>
+            )}
           </View>
         </Animated.View>
       </View>
+
+      {/* Routine Instructions modal (rendered on top of overlay) */}
+      {isRoutine && taskForInstructions && (
+        <TaskInstructionsModal
+          visible={showInstructions}
+          task={taskForInstructions}
+          onClose={() => setShowInstructions(false)}
+        />
+      )}
     </Modal>
   );
 };
@@ -290,11 +378,7 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 10,
   },
-  snoozeWrapper: {
-    flex: 1,
-    position: 'relative',
-  },
-  snoozeBtn: {
+  secondaryBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -304,51 +388,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
   },
-  snoozeBtnText: {
+  secondaryBtnText: {
     fontSize: 14,
     fontFamily: F.semiBold,
     color: patientC.primary,
-  },
-  snoozeMenu: {
-    position: 'absolute',
-    bottom: '110%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  snoozeOption: {
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  snoozeOptionText: {
-    fontSize: 14,
-    fontFamily: F.medium,
-    color: patientC.primary,
-    textAlign: 'center',
-  },
-  skipBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.skipBg,
-    borderRadius: 14,
-    paddingVertical: 14,
-  },
-  skipBtnText: {
-    fontSize: 14,
-    fontFamily: F.semiBold,
-    color: C.textSecondary,
   },
   btnPressed: {
     opacity: 0.75,

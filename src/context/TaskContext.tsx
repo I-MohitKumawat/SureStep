@@ -204,6 +204,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, [firebaseUser]);
 
   const loadTasksForPatient = useCallback(async (patientId: string, forceRefresh = false) => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('join:patient', patientId);
+    }
+
     const now = Date.now();
     const lastFetched = lastFetchedRef.current[patientId] || 0;
     const isStale = now - lastFetched > 60_000;

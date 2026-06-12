@@ -9,7 +9,7 @@
  *  2. WebSocket listener for reminder:active  → show ReminderOverlay
  *  3. WebSocket listener for reminder:snoozed → dismiss overlay
  *  4. WebSocket listener for reminder:completed / reminder:missed → dismiss overlay
- *  5. Expo Notifications listener → handle Complete/Snooze/Skip taps from notification tray
+ *  5. Expo Notifications listener → handle Complete/Snooze/Skip/Open/Instructions taps from notification tray
  *  6. Exposes completeReminder / snoozeReminder / skipReminder to ReminderOverlay
  */
 import React, {
@@ -45,6 +45,8 @@ type ReminderContextValue = {
   completeReminder:  (reminderId: string) => Promise<void>;
   snoozeReminder:    (reminderId: string, minutes: number) => Promise<void>;
   skipReminder:      (reminderId: string) => Promise<void>;
+  showInstructionsOnOpen: boolean;
+  setShowInstructionsOnOpen: (show: boolean) => void;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
   const [allReminders,   setAllReminders]   = useState<ReminderLog[]>([]);
   const [activeReminder, setActiveReminder] = useState<ReminderLog | null>(null);
   const [isLoading,      setIsLoading]      = useState(false);
+  const [showInstructionsOnOpen, setShowInstructionsOnOpen] = useState(false);
 
   const patientId = user?.role === 'PATIENT' ? user.id : null;
 
@@ -177,9 +180,33 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
         if (action === 'COMPLETE') {
           await completeReminder(reminderId);
         } else if (action === 'SNOOZE') {
-          await snoozeReminder(reminderId, snoozeMinutes ?? 10);
-        } else {
+          await snoozeReminder(reminderId, snoozeMinutes ?? 5);
+        } else if (action === 'SKIP') {
           await skipReminder(reminderId);
+        } else if (action === 'OPEN') {
+          // Open active reminder details
+          const found = allReminders.find((r) => r.id === reminderId);
+          if (found) {
+            setActiveReminder(found);
+          } else if (patientId) {
+            const reminders = await fetchActiveReminders(patientId);
+            const matching = reminders.find((r) => r.id === reminderId);
+            if (matching) setActiveReminder(matching);
+          }
+        } else if (action === 'VIEW_INSTRUCTIONS') {
+          // Open active reminder details and flag to show instructions modal
+          const found = allReminders.find((r) => r.id === reminderId);
+          if (found) {
+            setActiveReminder(found);
+            setShowInstructionsOnOpen(true);
+          } else if (patientId) {
+            const reminders = await fetchActiveReminders(patientId);
+            const matching = reminders.find((r) => r.id === reminderId);
+            if (matching) {
+              setActiveReminder(matching);
+              setShowInstructionsOnOpen(true);
+            }
+          }
         }
       } catch (err) {
         console.warn('[ReminderContext] Notification action failed:', err);
@@ -187,7 +214,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => sub.remove();
-  }, []);
+  }, [allReminders, patientId]);
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -243,8 +270,10 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
       completeReminder,
       snoozeReminder,
       skipReminder,
+      showInstructionsOnOpen,
+      setShowInstructionsOnOpen,
     }),
-    [activeReminder, allReminders, isLoading, completeReminder, snoozeReminder, skipReminder],
+    [activeReminder, allReminders, isLoading, completeReminder, snoozeReminder, skipReminder, showInstructionsOnOpen],
   );
 
   return (

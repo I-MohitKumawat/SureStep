@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Alert, Image, Vibration } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, Alert, Image, Vibration, AppState, type AppStateStatus } from 'react-native';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useIsFocused } from '@react-navigation/native';
@@ -32,7 +32,15 @@ import apiClient from '../../services/apiClient';
 import type { PatientStackParams } from '../../types/navigation.types';
 import messaging from '@react-native-firebase/messaging';
 import { startBackgroundTracking, updateBackgroundTrackingMode } from '../../utils/locationTask';
-import { getBatteryPercentage, getNetworkStatus } from '../../utils/deviceTelemetry';
+import {
+  getBatteryPercentage,
+  getNetworkStatus,
+  checkExactAlarmPermission,
+  checkBatteryOptimizationEnabled,
+  openBatteryOptimizationSettings,
+  openExactAlarmSettings,
+} from '../../utils/deviceTelemetry';
+import { useNotifications } from '../../context/NotificationContext';
 
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientHomeScreen'>;
 type ActionState = 'done' | 'missed' | 'unsure' | 'overdue' | null;
@@ -76,10 +84,43 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const [helpTask, setHelpTask] = useState<Task | null>(null);
   const [viewingInstructionsTask, setViewingInstructionsTask] = useState<Task | null>(null);
 
-  // Active alarm task and snoozed list
-  const [activeAlarmTask, setActiveAlarmTask] = useState<Task | null>(null);
-  const [activeReminder, setActiveReminder] = useState<any | null>(null);
-  const [snoozedTasks, setSnoozedTasks] = useState<Record<string, number>>({});
+  // Active alarm task and snoozed list removed - handled globally by ReminderContext
+
+  const { checkNotificationPermissions, requestNotificationPermissions } = useNotifications();
+  const [notifPermissionGranted, setNotifPermissionGranted] = useState<boolean>(true);
+  const [alarmPermissionGranted, setAlarmPermissionGranted] = useState<boolean>(true);
+  const [batteryOptimizedActive, setBatteryOptimizedActive] = useState<boolean>(false);
+
+  const checkDevicePermissions = useCallback(async () => {
+    try {
+      const np = await checkNotificationPermissions();
+      setNotifPermissionGranted(np === 'granted');
+
+      const ap = await checkExactAlarmPermission();
+      setAlarmPermissionGranted(ap);
+
+      const bo = await checkBatteryOptimizationEnabled();
+      setBatteryOptimizedActive(bo);
+    } catch (err) {
+      console.warn('Failed to check device permissions on home screen:', err);
+    }
+  }, [checkNotificationPermissions]);
+
+  useEffect(() => {
+    if (isFocused) {
+      void checkDevicePermissions();
+    }
+  }, [isFocused, checkDevicePermissions]);
+
+  // Listen to AppState to refresh when returning from settings
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active' && isFocused) {
+        void checkDevicePermissions();
+      }
+    });
+    return () => sub.remove();
+  }, [isFocused, checkDevicePermissions]);
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -103,94 +144,15 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   // Patient phone comes from auth — no AsyncStorage needed
   const patientId = status === 'authenticated' ? user?.id : null;
 
-  // Alarm Sound and Vibration Management
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const vibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopAlarmEffects = useCallback(async () => {
-    // Stop vibration
-    Vibration.cancel();
-    if (vibrationIntervalRef.current) {
-      clearInterval(vibrationIntervalRef.current);
-      vibrationIntervalRef.current = null;
-    }
-
-    // Stop audio
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch (err) {
-        console.warn('[AlarmEffects] Failed to stop/unload sound:', err);
-      }
-      soundRef.current = null;
-    }
-  }, []);
-
-  const startAlarmEffects = useCallback(async () => {
-    await stopAlarmEffects();
-
-    // 1. Start Repeating Vibration
-    const vibrationPattern = [1000, 1000]; // Vibrate 1s, pause 1s
-    Vibration.vibrate(vibrationPattern, true);
-
-    vibrationIntervalRef.current = setInterval(() => {
-      Vibration.vibrate(vibrationPattern, true);
-    }, 4000);
-
-    // 2. Play Alarm Sound
-    try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        playThroughEarpieceAndroid: false,
-      });
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav' },
-        { isLooping: true, volume: 1.0 }
-      );
-      soundRef.current = sound;
-      await sound.playAsync();
-    } catch (err) {
-      console.warn('[AlarmEffects] Failed to load/play alarm sound:', err);
-    }
-  }, [stopAlarmEffects]);
-
-  useEffect(() => {
-    if (activeReminder || activeAlarmTask) {
-      void startAlarmEffects();
-    } else {
-      void stopAlarmEffects();
-    }
-    return () => {
-      void stopAlarmEffects();
-    };
-  }, [activeReminder, activeAlarmTask, startAlarmEffects, stopAlarmEffects]);
-
-  const fetchActiveReminders = useCallback(async () => {
-    if (!patientId) return;
-    try {
-      const res = await apiClient.get('/notifications/reminders/active');
-      const active = res.data.reminders?.find((r: any) => r.state === 'ACTIVE');
-      if (active) {
-        setActiveReminder(active);
-      }
-    } catch (err) {
-      console.warn('[PatientHomeScreen] Failed to fetch active reminders:', err);
-    }
-  }, [patientId]);
-
   useEffect(() => {
     if (!patientId || !isFocused) return;
     void loadTasksForPatient(patientId!);
-    void fetchActiveReminders();
     // Poll for updates every 60s as a fallback — WebSocket synchronization handles real-time updates.
     const interval = setInterval(() => {
       void loadTasksForPatient(patientId!);
-      void fetchActiveReminders();
     }, 60_000);
     return () => clearInterval(interval);
-  }, [patientId, isFocused, loadTasksForPatient, fetchActiveReminders]);
+  }, [patientId, isFocused, loadTasksForPatient]);
 
   // Raw tasks from context, filtered strictly to this patient
   const patientTasks: Task[] = useMemo(
@@ -376,54 +338,16 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     };
 
-    const handleReminderActive = (data: any) => {
-      console.log('[Patient] Reminder active received:', data.reminder);
-      setActiveReminder(data.reminder);
-    };
-
-    const handleReminderSnoozed = (data: any) => {
-      console.log('[Patient] Reminder snoozed received:', data.reminderId);
-      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-    };
-
-    const handleReminderCompleted = (data: any) => {
-      console.log('[Patient] Reminder completed received:', data.reminderId);
-      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-      void loadTasksForPatient(patientId);
-    };
-
-    const handleReminderSkipped = (data: any) => {
-      console.log('[Patient] Reminder skipped received:', data.reminderId);
-      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-      void loadTasksForPatient(patientId);
-    };
-
-    const handleReminderMissed = (data: any) => {
-      console.log('[Patient] Reminder missed received:', data.reminderId);
-      setActiveReminder((prev: any) => (prev?.id === data.reminderId ? null : prev));
-      void loadTasksForPatient(patientId);
-    };
-
     socket.on('location:request', handleLocationRequest);
     socket.on('state:change', handleStateChange);
     socket.on('relationship:change', handleRelationshipChange);
-    socket.on('reminder:active', handleReminderActive);
-    socket.on('reminder:snoozed', handleReminderSnoozed);
-    socket.on('reminder:completed', handleReminderCompleted);
-    socket.on('reminder:skipped', handleReminderSkipped);
-    socket.on('reminder:missed', handleReminderMissed);
 
     return () => {
       socket.off('location:request', handleLocationRequest);
       socket.off('state:change', handleStateChange);
       socket.off('relationship:change', handleRelationshipChange);
-      socket.off('reminder:active', handleReminderActive);
-      socket.off('reminder:snoozed', handleReminderSnoozed);
-      socket.off('reminder:completed', handleReminderCompleted);
-      socket.off('reminder:skipped', handleReminderSkipped);
-      socket.off('reminder:missed', handleReminderMissed);
     };
-  }, [patientId, reloadCaregiver, loadTasksForPatient]);
+  }, [patientId, reloadCaregiver]);
 
   // Load confirmed caregiver on focus or mount
   React.useEffect(() => {
@@ -459,23 +383,8 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           console.log(`[Expiry] Task "${task.title}" expired. Marking as missed.`);
           try {
             await handleUpdateTaskStatus(task.id, 'missed');
-            // If the active alarm is this task, clear it
-            if (activeAlarmTask?.id === task.id) {
-              setActiveAlarmTask(null);
-            }
           } catch (err) {
             console.error('Failed to auto-miss expired task:', err);
-          }
-          continue;
-        }
-
-        // 2. Active Alarm Check (within 30 minutes of scheduled time)
-        if (timeDiffMs >= 0 && timeDiffMs < 30 * 60 * 1000) {
-          const snoozeUntil = snoozedTasks[task.id] || 0;
-          if (now.getTime() > snoozeUntil) {
-            if (!activeAlarmTask || activeAlarmTask.id !== task.id) {
-              setActiveAlarmTask(task);
-            }
           }
         }
       }
@@ -487,7 +396,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
     }, 10_000);
 
     return () => clearInterval(timer);
-  }, [patientId, patientTasks, snoozedTasks, activeAlarmTask, handleUpdateTaskStatus]);
+  }, [patientId, patientTasks, handleUpdateTaskStatus]);
 
   const nextActionableIndex = useMemo(() => {
     const len = patientTasks.length;
@@ -686,6 +595,54 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             </View>
           </View>
 
+          {/* -- Permissions / Diagnostics warnings ----------------------- */}
+          {(!notifPermissionGranted || !alarmPermissionGranted || batteryOptimizedActive) && (
+            <View style={styles.systemWarningCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Ionicons name="warning-outline" size={20} color="#B45309" />
+                <Text style={styles.systemWarningTitle}>System Action Required</Text>
+              </View>
+              <Text style={styles.systemWarningDesc}>
+                To ensure you receive medical alerts and scheduled care reminders reliably:
+              </Text>
+              <View style={{ gap: 8, marginTop: 8 }}>
+                {!notifPermissionGranted && (
+                  <View style={styles.systemWarningRow}>
+                    <Text style={styles.systemWarningItem}>• Notification permissions are disabled</Text>
+                    <Pressable
+                      style={styles.systemWarningBtn}
+                      onPress={() => void requestNotificationPermissions().then(() => void checkDevicePermissions())}
+                    >
+                      <Text style={styles.systemWarningBtnText}>Enable</Text>
+                    </Pressable>
+                  </View>
+                )}
+                {!alarmPermissionGranted && (
+                  <View style={styles.systemWarningRow}>
+                    <Text style={styles.systemWarningItem}>• Exact alarm permissions are restricted</Text>
+                    <Pressable
+                      style={[styles.systemWarningBtn, { backgroundColor: '#7C3AED' }]}
+                      onPress={openExactAlarmSettings}
+                    >
+                      <Text style={styles.systemWarningBtnText}>Configure</Text>
+                    </Pressable>
+                  </View>
+                )}
+                {batteryOptimizedActive && (
+                  <View style={styles.systemWarningRow}>
+                    <Text style={styles.systemWarningItem}>• Battery optimization is throttling reminders</Text>
+                    <Pressable
+                      style={[styles.systemWarningBtn, { backgroundColor: '#F59E0B' }]}
+                      onPress={openBatteryOptimizationSettings}
+                    >
+                      <Text style={styles.systemWarningBtnText}>Optimize</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
           {/* -- Location sharing status pill --------------------------- */}
           {locationStatus !== 'idle' && (
             <View style={[
@@ -822,122 +779,6 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
       </View>
 
-      {/* 🔔 Premium Interactive Alarm Modal Overlay */}
-      {(activeReminder || activeAlarmTask) && (
-        <Modal
-          visible={true}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => {}}
-        >
-          <View style={styles.alarmOverlay}>
-            <View style={styles.alarmCard}>
-              <View style={styles.alarmIconContainer}>
-                <Text style={styles.alarmEmoji}>
-                  {activeReminder
-                    ? (activeReminder.reference_type === 'ROUTINE' ? '🕒' : activeReminder.reference_type === 'MEDICATION' ? '💊' : activeReminder.reference_type === 'APPOINTMENT' ? '📅' : '⏰')
-                    : (activeAlarmTask?.icon || '⏰')}
-                </Text>
-              </View>
-              
-              <Text style={styles.alarmSubtitle}>ACTIVELY REMINDING</Text>
-              <Text style={styles.alarmTitle}>{activeReminder ? activeReminder.title : activeAlarmTask?.title}</Text>
-              
-              <View style={styles.alarmTimeBadge}>
-                <Ionicons name="time-outline" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                <Text style={styles.alarmTimeText}>
-                  Due: {activeReminder ? new Date(activeReminder.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : activeAlarmTask?.time}
-                </Text>
-              </View>
-
-              {(activeReminder?.body || activeAlarmTask?.description) ? (
-                <Text style={styles.alarmDesc}>{activeReminder ? activeReminder.body : activeAlarmTask?.description}</Text>
-              ) : null}
-
-              <View style={[styles.alarmButtons, { flexDirection: 'column', gap: 10 }]}>
-                <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.alarmSnoozeBtn,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={async () => {
-                      if (activeReminder) {
-                        try {
-                          await apiClient.post(`/notifications/reminders/${activeReminder.id}/action`, { action: 'SNOOZE', snooze_minutes: 5 });
-                          setActiveReminder(null);
-                        } catch (err) {
-                          console.error('Failed to snooze reminder:', err);
-                        }
-                      } else if (activeAlarmTask) {
-                        const taskId = activeAlarmTask.id;
-                        setSnoozedTasks((prev) => ({
-                          ...prev,
-                          [taskId]: Date.now() + 5 * 60 * 1000,
-                        }));
-                        setActiveAlarmTask(null);
-                      }
-                    }}
-                  >
-                    <Text style={styles.alarmSnoozeBtnText}>Snooze (5m)</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.alarmCompleteBtn,
-                      pressed && { opacity: 0.9 },
-                    ]}
-                    onPress={async () => {
-                      if (activeReminder) {
-                        try {
-                          await apiClient.post(`/notifications/reminders/${activeReminder.id}/action`, { action: 'COMPLETE' });
-                          setActiveReminder(null);
-                          void fetchActiveReminders();
-                          void loadTasksForPatient(patientId!);
-                        } catch (err) {
-                          console.error('Failed to complete reminder:', err);
-                        }
-                      } else if (activeAlarmTask) {
-                        const taskId = activeAlarmTask.id;
-                        try {
-                          await handleUpdateTaskStatus(taskId, 'done');
-                          setActiveAlarmTask(null);
-                        } catch (err) {
-                          console.error('Failed to complete task from alarm modal:', err);
-                        }
-                      }
-                    }}
-                  >
-                    <Text style={styles.alarmCompleteBtnText}>Complete</Text>
-                  </Pressable>
-                </View>
-
-                {activeReminder && (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.alarmSnoozeBtn,
-                      { borderColor: '#FCA5A5', backgroundColor: '#FFF5F5', width: '100%' },
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={async () => {
-                      try {
-                        await apiClient.post(`/notifications/reminders/${activeReminder.id}/action`, { action: 'SKIP' });
-                        setActiveReminder(null);
-                        void fetchActiveReminders();
-                        void loadTasksForPatient(patientId!);
-                      } catch (err) {
-                        console.error('Failed to skip reminder:', err);
-                      }
-                    }}
-                  >
-                    <Text style={[styles.alarmSnoozeBtnText, { color: '#DC2626' }]}>Skip Task</Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
     </ScreenContainer>
   );
 };
@@ -1471,6 +1312,48 @@ const styles = StyleSheet.create({
   alarmCompleteBtnText: {
     fontFamily: F.bold,
     fontSize: 15,
+    color: '#FFFFFF',
+  },
+  systemWarningCard: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  systemWarningTitle: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#92400E',
+  },
+  systemWarningDesc: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 16,
+  },
+  systemWarningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  systemWarningItem: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: '#B45309',
+    flex: 1,
+  },
+  systemWarningBtn: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  systemWarningBtnText: {
+    fontFamily: F.bold,
+    fontSize: 11,
     color: '#FFFFFF',
   },
 });

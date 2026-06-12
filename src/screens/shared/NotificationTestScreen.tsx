@@ -22,9 +22,12 @@ import {
   StyleSheet,
   Text,
   View,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import {
   triggerTestNotification,
@@ -36,6 +39,13 @@ import {
 import { scheduleTestAlarm } from '../../services/localAlarmService';
 import { getSocket } from '../../services/socketClient';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
+import {
+  checkExactAlarmPermission,
+  checkBatteryOptimizationEnabled,
+  openBatteryOptimizationSettings,
+  openExactAlarmSettings,
+} from '../../utils/deviceTelemetry';
 import { C, patientC, caregiverC, familyC, SOS_RED } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
@@ -58,10 +68,65 @@ export const NotificationTestScreen: React.FC = () => {
     role === 'FAMILY'    ? familyC.primary    :
     patientC.primary;
 
+  const { checkNotificationPermissions, requestNotificationPermissions } = useNotifications();
+
   const [loading,         setLoading]         = useState<string | null>(null);
   const [socketLog,       setSocketLog]        = useState<SocketLogEntry[]>([]);
   const [activeReminders, setActiveReminders]  = useState<ReminderLog[]>([]);
+  
+  const [notifPermission, setNotifPermission] = useState<string>('unknown');
+  const [alarmPermission, setAlarmPermission] = useState<boolean>(true);
+  const [batteryOptimized, setBatteryOptimized] = useState<boolean>(false);
+  const [scheduledCount,   setScheduledCount]   = useState<number>(0);
+  
   const logIdRef = useRef(0);
+
+  const refreshAllStatus = useCallback(async () => {
+    try {
+      const np = await checkNotificationPermissions();
+      setNotifPermission(np);
+
+      const ap = await checkExactAlarmPermission();
+      setAlarmPermission(ap);
+
+      const bo = await checkBatteryOptimizationEnabled();
+      setBatteryOptimized(bo);
+
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      setScheduledCount(scheduled.length);
+    } catch (err) {
+      console.warn('[Diagnostics] Failed to refresh statuses:', err);
+    }
+  }, [checkNotificationPermissions]);
+
+  // ─── Load active reminders ────────────────────────────────────────────────
+
+  const loadActiveReminders = useCallback(async () => {
+    try {
+      const reminders = await fetchActiveReminders(
+        role === 'PATIENT' ? user?.id : undefined
+      );
+      setActiveReminders(reminders);
+    } catch {
+      setActiveReminders([]);
+    }
+  }, [user, role]);
+
+  useEffect(() => { void loadActiveReminders(); }, [loadActiveReminders]);
+
+  useEffect(() => {
+    void refreshAllStatus();
+  }, [refreshAllStatus]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        void refreshAllStatus();
+        void loadActiveReminders();
+      }
+    });
+    return () => sub.remove();
+  }, [refreshAllStatus, loadActiveReminders]);
 
   // ─── Socket event logger ──────────────────────────────────────────────────
 
@@ -112,20 +177,7 @@ export const NotificationTestScreen: React.FC = () => {
     return () => cleanupFns.forEach((fn) => fn());
   }, [addLog]);
 
-  // ─── Load active reminders ────────────────────────────────────────────────
 
-  const loadActiveReminders = useCallback(async () => {
-    try {
-      const reminders = await fetchActiveReminders(
-        role === 'PATIENT' ? user?.id : undefined
-      );
-      setActiveReminders(reminders);
-    } catch {
-      setActiveReminders([]);
-    }
-  }, [user, role]);
-
-  useEffect(() => { void loadActiveReminders(); }, [loadActiveReminders]);
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -191,6 +243,88 @@ export const NotificationTestScreen: React.FC = () => {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+
+        {/* Diagnostics & System Status */}
+        <Text style={[styles.sectionTitle, { color: accentColor }]}>DIAGNOSTICS & SYSTEM STATUS</Text>
+        <View style={styles.diagnosticsCard}>
+          {/* Notification Permission Row */}
+          <View style={styles.statusRow}>
+            <View style={styles.statusInfo}>
+              <Text style={styles.statusLabel}>Notification Permission</Text>
+              <Text style={[
+                styles.statusValue,
+                { color: notifPermission === 'granted' ? '#10B981' : '#EF4444' }
+              ]}>
+                {notifPermission === 'granted' ? 'Granted' : 'Denied'}
+              </Text>
+            </View>
+            {notifPermission !== 'granted' && (
+              <Pressable
+                style={[styles.statusBtn, { backgroundColor: accentColor }]}
+                onPress={() => void requestNotificationPermissions().then(() => void refreshAllStatus())}
+              >
+                <Text style={styles.statusBtnText}>Enable</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View style={styles.statusDivider} />
+
+          {/* Alarm Permission Row */}
+          <View style={styles.statusRow}>
+            <View style={styles.statusInfo}>
+              <Text style={styles.statusLabel}>Exact Alarm Permission</Text>
+              <Text style={[
+                styles.statusValue,
+                { color: alarmPermission ? '#10B981' : '#F59E0B' }
+              ]}>
+                {alarmPermission ? 'Allowed' : 'Restricted'}
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.statusBtn, { backgroundColor: '#7C3AED' }]}
+              onPress={openExactAlarmSettings}
+            >
+              <Text style={styles.statusBtnText}>Manage</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.statusDivider} />
+
+          {/* Battery Optimization Row */}
+          <View style={styles.statusRow}>
+            <View style={styles.statusInfo}>
+              <Text style={styles.statusLabel}>Battery Optimization</Text>
+              <Text style={[
+                styles.statusValue,
+                { color: batteryOptimized ? '#F59E0B' : '#10B981' }
+              ]}>
+                {batteryOptimized ? 'Active (Optimized)' : 'Disabled (Unrestricted)'}
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.statusBtn, { backgroundColor: '#F59E0B' }]}
+              onPress={openBatteryOptimizationSettings}
+            >
+              <Text style={styles.statusBtnText}>Configure</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.statusDivider} />
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statCount}>{scheduledCount}</Text>
+              <Text style={styles.statLabel}>Scheduled Alarms</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Text style={styles.statCount}>{activeReminders.length}</Text>
+              <Text style={styles.statLabel}>Active Reminders</Text>
+            </View>
+          </View>
+        </View>
 
         {/* Actions */}
         <Text style={[styles.sectionTitle, { color: accentColor }]}>TRIGGER ACTIONS</Text>
@@ -356,4 +490,72 @@ const styles = StyleSheet.create({
   logEvent:       { fontSize: 12, fontFamily: F.bold },
   logTs:          { fontSize: 11, fontFamily: F.regular, color: '#64748B' },
   logData:        { fontSize: 11, fontFamily: F.regular, color: '#94A3B8' },
+  diagnosticsCard: {
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 16,
+    gap: 12,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  statusInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  statusLabel: {
+    fontSize: 14,
+    fontFamily: F.semiBold,
+    color: C.textPrimary,
+  },
+  statusValue: {
+    fontSize: 13,
+    fontFamily: F.medium,
+  },
+  statusBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusBtnText: {
+    fontSize: 12,
+    fontFamily: F.bold,
+    color: '#FFFFFF',
+  },
+  statusDivider: {
+    height: 1,
+    backgroundColor: C.border,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statCount: {
+    fontSize: 20,
+    fontFamily: F.bold,
+    color: C.textPrimary,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: F.regular,
+    color: C.textSecondary,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: C.border,
+  },
 });

@@ -1,5 +1,60 @@
 import * as Battery from 'expo-battery';
 import NetInfo from '@react-native-community/netinfo';
+import { NativeModules, Platform, Linking } from 'react-native';
+
+const { DiagnosticsModule } = NativeModules;
+
+/**
+ * Check if the app can schedule exact alarms on Android.
+ */
+export async function checkExactAlarmPermission(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  try {
+    return await DiagnosticsModule.canScheduleExactAlarms();
+  } catch (err) {
+    console.warn('[Telemetry] canScheduleExactAlarms failed:', err);
+    return true; // Safe fallback
+  }
+}
+
+/**
+ * Check if battery optimization is enabled (meaning the app is optimized/throttled).
+ */
+export async function checkBatteryOptimizationEnabled(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  try {
+    return await Battery.isBatteryOptimizationEnabledAsync();
+  } catch (err) {
+    console.warn('[Telemetry] isBatteryOptimizationEnabledAsync failed:', err);
+    return false;
+  }
+}
+
+/**
+ * Direct the user to the battery optimization settings list.
+ */
+export async function openBatteryOptimizationSettings(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Linking.sendIntent('android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS');
+  } catch (err) {
+    console.warn('[Telemetry] Failed to open battery settings intent:', err);
+    Linking.openSettings();
+  }
+}
+
+/**
+ * Direct the user to the exact alarm / reminders permission settings.
+ */
+export async function openExactAlarmSettings(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+  } catch (err) {
+    console.warn('[Telemetry] Failed to open exact alarm settings intent:', err);
+    Linking.openSettings();
+  }
+}
 
 /**
  * Fetch patient device's current battery percentage.
@@ -38,3 +93,4 @@ export async function getNetworkStatus(): Promise<string> {
     return 'Offline';
   }
 }
+

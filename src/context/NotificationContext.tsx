@@ -25,9 +25,12 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
+import { Alert, Linking, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import messaging, {
   type FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
+import { useAuth } from './AuthContext';
 import type { NotificationBannerType } from '../components/shared/NotificationBanner';
 import { getSocket } from '../services/socketClient';
 import { bootstrapLocalNotifications, registerNotificationCategories } from '../services/localAlarmService';
@@ -47,9 +50,12 @@ type NotificationContextValue = {
   fcmToken:    string | null;
   unreadCount: number;
   banner:      BannerState;
-  dismissBanner:         () => void;
-  incrementUnread:       () => void;
-  resetUnread:           () => void;
+  dismissBanner:                  () => void;
+  incrementUnread:                () => void;
+  resetUnread:                    () => void;
+  navigationRef:                  React.RefObject<any>;
+  checkNotificationPermissions:   () => Promise<Notifications.PermissionStatus>;
+  requestNotificationPermissions: () => Promise<boolean>;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -73,6 +79,9 @@ function inferBannerType(notificationType?: string): NotificationBannerType {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
+  const role = user?.role;
+
   const [fcmToken,    setFcmToken]    = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [banner, setBanner]           = useState<BannerState>({
@@ -110,19 +119,24 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const t = type.toUpperCase();
 
     try {
-      if (t.includes('SOS') || t.includes('GEOFENCE') || t.includes('BREACH')) {
-        ref.navigate('CaregiverAlertFeedScreen');
-      } else if (t.includes('REMINDER') || t.includes('ROUTINE')) {
-        ref.navigate('NotificationHistoryScreen');
-      } else if (t.includes('RELATIONSHIP') || t.includes('REQUEST')) {
-        ref.navigate('NotificationHistoryScreen');
+      if (role === 'PATIENT') {
+        // Patients should be routed to PatientHomeScreen where the active reminder overlay is displayed
+        ref.navigate('PatientHomeScreen');
       } else {
-        ref.navigate('NotificationHistoryScreen');
+        if (t.includes('SOS') || t.includes('GEOFENCE') || t.includes('BREACH')) {
+          ref.navigate('CaregiverAlertFeedScreen');
+        } else if (t.includes('REMINDER') || t.includes('ROUTINE')) {
+          ref.navigate('NotificationHistoryScreen');
+        } else if (t.includes('RELATIONSHIP') || t.includes('REQUEST')) {
+          ref.navigate('NotificationHistoryScreen');
+        } else {
+          ref.navigate('NotificationHistoryScreen');
+        }
       }
     } catch (err) {
       console.warn('[NotificationContext] Navigation from payload failed:', err);
     }
-  }, []);
+  }, [role]);
 
   // ─── Bootstrap local notifications ───────────────────────────────────────
 
@@ -228,14 +242,87 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // ─── Notification Permission Helpers ─────────────────────────────────────
+
+  const checkNotificationPermissions = useCallback(async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status;
+  }, []);
+
+  const requestNotificationPermissions = useCallback(async () => {
+    const { status, canAskAgain } = await Notifications.requestPermissionsAsync();
+    if (status === 'granted') {
+      return true;
+    }
+
+    if (status === 'denied' && !canAskAgain) {
+      Alert.alert(
+        'Notifications Disabled',
+        'Notification permissions are permanently denied. Please enable them in system settings to receive vital health reminders.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ],
+      );
+      return false;
+    }
+
+    if (status === 'denied') {
+      Alert.alert(
+        'Permissions Required',
+        'SureStep requires notification permissions to alert you of routine reminders and safety events.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Try Again', onPress: () => void requestNotificationPermissions() },
+        ],
+      );
+      return false;
+    }
+
+    return false;
+  }, []);
+
+  // Auto-prompt patients and caregivers on startup if permission is not granted
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'PATIENT' || user.role === 'CAREGIVER') {
+      void (async () => {
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') {
+          await Notifications.requestPermissionsAsync();
+        }
+      })();
+    }
+  }, [user]);
+
   // ─── Context value ────────────────────────────────────────────────────────
 
   const incrementUnread = useCallback(() => setUnreadCount((c) => c + 1), []);
   const resetUnread     = useCallback(() => setUnreadCount(0), []);
 
   const value = useMemo<NotificationContextValue>(
-    () => ({ fcmToken, unreadCount, banner, dismissBanner, incrementUnread, resetUnread }),
-    [fcmToken, unreadCount, banner, dismissBanner, incrementUnread, resetUnread],
+    () => ({
+      fcmToken,
+      unreadCount,
+      banner,
+      dismissBanner,
+      incrementUnread,
+      resetUnread,
+      navigationRef,
+      checkNotificationPermissions,
+      requestNotificationPermissions,
+    }),
+    [
+      fcmToken,
+      unreadCount,
+      banner,
+      dismissBanner,
+      incrementUnread,
+      resetUnread,
+      navigationRef,
+      checkNotificationPermissions,
+      requestNotificationPermissions,
+    ],
   );
 
   return (
