@@ -4,6 +4,12 @@
     "slug": "surestep",
     "scheme": "surestep",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f32fc97d-48cd-404a-ba88-8f508db31b6e"
+    },
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "platforms": [
@@ -61,6 +67,7 @@
       }
     },
     "ios": {
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "SureStep monitors your patient's location continuously to alert you if they leave their safe zone.",
         "NSLocationAlwaysUsageDescription": "SureStep needs background location access to monitor patient safety even when the app is closed.",
@@ -69,7 +76,8 @@
           "location",
           "fetch"
         ]
-      }
+      },
+      "bundleIdentifier": "com.anonymous.surestep"
     },
     "extra": {
       "eas": {
