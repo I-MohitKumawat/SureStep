@@ -3,9 +3,10 @@
  * Current user profile read and update. Maps to /users routes.
  */
 import apiClient from './apiClient';
+import type { UserMeData } from '../types/api.types';
 
 export const getMe = () =>
-  apiClient.get('/users/me');
+  apiClient.get<{ success: boolean; data: UserMeData }>('/users/me');
 
 export const updateMe = (body: unknown) =>
   apiClient.patch('/users/me', body);

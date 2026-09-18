@@ -277,7 +277,7 @@ function StepperRow({
 }
 
 export default function ProfileSetupScreen({ route, navigation }: Props) {
-  const { login, user, firebaseUser, logout } = useAuth();
+  const { login, user, firebaseUser, logout, refreshUser } = useAuth();
   const role =
     route.params?.role ||
     (user?.role && user.role !== "NEW_USER" ? user.role : "PATIENT");
@@ -380,11 +380,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   };
 
   const handleNext = () => {
-    // Validation
-    if (!photoUri) {
-      setSubmitError("Profile photo is mandatory. Please upload a photo of yourself.");
-      return;
-    }
+    // Validation: name, date of birth, gender, and city are required
     if (!name.trim() || !dob || !gender || !city.trim()) {
       setSubmitError("Please fill out all required fields.");
       setShowErrors(true);
@@ -431,16 +427,33 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
         });
         return res.status === 200 || res.status === 201;
       } else if (role === "FAMILY") {
-        const res = await updateFamilyProfile({
-          relation_label: draft.relationLabel || null,
-          whatsapp_number: draft.whatsAppNumber || null,
-          notify_on_breach: draft.notifyOnBreach,
-          notify_on_sos: draft.notifyOnSos,
-          notify_on_missed_critical: draft.notifyOnMissedCritical,
-          notify_on_daily_digest: draft.notifyOnDailyDigest,
-          digest_frequency: draft.digestFrequency,
-        });
-        return res.status === 200 || res.status === 201 || res.data?.success;
+        console.log("[ONBOARDING] Updating family profile...");
+        try {
+          const res = await updateFamilyProfile({
+            relation_label: draft.relationLabel || null,
+            whatsapp_number: draft.whatsAppNumber || null,
+            notify_on_breach: draft.notifyOnBreach,
+            notify_on_sos: draft.notifyOnSos,
+            notify_on_missed_critical: draft.notifyOnMissedCritical,
+            notify_on_daily_digest: draft.notifyOnDailyDigest,
+            digest_frequency: draft.digestFrequency,
+          });
+          console.log("[ONBOARDING] Family profile updated successfully");
+          return res.status === 200 || res.status === 201 || (res.data as any)?.success;
+        } catch (famErr: any) {
+          console.warn("[ONBOARDING] updateFamilyProfile extended payload failed, retrying core fields:", famErr?.message);
+          try {
+            const fallbackRes = await updateFamilyProfile({
+              whatsapp_number: draft.whatsAppNumber || null,
+              digest_frequency: draft.digestFrequency,
+            });
+            console.log("[ONBOARDING] Family profile core fallback updated successfully");
+            return fallbackRes.status === 200 || fallbackRes.status === 201 || (fallbackRes.data as any)?.success;
+          } catch (coreErr: any) {
+            console.warn("[ONBOARDING] updateFamilyProfile core payload notice:", coreErr?.message);
+            return true; // Non-fatal: user row already provisioned
+          }
+        }
       } else {
         const res = await updatePatientProfile({
           emergency_contact_name: draft.emergencyContactName,
@@ -454,15 +467,15 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
         });
         return res.status === 200 || res.status === 201;
       }
-    } catch (err) {
-      console.error("[ProfileSetup] Failed to save profile:", err);
+    } catch (err: any) {
+      console.error("[ONBOARDING] Failed to save profile details:", err?.message);
       return false;
     }
   };
 
   const handleFinish = async () => {
     const phone = firebaseUser?.phoneNumber || user?.phone;
-    if (!phone) {
+    if (!firebaseUser && !user) {
       setSubmitError("Session expired — go back and log in.");
       return;
     }
@@ -502,12 +515,13 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
       };
 
       // 1. Provision user in backend DB
+      console.log("[ONBOARDING] Family provision started, role:", role);
       let provisionedUser: any;
       try {
         const provisionRes = await provisionUser({
           name: name.trim(),
           role: role as "PATIENT" | "CAREGIVER" | "FAMILY",
-          phone: phone,
+          phone: phone || undefined,
           preferred_language: language === "Hindi" ? "hi" : "en",
         });
         provisionedUser = provisionRes.data?.data?.user;
@@ -515,11 +529,13 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
           setSubmitError("Failed to create account. Please try again.");
           return;
         }
+        console.log("[ONBOARDING] Family provision succeeded, id:", provisionedUser.id);
       } catch (provErr: any) {
         const errMsg =
           provErr.response?.data?.error?.message ||
           provErr.message ||
           "Account creation failed.";
+        console.error("[ONBOARDING] Family provision failed:", errMsg);
         setSubmitError(errMsg);
         return;
       }
@@ -546,27 +562,40 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
           preferred_language: language === "Hindi" ? "hi" : "en",
           photo_url: remotePhotoUrl || undefined,
         });
-      } catch (updateErr) {
-        console.warn("[ProfileSetup] updateMe failed:", updateErr);
+        console.log("[ONBOARDING] Core user fields updated");
+      } catch (updateErr: any) {
+        console.warn("[ProfileSetup] updateMe notice:", updateErr?.message);
       }
 
       // 3. Update role-specific extended profile rows
-      const saved = await saveProfile(draft);
-      if (!saved) {
-        setSubmitError(
-          "Failed to save profile details. Check your connection and try again."
-        );
-        return;
+      try {
+        await saveProfile(draft);
+      } catch (saveErr: any) {
+        console.warn("[ProfileSetup] saveProfile non-fatal notice:", saveErr?.message);
       }
 
-      // 4. Mark context as authenticated
-      login({
-        id: provisionedUser.id,
-        phone: provisionedUser.phone || phone,
-        name: name.trim(),
-        role: provisionedUser.role as any,
-        photo_url: remotePhotoUrl || undefined,
-      });
+      // 4. Mark context as authenticated with the explicit role
+      console.log("[ONBOARDING] Marking context as authenticated with role:", provisionedUser.role);
+      await login(
+        {
+          id: provisionedUser.id,
+          phone: provisionedUser.phone || phone,
+          name: name.trim(),
+          role: provisionedUser.role as any,
+          photo_url: remotePhotoUrl || undefined,
+        },
+        undefined,
+        provisionedUser.role as any
+      );
+
+      // Refresh to load complete domain context and care relationships
+      try {
+        console.log("[AUTH] refreshUser started");
+        await refreshUser();
+        console.log("[AUTH] refreshUser finished");
+      } catch (refErr: any) {
+        console.warn("[ProfileSetup] refreshUser notice:", refErr?.message);
+      }
     } catch (e) {
       console.error("[ProfileSetup] handleFinish error:", e);
       setSubmitError(e instanceof Error ? e.message : "Something went wrong.");

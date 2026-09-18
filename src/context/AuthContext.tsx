@@ -12,12 +12,13 @@
  */
 import React, {
   createContext, useCallback, useContext, useEffect,
-  useMemo, useState, type ReactNode,
+  useMemo, useRef, useState, type ReactNode,
 } from 'react';
 import { getAuth, onAuthStateChanged, signOut, getIdToken, type FirebaseAuthTypes } from '@react-native-firebase/auth';
 import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import type { UserRoleType } from '../types/enums';
+import type { CareContext } from '../types/api.types';
 import { setFirebaseTokenResolver, clearFirebaseTokenResolver } from '../services/apiClient';
 import { connectSocket, disconnectSocket, setSocketTokenResolver } from '../services/socketClient';
 import { getMe } from '../services/userService';
@@ -34,7 +35,7 @@ import {
 export type AuthStatus =
   | 'loading'           // Checking stored tokens on app start
   | 'unauthenticated'   // No valid Firebase session
-  | 'no_role'           // Firebase session exists, but no DB record yet (new user)
+  | 'no_role'           // Firebase session exists, but no DB record yet / needs onboarding
   | 'no_profile'        // Has role but profile setup not completed
   | 'authenticated';    // Fully authenticated and onboarded
 
@@ -47,14 +48,21 @@ export type AuthUser = {
 };
 
 type AuthContextValue = {
-  status:       AuthStatus;
-  user:         AuthUser | null;
-  firebaseUser: FirebaseAuthTypes.User | null;
-  login:        (user: AuthUser) => void;
-  logout:       () => void;
-  setStatus:    (s: AuthStatus) => void;
-  loginDevMode: (role: UserRoleType) => Promise<void>;
-  updateUser:   (patch: Partial<AuthUser>) => void;
+  status:               AuthStatus;
+  user:                 AuthUser | null;
+  firebaseUser:         FirebaseAuthTypes.User | null;
+  careContext:          CareContext | null;
+  activeRole:           UserRoleType | 'NEW_USER' | null;
+  networkError:         boolean;
+  networkErrorMessage?: string | null;
+  isRetrying:           boolean;
+  retryAuth:            () => Promise<void>;
+  refreshUser:          () => Promise<void>;
+  login:                (user: AuthUser, careCtx?: CareContext, role?: UserRoleType) => void;
+  logout:               () => void;
+  setStatus:            (s: AuthStatus) => void;
+  loginDevMode:         (role: UserRoleType) => Promise<void>;
+  updateUser:           (patch: Partial<AuthUser>) => void;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -64,9 +72,136 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [status,       setStatus]       = useState<AuthStatus>('loading');
-  const [user,         setUser]         = useState<AuthUser | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseAuthTypes.User | null>(null);
+  const [status,              setStatus]              = useState<AuthStatus>('loading');
+  const [user,                setUser]                = useState<AuthUser | null>(null);
+  const [firebaseUser,        setFirebaseUser]        = useState<FirebaseAuthTypes.User | null>(null);
+  const [careContext,         setCareContext]         = useState<CareContext | null>(null);
+  const [activeRole,          setActiveRole]          = useState<UserRoleType | 'NEW_USER' | null>(null);
+  const [networkError,        setNetworkError]        = useState(false);
+  const [networkErrorMessage, setNetworkErrorMessage] = useState<string | null>(null);
+  const [isRetrying,          setIsRetrying]          = useState(false);
+  const resolutionSeq = useRef(0);
+
+  const resolveSession = useCallback(async (fbUser: FirebaseAuthTypes.User) => {
+    const currentSeq = ++resolutionSeq.current;
+    try {
+      console.log('[AUTH] GET /users/me started');
+      const response = await getMe();
+      if (currentSeq !== resolutionSeq.current) return;
+      console.log('[AUTH] GET /users/me succeeded');
+      const resData = (response.data as any)?.data || response.data;
+      const dbUser = resData?.user || resData;
+      const resActiveRole = resData?.activeRole || dbUser?.role;
+      const resCareContext = resData?.careContext || null;
+
+      console.log('[AUTH] resolved activeRole =', resActiveRole);
+      console.log('[AUTH] resolved careContext profiles =', JSON.stringify(resCareContext?.profiles ?? {}));
+
+      if (!dbUser || !dbUser.name) {
+        // DB row missing or basic profile not yet completed
+        if (dbUser?.id) {
+          setUser({
+            id:        dbUser.id,
+            phone:     dbUser.phone || fbUser.phoneNumber || '',
+            name:      '',
+            role:      (resActiveRole && resActiveRole !== 'NEW_USER' ? resActiveRole : 'PATIENT') as UserRoleType,
+            photo_url: dbUser.photo_url || undefined,
+          });
+          console.log('[AUTH] Status transition -> no_profile');
+          setStatus('no_profile');
+        } else {
+          // No user row at all in DB
+          console.log('[AUTH] Status transition -> no_role');
+          setStatus('no_role');
+        }
+        setNetworkError(false);
+        setNetworkErrorMessage(null);
+        return;
+      }
+
+      // Valid account with a name exists
+      const resolvedUser: AuthUser = {
+        id:        dbUser.id || '',
+        phone:     dbUser.phone || fbUser.phoneNumber || '',
+        name:      dbUser.name || '',
+        role:      (resActiveRole && resActiveRole !== 'NEW_USER' ? resActiveRole : dbUser.role || 'PATIENT') as UserRoleType,
+        photo_url: dbUser.photo_url || undefined,
+      };
+      setUser(resolvedUser);
+      setCareContext(resCareContext);
+      setActiveRole(resActiveRole);
+      setNetworkError(false);
+      setNetworkErrorMessage(null);
+
+      // Connect socket
+      try {
+        const token = await fbUser.getIdToken();
+        if (token) connectSocket(token);
+      } catch (tokenErr) {
+        console.warn('[AuthContext] Failed to resolve token for socket connection:', tokenErr);
+      }
+
+      console.log('[AUTH] Status transition -> authenticated');
+      setStatus('authenticated');
+      void bootstrapFcmToken();
+
+      if (resolvedUser.role === 'PATIENT') {
+        void (async () => {
+          const granted = await requestBackgroundLocationPermission();
+          if (granted) await startBackgroundLocationUpdates();
+        })();
+      }
+    } catch (err: any) {
+      if (currentSeq !== resolutionSeq.current) return;
+      if (err.response?.status === 404) {
+        // True 404: Authenticated with Firebase, but no SureStep user account yet.
+        console.log('[AuthContext] User not in DB (404) — directing to onboarding');
+        setNetworkError(false);
+        setNetworkErrorMessage(null);
+        setStatus('no_role');
+      } else {
+        const httpStatus = err.response?.status;
+        const errCode = err.code;
+        const errMsg = err.response?.data?.error?.message || err.message || 'Unknown error';
+        console.warn(`[AUTH] GET /users/me failed: status=${httpStatus}, code=${errCode}, message=${errMsg}`);
+
+        // Transient network or server failure (e.g. Render cold start or 500 error)
+        let errorMsg = 'Could not connect to SureStep server.';
+        if (err.response?.status) {
+          errorMsg = `Server error (${err.response.status}).`;
+        } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMsg = 'Connection timed out.';
+        } else if (err.message) {
+          errorMsg = err.message;
+        }
+
+        console.warn('[AuthContext] getMe failed with network/server error:', errorMsg);
+        setNetworkError(true);
+        setNetworkErrorMessage(errorMsg);
+        // Do not log user out! If already authenticated, maintain state. Otherwise stay in loading and allow retry.
+        setStatus((prev) => (prev === 'authenticated' ? 'authenticated' : 'loading'));
+      }
+    }
+  }, []);
+
+  const retryAuth = useCallback(async () => {
+    const authInstance = getAuth();
+    if (authInstance.currentUser) {
+      setIsRetrying(true);
+      try {
+        await resolveSession(authInstance.currentUser);
+      } finally {
+        setIsRetrying(false);
+      }
+    }
+  }, [resolveSession]);
+
+  const refreshUser = useCallback(async () => {
+    const authInstance = getAuth();
+    if (authInstance.currentUser) {
+      await resolveSession(authInstance.currentUser);
+    }
+  }, [resolveSession]);
 
   useEffect(() => {
     // onAuthStateChanged fires once immediately with the persisted session (or null)
@@ -74,11 +209,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const authInstance = getAuth();
     const unsubscribe = onAuthStateChanged(authInstance, async (fbUser) => {
       if (!fbUser) {
+        resolutionSeq.current++;
         // Signed out — clear everything
         clearFirebaseTokenResolver();
         disconnectSocket();
         setFirebaseUser(null);
         setUser(null);
+        setCareContext(null);
+        setActiveRole(null);
+        setNetworkError(false);
         setStatus('unauthenticated');
         return;
       }
@@ -90,67 +229,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setFirebaseTokenResolver(resolver);
       setSocketTokenResolver(resolver);
 
-      // Now load the user's DB profile from the backend.
-      try {
-        const response = await getMe();
-        const dbUser = response.data?.data?.user || response.data?.user || response.data;
-
-        if (!dbUser || !dbUser.role || dbUser.role === 'NEW_USER') {
-          setStatus('no_role');
-        } else if (!dbUser.name) {
-          setUser({
-            id:        dbUser.id || '',
-            phone:     dbUser.phone || '',
-            name:      '',
-            role:      dbUser.role as UserRoleType,
-            photo_url: dbUser.photo_url || undefined,
-          });
-          setStatus('no_profile');
-        } else {
-          setUser({
-            id:        dbUser.id || '',
-            phone:     dbUser.phone || '',
-            name:      dbUser.name || '',
-            role:      dbUser.role as UserRoleType,
-            photo_url: dbUser.photo_url || undefined,
-          });
-          // Connect socket first to avoid races
-          try {
-            const token = await resolver();
-            if (token) connectSocket(token);
-          } catch (tokenErr) {
-            console.warn('[AuthContext] Failed to resolve token for socket connection:', tokenErr);
-          }
-          setStatus('authenticated');
-          // Register FCM device token now that we have an authenticated session
-          void bootstrapFcmToken();
-          // For patients: start background location tracking
-          if (dbUser.role === 'PATIENT') {
-            void (async () => {
-              const granted = await requestBackgroundLocationPermission();
-              if (granted) await startBackgroundLocationUpdates();
-            })();
-          }
-        }
-      } catch (err: any) {
-        // If getMe fails for ANY reason (404 = new user, network error, etc.),
-        // we NEVER kick a Firebase-authenticated user back to unauthenticated.
-        // 404 = user not in DB yet → send to onboarding
-        // anything else = backend unreachable → still send to onboarding so they can proceed
-        if (err.response?.status === 404) {
-          console.log('[AuthContext] User not in DB (404) — directing to onboarding');
-        } else {
-          console.warn('[AuthContext] getMe failed (non-404), still treating as new user:', err?.message);
-        }
-        setStatus('no_role');
-      }
+      // Now resolve the user's DB profile + care context from backend
+      await resolveSession(fbUser);
     });
 
     return unsubscribe; // Clean up the listener on unmount
-  }, []);
+  }, [resolveSession]);
 
-  const login = useCallback(async (authUser: AuthUser) => {
+  const login = useCallback(async (authUser: AuthUser, careCtx?: CareContext, role?: UserRoleType) => {
     setUser(authUser);
+    if (careCtx) setCareContext(careCtx);
+    if (role) setActiveRole(role);
     try {
       const fbUser = getAuth().currentUser;
       if (fbUser) {
@@ -160,10 +249,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.warn('[AuthContext] Failed to connect socket on login:', err);
     }
+    setNetworkError(false);
     setStatus('authenticated');
   }, []);
 
   const logout = useCallback(async () => {
+    resolutionSeq.current++;
     try {
       const authInstance = getAuth();
       if (authInstance.currentUser) {
@@ -176,6 +267,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       disconnectSocket();
       setFirebaseUser(null);
       setUser(null);
+      setCareContext(null);
+      setActiveRole(null);
+      setNetworkError(false);
+      setNetworkErrorMessage(null);
+      setIsRetrying(false);
       setStatus('unauthenticated');
       // Stop patient background location on logout
       void stopBackgroundLocationUpdates();
@@ -194,7 +290,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Call backend to auto-provision / login the mock user
       const response = await getMe();
-      const dbUser = response.data?.data?.user || response.data?.user || response.data;
+      const resData = (response.data as any)?.data || response.data;
+      const dbUser = resData?.user || resData;
+      const resActiveRole = resData?.activeRole || role;
+      const resCareContext = resData?.careContext || null;
 
       setFirebaseUser({
         uid: dbUser?.firebase_uid || `mock-dev-${role.toLowerCase()}-uid`,
@@ -205,9 +304,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id:        dbUser?.id || '',
         phone:     dbUser?.phone || '',
         name:      dbUser?.name || '',
-        role:      dbUser?.role as UserRoleType,
+        role:      resActiveRole as UserRoleType,
         photo_url: dbUser?.photo_url || undefined,
       });
+      setCareContext(resCareContext);
+      setActiveRole(resActiveRole);
+      setNetworkError(false);
       connectSocket(mockToken);
       setStatus('authenticated');
     } catch (err: any) {
@@ -219,6 +321,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         name: `Demo ${role.charAt(0) + role.slice(1).toLowerCase()}`,
         role,
       });
+      setCareContext(null);
+      setActiveRole(role);
+      setNetworkError(false);
       connectSocket(mockToken);
       setStatus('authenticated');
     }
@@ -295,8 +400,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [status, user]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, firebaseUser, login, logout, setStatus, loginDevMode, updateUser }),
-    [status, user, firebaseUser, login, logout, loginDevMode, updateUser],
+    () => ({
+      status,
+      user,
+      firebaseUser,
+      careContext,
+      activeRole,
+      networkError,
+      networkErrorMessage,
+      isRetrying,
+      retryAuth,
+      refreshUser,
+      login,
+      logout,
+      setStatus,
+      loginDevMode,
+      updateUser,
+    }),
+    [
+      status,
+      user,
+      firebaseUser,
+      careContext,
+      activeRole,
+      networkError,
+      networkErrorMessage,
+      isRetrying,
+      retryAuth,
+      refreshUser,
+      login,
+      logout,
+      loginDevMode,
+      updateUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

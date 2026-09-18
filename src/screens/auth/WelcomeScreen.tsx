@@ -89,7 +89,7 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
               <Pressable
                 onPress={() => status === 'no_role'
                   ? navigation.navigate('RoleSelectionScreen')
-                  : navigation.navigate('ProfileSetupScreen', { role: (firebaseUser ? 'PATIENT' : 'PATIENT') as any })
+                  : navigation.navigate('ProfileSetupScreen', { role: 'PATIENT' })
                 }
                 style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
               >
@@ -103,22 +103,17 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
               </Pressable>
             </>
           ) : (
-            // Normal: show Sign In and Sign Up
+            // Unified Sign In entry point
             <>
               <Pressable
-                onPress={() => navigation.navigate('PhoneAuthScreen', { mode: 'signin' })}
+                onPress={() => navigation.navigate('PhoneAuthScreen')}
                 style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
               >
-                <Text style={styles.ctaText}>Sign In</Text>
+                <Text style={styles.ctaText}>Sign In with Phone</Text>
               </Pressable>
-              <Pressable
-                onPress={() => navigation.navigate('PhoneAuthScreen', { mode: 'signup' })}
-                style={({ pressed }) => [styles.ctaButtonOutline, pressed && styles.ctaPressed]}
-              >
-                <Text style={styles.ctaTextOutline}>Create Account</Text>
-              </Pressable>
-
-
+              <Text style={styles.secondaryText}>
+                New to SureStep? Sign in to set up your profile.
+              </Text>
             </>
           )}
 

@@ -19,7 +19,6 @@ import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
-import { getMe } from '../../services/userService';
 import { setFirebaseTokenResolver } from '../../services/apiClient';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'PhoneAuthScreen'>;
@@ -30,9 +29,7 @@ const countries = [
   { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
 ];
 
-export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
-  const mode = route.params?.mode ?? 'signin';
-
+export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [countryModalVisible, setCountryModalVisible] = useState(false);
 
@@ -100,6 +97,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
 
     setLoading(true);
 
+    let verifySucceeded = false;
     try {
       // Step 1: Confirm OTP — creates the Firebase session
       const credential = await confirmationRef.current.confirm(otp);
@@ -112,35 +110,10 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
 
       // Step 2: Wire up token resolver immediately
       setFirebaseTokenResolver(() => getIdToken(fbUser));
+      verifySucceeded = true;
 
-      if (mode === 'signup') {
-        // Sign-up: OTP is confirmed. Firebase session is live.
-        // Navigate directly to RoleSelectionScreen — don't wait for onAuthStateChanged.
-        // RoleNavigator will also react to the session change, but the direct nav is faster.
-        navigation.navigate('RoleSelectionScreen');
-
-      } else {
-        // Sign-in: check if user exists in DB
-        try {
-          await getMe();
-          // Found — AuthContext.onAuthStateChanged will fire and set status = 'authenticated'
-          // RoleNavigator handles the navigation automatically
-        } catch (err: any) {
-          if (err.response?.status === 404) {
-            // Clean 404: this phone has never signed up
-            await signOut(getAuth());
-            setOtp('');
-            setCodeSent(false);
-            setAuthError('No account found for this number. Please create an account.');
-          } else {
-            // Network/server error — sign them out and show a useful message
-            await signOut(getAuth());
-            setOtp('');
-            setCodeSent(false);
-            setAuthError('Could not connect to the server. Please check your connection and try again.');
-          }
-        }
-      }
+      // AuthContext's onAuthStateChanged listener handles session resolution,
+      // resolving the user and transitioning the navigation stack to RoleSelectionScreen.
     } catch (err: any) {
       console.error('[Firebase OTP Verification Error]', err);
       let userMsg = 'Invalid code. Please try again.';
@@ -151,7 +124,9 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
       }
       setAuthError(userMsg);
     } finally {
-      setLoading(false);
+      if (!verifySucceeded) {
+        setLoading(false);
+      }
     }
   };
 
@@ -228,16 +203,12 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation, route }) => {
 
               {/* TEXT HEADER */}
               <Text style={[styles.brandTitle, { color: theme.colors.textPrimary }]}>
-                {codeSent
-                  ? 'Enter verification code'
-                  : mode === 'signup' ? 'Create your account' : 'Sign in to SureStep'}
+                {codeSent ? 'Enter verification code' : 'Sign in to SureStep'}
               </Text>
               <Text style={[styles.brandSubtitle, { color: theme.colors.textSecondary }]}>
                 {codeSent
                   ? `Enter the 6-digit code sent to ${selectedCountry.code} ${phoneNumber}`
-                  : mode === 'signup'
-                    ? 'Enter your phone number to get started'
-                    : 'Enter your phone number to receive a verification code'}
+                  : 'Enter your phone number to receive a verification code'}
               </Text>
 
               {/* FORM AREA */}

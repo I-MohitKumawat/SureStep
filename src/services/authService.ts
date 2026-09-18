@@ -6,7 +6,7 @@ import apiClient from './apiClient';
 
 export type ProvisionPayload = {
   name: string;
-  role: 'PATIENT' | 'CAREGIVER' | 'FAMILY' | 'DOCTOR';
+  role?: 'PATIENT' | 'CAREGIVER' | 'FAMILY' | 'DOCTOR';
   phone?: string;
   preferred_language?: string;
 };

@@ -9,9 +9,9 @@ import type { UserRoleType } from './enums';
 // ─── Auth Stack ───────────────────────────────────────────────────────────────
 export type AuthStackParams = {
   WelcomeScreen:       undefined;
-  PhoneAuthScreen:     { mode: 'signin' | 'signup' };
+  PhoneAuthScreen:     undefined;
   RoleSelectionScreen: undefined;
-  ProfileSetupScreen:  { role: UserRoleType };
+  ProfileSetupScreen:  { role?: UserRoleType } | undefined;
   InviteAcceptScreen:  { token: string };
 };
 

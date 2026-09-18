@@ -32,6 +32,29 @@ export type User = {
   created_at:         string;
 };
 
+export type CareContext = {
+  relationships: Array<{
+    id: string;
+    patient_user_id: string;
+    related_user_id: string;
+    relationship_type: RelationshipType;
+    status: RelationshipStatus;
+    patient_name?: string;
+    related_name?: string;
+  }>;
+  profiles: {
+    hasPatientProfile: boolean;
+    hasCaregiverProfile: boolean;
+    hasFamilyProfile: boolean;
+  };
+};
+
+export type UserMeData = {
+  user: User;
+  activeRole: UserRoleType | 'NEW_USER';
+  careContext: CareContext;
+};
+
 // ─── Tasks ───────────────────────────────────────────────────────────────────
 export type TaskStep = { order: number; text: string };
 
