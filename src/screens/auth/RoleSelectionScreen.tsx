@@ -1,102 +1,86 @@
 /**
  * SureStep — src/screens/auth/RoleSelectionScreen.tsx
- * Step 1 of the onboarding wizard.
- * Patient: 2 steps total  (this = Step 1, Profile = Step 2)
- * Caregiver: 3 steps total (this = Step 1, Basic Info = Step 2, Professional = Step 3)
+ * Onboarding intent selection screen: "How will you use SureStep?"
+ * Replaces the legacy role selection with four user-centric intents.
  */
 import React, { useState } from 'react';
 import {
-  Pressable, ScrollView, StyleSheet, Text, View,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import type { AuthStackParams } from '../../types/navigation.types';
+import type { AuthStackParams, OnboardingIntent } from '../../types/navigation.types';
 import { useAuth } from '../../context/AuthContext';
-import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'RoleSelectionScreen'>;
 
-// ─── Step Indicator ──────────────────────────────────────────────────────────
-function StepIndicator({
-  current, total, labels,
-}: { current: number; total: number; labels: string[] }) {
-  return (
-    <View style={si.wrap}>
-      {Array.from({ length: total }, (_, i) => {
-        const idx    = i + 1;
-        const done   = idx < current;
-        const active = idx === current;
-        return (
-          <React.Fragment key={idx}>
-            <View style={si.item}>
-              <View style={[si.circle, done && si.circleDone, active && si.circleActive]}>
-                {done
-                  ? <Text style={si.check}>✓</Text>
-                  : <Text style={[si.num, active && si.numActive, !active && !done && si.numMuted]}>
-                      {idx}
-                    </Text>
-                }
-              </View>
-              <Text style={[si.label, active && si.labelActive, done && si.labelDone]}>
-                {labels[i]}
-              </Text>
-            </View>
-            {i < total - 1 && (
-              <View style={[si.dash, done && si.dashDone]} />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </View>
-  );
+interface IntentOption {
+  id: OnboardingIntent;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
 }
 
-// ─── Role Card ───────────────────────────────────────────────────────────────
-function RoleCard({
-  icon, title, description, selected, onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap; title: string; description: string; selected: boolean; onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        rc.card,
-        selected && rc.cardSelected,
-        pressed && rc.cardPressed,
-      ]}
-    >
-      <View style={[rc.bubble, selected && rc.bubbleSelected]}>
-        <Ionicons name={icon} size={24} color={selected ? C.primary : C.textMuted} />
-      </View>
-
-      <View style={rc.textWrap}>
-        <Text style={[rc.title, selected && rc.titleSelected]}>{title}</Text>
-        <Text style={rc.desc}>{description}</Text>
-      </View>
-
-      <View style={[rc.radio, selected && rc.radioSelected]}>
-        {selected && <View style={rc.radioInner} />}
-      </View>
-    </Pressable>
-  );
-}
+const INTENT_OPTIONS: IntentOption[] = [
+  {
+    id: 'RECEIVING_CARE',
+    label: "I'm receiving care myself",
+    icon: 'heart-outline',
+  },
+  {
+    id: 'SETTING_UP_CARE',
+    label: "I'm setting up care for someone",
+    icon: 'shield-checkmark-outline',
+  },
+  {
+    id: 'SUPPORTING_AS_FAMILY',
+    label: "I'm supporting someone as family",
+    icon: 'people-outline',
+  },
+  {
+    id: 'PROFESSIONAL_CAREGIVER',
+    label: "I'm providing professional care",
+    icon: 'medkit-outline',
+  },
+];
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
   const { firebaseUser } = useAuth();
-  const [selectedRole, setSelectedRole] = useState<'CAREGIVER' | 'PATIENT' | 'FAMILY' | null>(null);
+  const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent | null>(null);
 
-  const totalSteps  = selectedRole === 'CAREGIVER' ? 3 : 2;
-  const stepLabels  = selectedRole === 'CAREGIVER'
-    ? ['Your Role', 'Basic Info', 'Professional']
-    : ['Your Role', 'Profile Info'];
+  const handleContinue = () => {
+    if (!selectedIntent) return;
 
-  const proceed = () => {
-    if (!selectedRole) return;
-    navigation.navigate('ProfileSetupScreen', { role: selectedRole });
+    switch (selectedIntent) {
+      case 'RECEIVING_CARE':
+        navigation.navigate('PatientOnboardingScreen', { intent: 'RECEIVING_CARE' });
+        break;
+      case 'SETTING_UP_CARE':
+        navigation.navigate('PatientOnboardingScreen', { intent: 'SETTING_UP_CARE' });
+        break;
+      case 'SUPPORTING_AS_FAMILY':
+        navigation.navigate('FamilyOnboardingScreen', { intent: 'SUPPORTING_AS_FAMILY' });
+        break;
+      case 'PROFESSIONAL_CAREGIVER':
+        navigation.navigate('CaregiverOnboardingScreen', { intent: 'PROFESSIONAL_CAREGIVER' });
+        break;
+    }
+  };
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('WelcomeScreen');
+    }
   };
 
   const phoneDisplay = firebaseUser?.phoneNumber ?? '';
@@ -109,192 +93,226 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={s.header}>
-            <Text style={s.headerTitle}>Welcome to SureStep</Text>
+          {/* Top navigation row */}
+          <View style={s.topNav}>
+            <Pressable onPress={handleBack} style={s.backBtn} hitSlop={12}>
+              <Ionicons name="chevron-back" size={20} color={C.textSecondary} />
+              <Text style={s.backBtnText}>Back</Text>
+            </Pressable>
+
             {phoneDisplay ? (
-              <Text style={s.headerSub}>{phoneDisplay}</Text>
-            ) : null}
+              <Text style={s.phoneSubtitle}>{phoneDisplay}</Text>
+            ) : (
+              <View style={{ width: 48 }} />
+            )}
           </View>
 
-          {/* Step indicator */}
-          <StepIndicator
-            current={1}
-            total={totalSteps}
-            labels={stepLabels}
-          />
-
-          {/* Hero */}
-          <View style={s.hero}>
-            <Text style={s.heroTitle}>Who are you?</Text>
-            <Text style={s.heroSub}>
-              Select your profile type to get started.
-            </Text>
+          {/* Minimal illustration area */}
+          <View style={s.illustrationWrapper}>
+            <View style={s.illustrationBlob}>
+              <View style={s.illustrationIconBubble}>
+                <Ionicons name="sparkles" size={24} color={C.primary} />
+              </View>
+            </View>
           </View>
 
-          {/* Role cards */}
-          <View style={s.cards}>
-            <RoleCard
-              icon="heart-outline"
-              title="I'm a Patient"
-              description="Track daily routines and stay connected."
-              selected={selectedRole === 'PATIENT'}
-              onPress={() => setSelectedRole('PATIENT')}
-            />
-            <RoleCard
-              icon="medkit-outline"
-              title="I'm a Caregiver"
-              description="Manage patients and monitor safety."
-              selected={selectedRole === 'CAREGIVER'}
-              onPress={() => setSelectedRole('CAREGIVER')}
-            />
-            <RoleCard
-              icon="people-outline"
-              title="I'm a Family Member"
-              description="Observe, support, and stay informed."
-              selected={selectedRole === 'FAMILY'}
-              onPress={() => setSelectedRole('FAMILY')}
-            />
+          {/* Central Question */}
+          <Text style={s.heading}>How will you use SureStep?</Text>
+
+          {/* Minimal progress indicator */}
+          <View style={s.progressDots}>
+            <View style={s.progressDotActive} />
+            <View style={s.progressDot} />
+            <View style={s.progressDot} />
+            <View style={s.progressDot} />
           </View>
 
-          {/* CTA */}
-          <Pressable
-            onPress={proceed}
-            disabled={!selectedRole}
-            style={({ pressed }) => [
-              s.cta,
-              !selectedRole && s.ctaDisabled,
-              pressed && selectedRole && s.ctaPressed,
-            ]}
-          >
-            <Text style={s.ctaText}>
-              {selectedRole
-                ? `Next: ${selectedRole === 'CAREGIVER' ? 'basic info' : 'profile info'}  ›`
-                : 'Select a role to continue'}
-            </Text>
-          </Pressable>
+          {/* Intent Options */}
+          <View style={s.optionsContainer}>
+            {INTENT_OPTIONS.map((opt) => {
+              const isSelected = selectedIntent === opt.id;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => setSelectedIntent(opt.id)}
+                  style={({ pressed }) => [
+                    s.optionCard,
+                    isSelected && s.optionCardSelected,
+                    pressed && s.optionCardPressed,
+                  ]}
+                >
+                  <View style={[s.iconBox, isSelected && s.iconBoxSelected]}>
+                    <Ionicons
+                      name={opt.icon}
+                      size={22}
+                      color={isSelected ? C.primary : C.textSecondary}
+                    />
+                  </View>
 
-          {/* Back link */}
-          <Pressable
-            onPress={() => navigation.navigate('WelcomeScreen')}
-            style={s.backBtn}
-          >
-            <Text style={s.backText}>← Back to Welcome</Text>
-          </Pressable>
+                  <Text style={[s.optionText, isSelected && s.optionTextSelected]}>
+                    {opt.label}
+                  </Text>
+
+                  <View style={[s.radioCircle, isSelected && s.radioCircleSelected]}>
+                    {isSelected && <View style={s.radioDot} />}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Bottom CTA */}
+          <View style={s.footer}>
+            <Pressable
+              onPress={handleContinue}
+              disabled={!selectedIntent}
+              style={({ pressed }) => [
+                s.continueBtn,
+                !selectedIntent && s.continueBtnDisabled,
+                pressed && selectedIntent && s.continueBtnPressed,
+              ]}
+            >
+              <Text style={[s.continueBtnText, !selectedIntent && s.continueBtnTextDisabled]}>
+                Continue →
+              </Text>
+            </Pressable>
+          </View>
         </ScrollView>
       )}
     </ScreenContainer>
   );
 };
 
-// ─── Step Indicator Styles ────────────────────────────────────────────────────
-const si = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    marginVertical: 24,
-    paddingHorizontal: 8,
+const s = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: C.surface,
   },
-  item: { alignItems: 'center', gap: 6, width: 72 },
-
-  circle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: C.borderMid,
-    backgroundColor: '#F9FAFB',
+  scroll: {
+    paddingHorizontal: 24,
+    paddingBottom: 28,
+    flexGrow: 1,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingRight: 10,
+  },
+  backBtnText: {
+    fontFamily: F.medium,
+    fontSize: 14,
+    color: C.textSecondary,
+    marginLeft: 2,
+  },
+  phoneSubtitle: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textMuted,
+  },
+  illustrationWrapper: {
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  illustrationBlob: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#EAF7F4',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  circleActive: {
-    borderColor: C.primary,
-    backgroundColor: C.primary,
+  illustrationIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  circleDone: {
-    borderColor: C.primary,
-    backgroundColor: C.primary,
-  },
-
-  check:     { fontFamily: F.bold, fontSize: 14, color: '#fff' },
-  num:       { fontFamily: F.bold, fontSize: 14, color: C.textMuted },
-  numActive: { color: '#fff' },
-  numMuted:  { color: C.textMuted },
-
-  label: {
-    fontFamily: F.regular,
-    fontSize: 10,
-    color: C.textMuted,
+  heading: {
+    fontFamily: F.extraBold,
+    fontSize: 24,
+    color: C.textPrimary,
     textAlign: 'center',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    lineHeight: 32,
+    paddingHorizontal: 12,
+    marginBottom: 10,
   },
-  labelActive: { color: C.primary, fontFamily: F.semiBold },
-  labelDone:   { color: C.primary },
-
-  dash: {
-    flex: 1,
-    height: 2,
-    backgroundColor: C.border,
-    marginTop: 17,
-    borderStyle: 'dashed',
-    borderWidth: 1,
-    borderColor: C.borderMid,
+  progressDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+    gap: 6,
   },
-  dashDone: { borderColor: C.primary, backgroundColor: C.primary },
-});
-
-// ─── Role Card Styles ─────────────────────────────────────────────────────────
-const rc = StyleSheet.create({
-  card: {
+  progressDotActive: {
+    width: 20,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: C.primary,
+  },
+  progressDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: C.borderMid,
+  },
+  optionsContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: C.surface,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 60,
     borderWidth: 1.5,
     borderColor: C.border,
     gap: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
   },
-  cardSelected: {
+  optionCardSelected: {
     borderColor: C.primary,
     backgroundColor: '#F0FBF8',
   },
-  cardPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
-
-  bubble: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: C.bg,
+  optionCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  iconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bubbleSelected: { backgroundColor: C.primaryLight },
-  emoji: { fontSize: 26 },
-
-  textWrap: { flex: 1 },
-  title: {
-    fontFamily: F.bold,
-    fontSize: 16,
+  iconBoxSelected: {
+    backgroundColor: '#E0F5F0',
+  },
+  optionText: {
+    flex: 1,
+    fontFamily: F.medium,
+    fontSize: 15,
     color: C.textPrimary,
-    marginBottom: 3,
+    lineHeight: 21,
   },
-  titleSelected: { color: C.primary },
-  desc: {
-    fontFamily: F.regular,
-    fontSize: 13,
-    color: C.textSecondary,
-    lineHeight: 18,
+  optionTextSelected: {
+    fontFamily: F.bold,
+    color: C.textPrimary,
   },
-
-  radio: {
+  radioCircle: {
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -303,73 +321,41 @@ const rc = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioSelected: { borderColor: C.primary },
-  radioInner: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
+  radioCircleSelected: {
+    borderColor: C.primary,
     backgroundColor: C.primary,
   },
-});
-
-// ─── Screen Styles ────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.surface },
-  scroll: { paddingHorizontal: 24, paddingBottom: 48 },
-
-  header: { paddingTop: 16, marginBottom: 4 },
-  headerTitle: {
-    fontFamily: F.extraBold,
-    fontSize: 22,
-    color: C.textPrimary,
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
   },
-  headerSub: {
-    fontFamily: F.regular,
-    fontSize: 13,
-    color: C.textSecondary,
-    marginTop: 2,
+  footer: {
+    marginTop: 'auto',
+    paddingTop: 8,
   },
-
-  hero: { alignItems: 'center', marginVertical: 20 },
-  heroTitle: {
-    fontFamily: F.extraBold,
-    fontSize: 26,
-    color: C.textPrimary,
-    marginBottom: 8,
-  },
-  heroSub: {
-    fontFamily: F.regular,
-    fontSize: 14,
-    color: C.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 280,
-  },
-
-  cards: { gap: 14, marginBottom: 32 },
-
-  cta: {
-    height: 56,
-    borderRadius: 28,
+  continueBtn: {
+    height: 52,
+    borderRadius: 26,
     backgroundColor: C.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: C.primary,
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 6,
-    marginBottom: 16,
   },
-  ctaDisabled: { backgroundColor: C.borderMid, shadowOpacity: 0 },
-  ctaPressed:  { opacity: 0.88, transform: [{ scale: 0.98 }] },
-  ctaText: {
+  continueBtnDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  continueBtnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  continueBtnText: {
     fontFamily: F.bold,
     fontSize: 16,
-    color: C.primaryText,
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
-
-  backBtn: { alignItems: 'center', paddingVertical: 8 },
-  backText: { fontFamily: F.regular, fontSize: 14, color: C.textMuted },
+  continueBtnTextDisabled: {
+    color: '#9CA3AF',
+  },
 });

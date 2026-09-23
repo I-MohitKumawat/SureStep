@@ -64,6 +64,8 @@ export interface FamilyProfile {
   name: string;
   photo_url: string | null;
   relation_label: string | null;
+  proximity?: string | null;
+  involvement_interests?: string[];
   avatar_url: string | null;
   whatsapp_number: string | null;
   notify_on_breach: boolean;
@@ -89,6 +91,9 @@ export const createCareNote = (content: string, is_pinned?: boolean) =>
 
 export const deleteCareNote = (id: string) =>
   apiClient.delete(`/family/care-notes/${id}`);
+
+export const validateInviteCode = (code: string) =>
+  apiClient.post<{ success: boolean; data: { valid: boolean; patientName: string; code: string } }>('/family/invite-code/validate', { code });
 
 export const redeemInviteCode = (code: string) =>
   apiClient.post<{ success: boolean; data: { relationship: any; message: string } }>('/family/invite-code/redeem', { code });

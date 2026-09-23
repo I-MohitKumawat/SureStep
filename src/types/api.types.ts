@@ -310,6 +310,117 @@ export type PatientRelationship = {
   created_at:        string;
 };
 
+// ─── Patient Profile & Onboarding ─────────────────────────────────────────────
+export type PatientMedicationItem = {
+  id: string;
+  name: string;
+  dosage: string;
+  times_of_day: string[];
+  instructions?: string;
+};
+
+export type PatientProfile = {
+  user_id: string;
+  diagnosis?: string | null;
+  diagnosis_date?: string | null;
+  severity_level?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relation?: string | null;
+  emergency_contact_user_id?: string | null;
+  emergency_contact_status?: 'LINKED' | 'PENDING' | 'UNLINKED';
+  living_arrangement?: string | null;
+  care_needs?: string[];
+  safety_concerns?: string[];
+  communication_preferences?: string[];
+  other_conditions?: string[];
+  onboarding_source?: 'SELF' | 'FAMILY';
+  medications?: PatientMedicationItem[];
+  known_triggers?: string[];
+  comfort_items?: string[];
+  favourite_songs?: any[];
+  home_address?: string | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
+  can_use_phone_independently?: boolean;
+  voice_command_enabled?: boolean;
+  tts_enabled?: boolean;
+  tts_speed?: number;
+  cognitive_baseline_date?: string | null;
+  updated_at?: string;
+};
+
+export type PatientOnboardingPayload = {
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relation?: string | null;
+  diagnosis?: string | null;
+  diagnosis_date?: string | null;
+  severity_level?: string | null;
+  living_arrangement?: string | null;
+  care_needs?: string[];
+  safety_concerns?: string[];
+  communication_preferences?: string[];
+  other_conditions?: string[];
+  onboarding_source?: 'SELF' | 'FAMILY';
+  medications?: PatientMedicationItem[];
+  known_triggers?: string[];
+  comfort_items?: string[];
+  favourite_songs?: any[];
+  cognitive_baseline_date?: string | null;
+  nimhans_patient_id?: string | null;
+};
+
+export type CaregiverQualificationItem = {
+  id: string;
+  name: string;
+  issuer: string;
+  year?: string | number;
+  description?: string;
+};
+
+export type CaregiverProfile = {
+  user_id: string;
+  professional_role?: string | null;
+  years_of_experience: number;
+  dementia_experience_years: number;
+  has_dementia_training: boolean;
+  care_capabilities: string[];
+  specializations: string[];
+  qualifications: CaregiverQualificationItem[];
+  languages_spoken: string[];
+  availability_types: string[];
+  service_city?: string | null;
+  service_radius_km: number;
+  max_patients: number;
+  hourly_rate?: number | null;
+  daily_rate?: number | null;
+  bio?: string | null;
+  is_discoverable: boolean;
+  is_verified: boolean;
+  verification_status?: string;
+  updated_at?: string;
+};
+
+export type CaregiverOnboardingPayload = {
+  professional_role?: string | null;
+  years_of_experience?: number;
+  dementia_experience_years?: number;
+  has_dementia_training?: boolean;
+  care_capabilities?: string[];
+  specializations?: string[];
+  qualifications?: CaregiverQualificationItem[];
+  languages_spoken?: string[];
+  availability_types?: string[];
+  service_city?: string | null;
+  service_radius_km?: number | null;
+  max_patients?: number | null;
+  hourly_rate?: number | null;
+  daily_rate?: number | null;
+  bio?: string | null;
+  is_discoverable?: boolean;
+};
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export type AuthSession = {
   id:            string;

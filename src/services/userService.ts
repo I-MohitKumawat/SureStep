@@ -3,7 +3,7 @@
  * Current user profile read and update. Maps to /users routes.
  */
 import apiClient from './apiClient';
-import type { UserMeData } from '../types/api.types';
+import type { UserMeData, PatientOnboardingPayload, CaregiverOnboardingPayload } from '../types/api.types';
 
 export const getMe = () =>
   apiClient.get<{ success: boolean; data: UserMeData }>('/users/me');
@@ -14,13 +14,13 @@ export const updateMe = (body: unknown) =>
 export const getPatientProfile = (patientId: string) =>
   apiClient.get(`/profiles/patient/${patientId}`);
 
-export const updatePatientProfile = (body: unknown) =>
+export const updatePatientProfile = (body: PatientOnboardingPayload | unknown) =>
   apiClient.put('/profiles/patient', body);
 
 export const getCaregiverProfile = (caregiverId: string) =>
   apiClient.get(`/profiles/caregiver/${caregiverId}`);
 
-export const updateCaregiverProfile = (body: unknown) =>
+export const updateCaregiverProfile = (body: CaregiverOnboardingPayload | unknown) =>
   apiClient.put('/profiles/caregiver', body);
 
 

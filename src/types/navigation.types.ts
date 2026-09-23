@@ -6,13 +6,23 @@
  */
 import type { UserRoleType } from './enums';
 
+// ─── Onboarding Intent ────────────────────────────────────────────────────────
+export type OnboardingIntent =
+  | 'RECEIVING_CARE'         // Option 1: "I'm receiving care myself"
+  | 'SETTING_UP_CARE'        // Option 2: "I'm setting up care for someone"
+  | 'SUPPORTING_AS_FAMILY'   // Option 3: "I'm supporting someone as family"
+  | 'PROFESSIONAL_CAREGIVER'; // Option 4: "I'm providing professional care"
+
 // ─── Auth Stack ───────────────────────────────────────────────────────────────
 export type AuthStackParams = {
-  WelcomeScreen:       undefined;
-  PhoneAuthScreen:     undefined;
-  RoleSelectionScreen: undefined;
-  ProfileSetupScreen:  { role?: UserRoleType } | undefined;
-  InviteAcceptScreen:  { token: string };
+  WelcomeScreen:            undefined;
+  PhoneAuthScreen:          undefined;
+  RoleSelectionScreen:      undefined;
+  ProfileSetupScreen:       { role?: UserRoleType; intent?: OnboardingIntent } | undefined;
+  PatientOnboardingScreen:  { intent: OnboardingIntent; returnToStep?: number };
+  FamilyOnboardingScreen:   { intent?: OnboardingIntent; returnToStep?: number } | undefined;
+  CaregiverOnboardingScreen: { intent?: OnboardingIntent; returnToStep?: number } | undefined;
+  InviteAcceptScreen:       { token: string };
 };
 
 // ─── Patient Stack ────────────────────────────────────────────────────────────

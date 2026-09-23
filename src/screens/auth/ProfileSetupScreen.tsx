@@ -4,7 +4,7 @@
  * Patient: 2 steps total (1: RoleSelection, 2: ProfileSetup)
  * Caregiver: 3 steps total (1: RoleSelection, 2: Basic Info, 3: Professional Info)
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Platform, Pressable,
   ScrollView, StyleSheet, Switch, Text, TextInput, View,
@@ -281,6 +281,16 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   const role =
     route.params?.role ||
     (user?.role && user.role !== "NEW_USER" ? user.role : "PATIENT");
+
+  useEffect(() => {
+    if (role === 'PATIENT') {
+      const intent = route.params?.intent || 'RECEIVING_CARE';
+      navigation.replace('PatientOnboardingScreen', { intent });
+    } else if (role === 'FAMILY') {
+      const intent = route.params?.intent || 'SUPPORTING_AS_FAMILY';
+      navigation.replace('FamilyOnboardingScreen', { intent });
+    }
+  }, [role, route.params?.intent, navigation]);
 
   // Flow State logic
   const [step, setStep] = useState<2 | 3>(2); // Starts at step 2 (Role selection was step 1)
