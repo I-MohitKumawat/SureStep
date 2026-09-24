@@ -138,7 +138,15 @@ export type DocumentType =
 
 export type OtpPurpose = 'LOGIN' | 'PHONE_CHANGE' | 'ACCOUNT_DELETION';
 
+/**
+ * @deprecated Legacy 4-value availability type from early schema.
+ * Use `CanonicalShift` from `./care.types` for the authoritative 9-shift domain model:
+ * ('DAY_SHIFT' | 'EVENING_SHIFT' | 'OVERNIGHT' | 'LIVE_IN' | 'WEEKEND' | 'FULL_TIME' | 'PART_TIME' | 'RESPITE' | 'ON_CALL')
+ */
 export type AvailabilityType = 'LIVE_IN' | 'VISITING' | 'NIGHT' | 'ON_CALL';
+
+// Authoritative Care Domain Exports
+export * from './care.types';
 
 export type ShiftStatus = 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'MISSED';
 

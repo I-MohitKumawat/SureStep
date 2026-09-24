@@ -4,6 +4,7 @@
  * Every navigation.navigate() call is type-checked against these.
  * TDD Section 10.4.
  */
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { UserRoleType } from './enums';
 
 // ─── Onboarding Intent ────────────────────────────────────────────────────────
@@ -25,9 +26,25 @@ export type AuthStackParams = {
   InviteAcceptScreen:       { token: string };
 };
 
+import type { CaregiverListing } from '../screens/patient/CaregiverSearchView';
+
+// ─── Patient Tabs ─────────────────────────────────────────────────────────────
+export type PatientTabParams = {
+  HomeTab:       undefined;
+  FamilyTab:     undefined;
+  ActivitiesTab: undefined;
+  CareTeamTab:   undefined;
+};
+
 // ─── Patient Stack ────────────────────────────────────────────────────────────
 export type PatientStackParams = {
-  PatientHomeScreen:       { initialTab?: 'Home' | 'Family' | 'Activity' | 'Search' } | undefined;
+  PatientTabs:             NavigatorScreenParams<PatientTabParams> | undefined;
+  PatientHomeScreen:       { initialTab?: 'Home' | 'Family' | 'Activity' | 'Search' | 'CareTeam' } | undefined;
+  CareDiscoveryScreen:     { targetPatientId?: string; targetPatientName?: string } | undefined;
+  CaregiverProfileScreen:  { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
+  CareRequestScreen:       { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
+  CareRequestDetailScreen: { requestId: string; onUpdated?: () => void };
+  CareRequestsListScreen:  { initialTab?: 'PENDING' | 'ALL'; targetPatientId?: string; targetPatientName?: string } | undefined;
   PatientGamesScreen:      undefined;
   PatientStoriesScreen:    undefined;
   PatientActivitiesScreen: undefined;
@@ -47,6 +64,8 @@ export type PatientStackParams = {
 // ─── Caregiver Stack ──────────────────────────────────────────────────────────
 export type CaregiverStackParams = {
   CaregiverTriageScreen:          undefined;
+  CareRequestDetailScreen:        { requestId: string; isCaregiverViewer?: boolean; onUpdated?: () => void };
+  CareRequestsListScreen:         { initialTab?: 'PENDING' | 'ALL' } | undefined;
   CaregiverPatientDetailScreen:   { patientId: string; patientName: string; refresh?: boolean; initialTab?: 'Home' | 'Alerts' | 'Manage' };
   CaregiverAssessmentScreen:      { patientId: string; patientName: string; assessmentId?: string };
   CaregiverAssessmentViewScreen:  { patientId: string; patientName: string };
@@ -87,6 +106,11 @@ export type FamilyStackParams = {
   FamilyLinkPatientScreen: undefined;
   FamilyTabs:              undefined;
   FamilyFeedScreen:        undefined;
+  CareDiscoveryScreen:     { targetPatientId: string; targetPatientName?: string };
+  CaregiverProfileScreen:  { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
+  CareRequestScreen:       { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
+  CareRequestDetailScreen: { requestId: string; onUpdated?: () => void };
+  CareRequestsListScreen:  { initialTab?: 'PENDING' | 'ALL'; targetPatientId?: string; targetPatientName?: string } | undefined;
   FamilyMapScreen:         { patientId?: string } | undefined;
   FamilyAlertsScreen:      undefined;
   FamilyStoriesScreen:     { patientId: string };

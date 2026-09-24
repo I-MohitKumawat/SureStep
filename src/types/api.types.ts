@@ -46,6 +46,7 @@ export type CareContext = {
     hasPatientProfile: boolean;
     hasCaregiverProfile: boolean;
     hasFamilyProfile: boolean;
+    patientOnboardingSource?: 'SELF' | 'FAMILY' | string | null;
   };
 };
 

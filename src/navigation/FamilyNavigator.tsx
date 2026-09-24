@@ -28,6 +28,11 @@ import { NotificationHistoryScreen } from '../screens/shared/NotificationHistory
 import { NotificationSettingsScreen } from '../screens/shared/NotificationSettingsScreen';
 import { NotificationTestScreen }     from '../screens/shared/NotificationTestScreen';
 import { PatientProfileScreen } from '../screens/shared/PatientProfileScreen';
+import { CareDiscoveryScreen } from '../screens/patient/CareDiscoveryScreen';
+import { CaregiverProfileScreen } from '../screens/patient/CaregiverProfileScreen';
+import { CareRequestScreen } from '../screens/patient/CareRequestScreen';
+import { CareRequestDetailScreen } from '../screens/shared/CareRequestDetailScreen';
+import { CareRequestsListScreen } from '../screens/shared/CareRequestsListScreen';
 
 const Stack = createNativeStackNavigator<FamilyStackParams>();
 const Tab = createBottomTabNavigator<FamilyTabParams>();
@@ -59,6 +64,11 @@ const FamilyStack: React.FC = () => {
       <Stack.Screen name="FamilyLinkPatientScreen" component={FamilyLinkPatientScreen} />
       <Stack.Screen name="FamilyTabs"              component={FamilyTabs} />
       <Stack.Screen name="FamilyStoriesScreen"     component={FamilyStoriesScreen} />
+      <Stack.Screen name="CareDiscoveryScreen"     component={CareDiscoveryScreen} />
+      <Stack.Screen name="CaregiverProfileScreen"  component={CaregiverProfileScreen} />
+      <Stack.Screen name="CareRequestScreen"       component={CareRequestScreen} />
+      <Stack.Screen name="CareRequestDetailScreen" component={CareRequestDetailScreen} />
+      <Stack.Screen name="CareRequestsListScreen"  component={CareRequestsListScreen} />
       <Stack.Screen name="NotificationHistoryScreen" component={NotificationHistoryScreen} />
       <Stack.Screen name="NotificationSettingsScreen" component={NotificationSettingsScreen} />
       <Stack.Screen name="NotificationTestScreen"     component={NotificationTestScreen} />

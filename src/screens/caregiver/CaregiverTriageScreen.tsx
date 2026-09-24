@@ -21,6 +21,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 // Navigation types migrated to src/types/navigation.types.ts
@@ -35,6 +36,8 @@ import {
   approveFamilyRequest,
   rejectFamilyRequest,
 } from '../../services/familyService';
+import { getIncomingCareRequests } from '../../services/careRequestService';
+import { getCaregiverProfile } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/apiClient';
 import { relativeTime } from '../../utils/dateUtils';
@@ -359,8 +362,11 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
     family_photo: string | null;
     patient_name: string;
   }>>([]);
+  const [pendingInquiriesCount, setPendingInquiriesCount] = useState<number>(0);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [alertsFeed,  setAlertsFeed]  = useState<ApiAlert[]>([]);
+  const [caregiverProfile, setCaregiverProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState<boolean>(false);
 
   // â”€â”€ Data fetcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // REMOVED: Supabase migration to Express/PostgreSQL
@@ -489,6 +495,13 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
 
       const famRes = await getPendingFamilyRequests();
       setPendingFamilyRequests(famRes.data?.data?.requests || []);
+
+      try {
+        const canonicalRequests = await getIncomingCareRequests('PENDING');
+        setPendingInquiriesCount(canonicalRequests.length);
+      } catch (err) {
+        console.warn('[CaregiverTriage] Failed to load canonical pending care requests:', err);
+      }
     } catch (e) {
       console.error('[CaregiverPatients] loadPendingRequests error:', e);
     } finally {
@@ -528,13 +541,31 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, [caregiverPhone, loadPendingRequests, loadPatients]);
 
-  // ── Initial load ─────────────────────────────────────────────────────────────
-  React.useEffect(() => {
-    if (caregiverPhone) {
-      void loadPatients(caregiverPhone);
-      void loadPendingRequests(caregiverPhone);
+  const loadCaregiverProfile = useCallback(async (userId: string) => {
+    setProfileLoading(true);
+    try {
+      const res = await getCaregiverProfile(userId);
+      const prof = res.data?.data ?? res.data;
+      setCaregiverProfile(prof);
+    } catch (err) {
+      console.warn('[CaregiverTriage] Failed to load caregiver profile:', err);
+    } finally {
+      setProfileLoading(false);
     }
-  }, [caregiverPhone, loadPatients, loadPendingRequests]);
+  }, []);
+
+  // ── Focus Effect: Refresh on screen focus ─────────────────────────────────────
+  useFocusEffect(
+    useCallback(() => {
+      if (caregiverPhone) {
+        void loadPatients(caregiverPhone);
+        void loadPendingRequests(caregiverPhone);
+      }
+      if (user?.id) {
+        void loadCaregiverProfile(user.id);
+      }
+    }, [caregiverPhone, user?.id, loadPatients, loadPendingRequests, loadCaregiverProfile])
+  );
   // ── Realtime subscription ────────────────────────────────────────────────────
   React.useEffect(() => {
     if (!caregiverPhone) return;
@@ -592,8 +623,8 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
   // ── Total alert count for nav badge ───────────────────────────────────────────
   const totalAlertCount = useMemo(() => {
     const activeAlerts = alertsFeed.filter(a => !a.acknowledged_at).length;
-    return activeAlerts + pendingRequests.length + pendingFamilyRequests.length;
-  }, [alertsFeed, pendingRequests, pendingFamilyRequests]);
+    return activeAlerts + pendingRequests.length + pendingFamilyRequests.length + pendingInquiriesCount;
+  }, [alertsFeed, pendingRequests, pendingFamilyRequests, pendingInquiriesCount]);
 
   // ── Derived: filtered patient list ───────────────────────────────────────────
   const filteredPatients = useMemo(() => {
@@ -613,7 +644,79 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
       {/* ── Home tab ────────────────────────────────────────────────────────────── */}
       {activeTab === 'Home' && (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.welcomeText}>Welcome, {user?.name || 'Caregiver'}</Text>
+          {/* Caregiver Profile Header Card */}
+          <View style={styles.profileHeaderCard}>
+            <View style={styles.profileHeaderTop}>
+              <View style={styles.profileAvatarWrap}>
+                {user?.photo_url || caregiverProfile?.photo_url ? (
+                  <Image
+                    source={{ uri: user?.photo_url || caregiverProfile?.photo_url }}
+                    style={styles.profileAvatarImage}
+                  />
+                ) : (
+                  <Text style={styles.profileAvatarInitial}>
+                    {(user?.name || caregiverProfile?.name || 'C').charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.profileIdentityCol}>
+                <Text style={styles.profileNameText} numberOfLines={1}>
+                  {user?.name || caregiverProfile?.name || 'Caregiver'}
+                </Text>
+                <Text style={styles.profileRoleText} numberOfLines={1}>
+                  {caregiverProfile?.professionalRole || caregiverProfile?.professional_role || 'Professional Caregiver'}
+                </Text>
+                <View style={styles.profileBadgeRow}>
+                  {(caregiverProfile?.isDiscoverable ?? caregiverProfile?.is_discoverable ?? true) ? (
+                    <View style={styles.discoverableBadge}>
+                      <Ionicons name="checkmark-circle" size={12} color="#059669" style={{ marginRight: 4 }} />
+                      <Text style={styles.discoverableBadgeText}>Visible in Discovery</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.hiddenBadge}>
+                      <Ionicons name="eye-off-outline" size={12} color="#B45309" style={{ marginRight: 4 }} />
+                      <Text style={styles.hiddenBadgeText}>Hidden from Discovery</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Profile details chips */}
+            <View style={styles.profileDetailsRow}>
+              <View style={styles.profileDetailChip}>
+                <Ionicons name="briefcase-outline" size={13} color={C.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.profileDetailChipText}>
+                  {(caregiverProfile?.yearsExperience ?? caregiverProfile?.years_of_experience ?? 0)} yrs exp
+                </Text>
+              </View>
+              <View style={styles.profileDetailChip}>
+                <Ionicons name="location-outline" size={13} color={C.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.profileDetailChipText} numberOfLines={1}>
+                  {caregiverProfile?.serviceCity || caregiverProfile?.service_city || caregiverProfile?.city || 'Location unset'}
+                </Text>
+              </View>
+              {(caregiverProfile?.hourlyRate || caregiverProfile?.hourly_rate) ? (
+                <View style={styles.profileDetailChip}>
+                  <Ionicons name="cash-outline" size={13} color={C.primary} style={{ marginRight: 4 }} />
+                  <Text style={styles.profileDetailChipText}>
+                    ₹{caregiverProfile?.hourlyRate || caregiverProfile?.hourly_rate}/hr
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Profile CTA */}
+            <Pressable
+              style={({ pressed }) => [styles.profileEditBtn, pressed && { opacity: 0.85 }]}
+              onPress={() => navigation.navigate('CaregiverProfileEditScreen')}
+            >
+              <Ionicons name="create-outline" size={15} color={C.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.profileEditBtnText}>Edit Profile & Availability</Text>
+            </Pressable>
+          </View>
+
+          {/* Section: My Patients Header */}
           <View style={styles.headerContainer}>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitleText}>My Patients</Text>
@@ -628,16 +731,18 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
               >
                 <Ionicons name="notifications-outline" size={22} color="#111827" />
               </Pressable>
-              <Pressable 
-                onPress={() => setIsSearchVisible(!isSearchVisible)} 
-                style={({ pressed }) => [styles.searchIconButton, pressed && { opacity: 0.7 }]}
-              >
-                <Ionicons name="search-outline" size={22} color="#111827" />
-              </Pressable>
+              {patients.length > 0 && (
+                <Pressable 
+                  onPress={() => setIsSearchVisible(!isSearchVisible)} 
+                  style={({ pressed }) => [styles.searchIconButton, pressed && { opacity: 0.7 }]}
+                >
+                  <Ionicons name="search-outline" size={22} color="#111827" />
+                </Pressable>
+              )}
             </View>
           </View>
 
-          {isSearchVisible && (
+          {isSearchVisible && patients.length > 0 && (
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -648,6 +753,33 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
             />
           )}
 
+          {/* Care Inquiries Banner */}
+          <Pressable
+            style={({ pressed }) => [styles.inquiriesBanner, pressed && { opacity: 0.9 }]}
+            onPress={() => navigation.navigate('CareRequestsListScreen', { initialTab: 'PENDING' })}
+          >
+            <View style={styles.inquiriesBannerLeft}>
+              <View style={styles.inquiriesIconWrap}>
+                <Ionicons name="mail-unread" size={20} color={C.primary} />
+              </View>
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={styles.inquiriesTitle}>Care Inquiries & Proposals</Text>
+                <Text style={styles.inquiriesSubtitle}>
+                  {pendingInquiriesCount > 0
+                    ? `${pendingInquiriesCount} new incoming care ${pendingInquiriesCount === 1 ? 'proposal' : 'proposals'} awaiting your review`
+                    : 'Review and manage incoming care proposals'}
+                </Text>
+              </View>
+            </View>
+            {pendingInquiriesCount > 0 ? (
+              <View style={styles.inquiriesBadge}>
+                <Text style={styles.inquiriesBadgeText}>{pendingInquiriesCount} new</Text>
+              </View>
+            ) : (
+              <Ionicons name="chevron-forward" size={18} color={C.textSecondary} style={{ marginLeft: 6 }} />
+            )}
+          </Pressable>
+
           {loading && (
             <View style={{ alignItems: 'center', paddingTop: 32 }}>
               <ActivityIndicator color={C.primary} />
@@ -656,10 +788,182 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
           {error && !loading && (
             <Text style={styles.stateNote}>{error}</Text>
           )}
+
+          {/* Zero-Patient Experience */}
           {!loading && !error && patients.length === 0 && (
-            <Text style={styles.stateNote}>
-              No patients yet. Ask your patient to confirm you as their caregiver.
-            </Text>
+            <View style={styles.zeroPatientContainer}>
+              {/* Hero explanation */}
+              <View style={styles.zeroHeroCard}>
+                <View style={styles.zeroHeroIconWrap}>
+                  <Ionicons name="people-outline" size={28} color={C.primary} />
+                </View>
+                <Text style={styles.zeroHeroTitle}>No Patients Under Care Yet</Text>
+                <Text style={styles.zeroHeroDesc}>
+                  You are ready to accept care assignments. SureStep connects caregivers with dementia patients through mutual proposals and direct family invitations.
+                </Text>
+              </View>
+
+              {/* Direct incoming patient requests if any */}
+              {pendingRequests.length > 0 && (
+                <View style={styles.pendingSection}>
+                  <View style={styles.pendingSectionHeader}>
+                    <Ionicons name="notifications" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                    <Text style={styles.pendingSectionTitle}>
+                      Direct Patient Requests ({pendingRequests.length})
+                    </Text>
+                  </View>
+                  {pendingRequests.map((req) => (
+                    <View key={req.patient_phone} style={requestStyles.card}>
+                      <View style={requestStyles.avatar}>
+                        <Text style={requestStyles.avatarInitial}>{req.patient_name[0]?.toUpperCase()}</Text>
+                      </View>
+                      <View style={requestStyles.info}>
+                        <Text style={requestStyles.name}>{req.patient_name}</Text>
+                        <Text style={requestStyles.sub}>Wants to add you as their caregiver</Text>
+                      </View>
+                      <View style={requestStyles.actions}>
+                        <Pressable
+                          style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
+                          onPress={() => handleRespond(req.patient_phone, 'confirmed')}
+                        >
+                          <Text style={requestStyles.acceptText}>Accept</Text>
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
+                          onPress={() => handleRespond(req.patient_phone, 'rejected')}
+                        >
+                          <Text style={requestStyles.rejectText}>Reject</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Connecting with Patients section */}
+              <Text style={styles.guidanceSectionHeading}>HOW TO CONNECT WITH PATIENTS</Text>
+
+              {/* Pathway 1: Care Discovery Proposals */}
+              <View style={styles.pathwayCard}>
+                <View style={styles.pathwayHeaderRow}>
+                  <View style={styles.pathwayIconWrap}>
+                    <Ionicons name="search" size={20} color={C.primary} />
+                  </View>
+                  <View style={styles.pathwayTextWrap}>
+                    <Text style={styles.pathwayTitle}>Care Discovery Proposals</Text>
+                    <Text style={styles.pathwayDesc}>
+                      Patients and families in your service city search for caregivers in Care Discovery. When they send a care proposal, it arrives in your Inquiries list for review.
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [styles.pathwayBtn, pressed && { opacity: 0.85 }]}
+                  onPress={() => navigation.navigate('CareRequestsListScreen', { initialTab: 'PENDING' })}
+                >
+                  <Text style={styles.pathwayBtnText}>
+                    {pendingInquiriesCount > 0 ? `Review Proposals (${pendingInquiriesCount} Pending)` : 'Review Care Proposals'}
+                  </Text>
+                  <Ionicons name="arrow-forward" size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </Pressable>
+              </View>
+
+              {/* Pathway 2: Profile Discoverability */}
+              <View style={styles.pathwayCard}>
+                <View style={styles.pathwayHeaderRow}>
+                  <View style={[styles.pathwayIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="sparkles" size={20} color="#059669" />
+                  </View>
+                  <View style={styles.pathwayTextWrap}>
+                    <Text style={styles.pathwayTitle}>Profile & Availability</Text>
+                    <Text style={styles.pathwayDesc}>
+                      Families discover you based on your service city, experience, and availability. Keep your profile updated to receive relevant proposals.
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [styles.pathwaySecondaryBtn, pressed && { opacity: 0.85 }]}
+                  onPress={() => navigation.navigate('CaregiverProfileEditScreen')}
+                >
+                  <Text style={styles.pathwaySecondaryBtnText}>Update Profile & Visibility</Text>
+                  <Ionicons name="chevron-forward" size={14} color={C.primary} style={{ marginLeft: 4 }} />
+                </Pressable>
+              </View>
+
+              {/* Pathway 3: Direct Phone Linkage */}
+              <View style={styles.pathwayCard}>
+                <View style={styles.pathwayHeaderRow}>
+                  <View style={[styles.pathwayIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="call" size={20} color="#2563EB" />
+                  </View>
+                  <View style={styles.pathwayTextWrap}>
+                    <Text style={styles.pathwayTitle}>Direct Patient / Family Link</Text>
+                    <Text style={styles.pathwayDesc}>
+                      Patients or family members can also add you directly by entering your registered phone number in their app.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.phoneDisplayBox}>
+                  <Text style={styles.phoneDisplayLabel}>Your Registered Phone:</Text>
+                  <Text style={styles.phoneDisplayValue}>{caregiverPhone || user?.phone || '—'}</Text>
+                </View>
+                <Text style={styles.phoneDisplayNote}>
+                  Direct requests will appear immediately above for your review. Care does not begin until you accept.
+                </Text>
+              </View>
+
+              {/* Pathway 4: Family & Care Circle Guidance */}
+              <View style={styles.pathwayCard}>
+                <View style={styles.pathwayHeaderRow}>
+                  <View style={[styles.pathwayIconWrap, { backgroundColor: '#F5F3FF' }]}>
+                    <Ionicons name="people" size={20} color="#7C3AED" />
+                  </View>
+                  <View style={styles.pathwayTextWrap}>
+                    <Text style={styles.pathwayTitle}>Family & Care Circle</Text>
+                    <Text style={styles.pathwayDesc}>
+                      Care Circles are patient-centered. Once care begins with a patient, you can generate 6-character family invitation codes and manage family roles (Guardian, Close Family, Extended) from their Care Circle.
+                    </Text>
+                  </View>
+                </View>
+                {pendingFamilyRequests.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={[styles.sectionLabel, { marginBottom: 6 }]}>PENDING FAMILY REQUESTS</Text>
+                    {pendingFamilyRequests.map((req) => (
+                      <View key={req.id} style={requestStyles.card}>
+                        <View style={requestStyles.avatar}>
+                          {req.family_photo ? (
+                            <Image source={{ uri: req.family_photo }} style={requestStyles.avatarImage} />
+                          ) : (
+                            <Text style={requestStyles.avatarInitial}>
+                              {(req.family_name || 'F')[0]?.toUpperCase()}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={requestStyles.info}>
+                          <Text style={requestStyles.name}>{req.family_name}</Text>
+                          <Text style={requestStyles.sub}>
+                            Wants to join care circle of patient {req.patient_name}
+                          </Text>
+                        </View>
+                        <View style={requestStyles.actions}>
+                          <Pressable
+                            style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
+                            onPress={() => handleRespondFamily(req.id, 'approve')}
+                          >
+                            <Text style={requestStyles.acceptText}>Approve</Text>
+                          </Pressable>
+                          <Pressable
+                            style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
+                            onPress={() => handleRespondFamily(req.id, 'reject')}
+                          >
+                            <Text style={requestStyles.rejectText}>Reject</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
           )}
 
           {filteredPatients.map((patient) => {
@@ -701,6 +1005,32 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.headerRow}>
             <Text style={[styles.overline, { fontSize: 20, fontWeight: '600' }]}>PATIENT NOTIFICATIONS</Text>
           </View>
+
+          {/* Care Inquiries Entry Point */}
+          <Pressable
+            style={styles.inquiriesBanner}
+            onPress={() => navigation.navigate('CareRequestsListScreen', { initialTab: 'PENDING' })}
+          >
+            <View style={styles.inquiriesBannerLeft}>
+              <View style={styles.inquiriesIconWrap}>
+                <Ionicons name="mail-unread-outline" size={20} color={C.primary} />
+              </View>
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={styles.inquiriesTitle}>Care Inquiries & Proposals</Text>
+                <Text style={styles.inquiriesSubtitle}>
+                  {pendingInquiriesCount > 0
+                    ? `${pendingInquiriesCount} incoming care ${pendingInquiriesCount === 1 ? 'request' : 'requests'} waiting for response`
+                    : 'View all incoming and past care requests'}
+                </Text>
+              </View>
+            </View>
+            {pendingInquiriesCount > 0 && (
+              <View style={styles.inquiriesBadge}>
+                <Text style={styles.inquiriesBadgeText}>{pendingInquiriesCount} new</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={C.textSecondary} style={{ marginLeft: 6 }} />
+          </Pressable>
 
           {/* ── Patient request section ────────────────────────────────────── */}
           {pendingRequests.length > 0 && (
@@ -778,7 +1108,25 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
 
           {loading && <ActivityIndicator color={C.primary} style={{ marginTop: 20 }} />}
           {!loading && patients.length === 0 && (
-            <Text style={styles.stateNote}>No patients linked yet.</Text>
+            <View style={styles.emptyAlertsCard}>
+              <View style={styles.emptyAlertsIconWrap}>
+                <Ionicons name="shield-checkmark-outline" size={32} color={C.primary} />
+              </View>
+              <Text style={styles.emptyAlertsTitle}>No Active Safety Alerts</Text>
+              <Text style={styles.emptyAlertsDesc}>
+                Real-time safety alerts (geofence breaches, emergency SOS notifications, and missed routines) will appear here once you are actively caring for a patient.
+              </Text>
+              <Text style={styles.emptyAlertsSubDesc}>
+                Incoming care proposals and family access requests are displayed above when pending.
+              </Text>
+              <Pressable
+                style={({ pressed }) => [styles.emptyAlertsBtn, pressed && { opacity: 0.85 }]}
+                onPress={() => navigation.navigate('CareRequestsListScreen', { initialTab: 'PENDING' })}
+              >
+                <Ionicons name="mail-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyAlertsBtnText}>Review Care Inquiries & Proposals</Text>
+              </Pressable>
+            </View>
           )}
 
           {!loading && (() => {
@@ -992,6 +1340,59 @@ const styles = StyleSheet.create({
   overline:     { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.4, color: C.primary, marginBottom: 2 },
   sectionLabel: { fontFamily: F.bold, fontSize: 10, letterSpacing: 1.4, color: C.textMuted, marginBottom: 10 },
   stateNote:    { fontFamily: F.regular, color: C.textMuted, textAlign: 'center', marginTop: 32, fontSize: 14 },
+
+  inquiriesBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  inquiriesBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  inquiriesIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#E6F4F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inquiriesTitle: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: C.textPrimary,
+  },
+  inquiriesSubtitle: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textSecondary,
+    marginTop: 2,
+  },
+  inquiriesBadge: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginRight: 4,
+  },
+  inquiriesBadgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
 
   searchInput: {
     height: 46, borderRadius: 12,
@@ -1209,6 +1610,345 @@ const styles = StyleSheet.create({
     fontFamily: F.bold,
     fontSize: 13,
     color: '#16A34A',
+  },
+
+  // ── Profile Header Card Styles ─────────────────────────────────────────────
+  profileHeaderCard: {
+    backgroundColor: C.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  profileHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  profileAvatarWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: C.primaryLight,
+    borderWidth: 2,
+    borderColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    overflow: 'hidden',
+  },
+  profileAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  profileAvatarInitial: {
+    fontFamily: F.extraBold,
+    fontSize: 24,
+    color: C.primary,
+  },
+  profileIdentityCol: {
+    flex: 1,
+  },
+  profileNameText: {
+    fontFamily: F.extraBold,
+    fontSize: 18,
+    color: C.textPrimary,
+  },
+  profileRoleText: {
+    fontFamily: F.semiBold,
+    fontSize: 13,
+    color: C.textSecondary,
+    marginTop: 1,
+  },
+  profileBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  discoverableBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  discoverableBadgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: '#065F46',
+  },
+  hiddenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  hiddenBadgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: '#92400E',
+  },
+  profileDetailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  profileDetailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  profileDetailChipText: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: C.textPrimary,
+  },
+  profileEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primaryLight,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.primary,
+  },
+  profileEditBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: C.primary,
+  },
+
+  // ── Zero Patients Dashboard Styles ─────────────────────────────────────────
+  zeroPatientContainer: {
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  zeroHeroCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  zeroHeroIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  zeroHeroTitle: {
+    fontFamily: F.extraBold,
+    fontSize: 17,
+    color: C.textPrimary,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  zeroHeroDesc: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  pendingSection: {
+    marginBottom: 20,
+  },
+  pendingSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pendingSectionTitle: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    letterSpacing: 0.8,
+    color: '#DC2626',
+  },
+  guidanceSectionHeading: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: C.textMuted,
+    marginBottom: 12,
+  },
+  pathwayCard: {
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  pathwayHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  pathwayIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  pathwayTextWrap: {
+    flex: 1,
+  },
+  pathwayTitle: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.textPrimary,
+    marginBottom: 4,
+  },
+  pathwayDesc: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textSecondary,
+    lineHeight: 18,
+  },
+  pathwayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 14,
+  },
+  pathwayBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  pathwaySecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingVertical: 9,
+    marginTop: 12,
+  },
+  pathwaySecondaryBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: C.primary,
+  },
+  phoneDisplayBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  phoneDisplayLabel: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: '#0369A1',
+  },
+  phoneDisplayValue: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#0C4A6E',
+  },
+  phoneDisplayNote: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textMuted,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+
+  // ── Empty Alerts State Styles ──────────────────────────────────────────────
+  emptyAlertsCard: {
+    backgroundColor: C.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  emptyAlertsIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyAlertsTitle: {
+    fontFamily: F.extraBold,
+    fontSize: 17,
+    color: C.textPrimary,
+    marginBottom: 6,
+  },
+  emptyAlertsDesc: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 6,
+  },
+  emptyAlertsSubDesc: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: C.textMuted,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  emptyAlertsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primary,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+  },
+  emptyAlertsBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
   },
 });
 

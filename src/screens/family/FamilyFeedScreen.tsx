@@ -297,6 +297,50 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Care Discovery Entry Point Card */}
+        {p && (
+          <View style={s.careDiscoveryCard}>
+            <View style={s.careDiscoveryHeader}>
+              <View style={s.careDiscoveryIconWrap}>
+                <Ionicons name="medical" size={20} color={C.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.careDiscoveryTitle}>Need professional care for {p.name}?</Text>
+                <Text style={s.careDiscoverySub}>
+                  Find dementia specialists, clinical nurses, and day aides near you.
+                </Text>
+              </View>
+            </View>
+            <View style={s.careDiscoveryBtnRow}>
+              <Pressable
+                style={({ pressed }) => [s.careDiscoveryBtn, pressed && { opacity: 0.85 }]}
+                onPress={() =>
+                  navigation.navigate('CareDiscoveryScreen', {
+                    targetPatientId: p.id,
+                    targetPatientName: p.name,
+                  })
+                }
+              >
+                <Ionicons name="search" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={s.careDiscoveryBtnText}>Find Caregivers</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [s.careRequestsBtn, pressed && { opacity: 0.85 }]}
+                onPress={() =>
+                  navigation.navigate('CareRequestsListScreen', {
+                    targetPatientId: p.id,
+                    targetPatientName: p.name,
+                  })
+                }
+              >
+                <Ionicons name="document-text-outline" size={15} color={C.primary} style={{ marginRight: 6 }} />
+                <Text style={s.careRequestsBtnText}>Care Requests</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* Routine Card */}
         <View style={s.card}>
           <View style={s.sectionHeader}>
@@ -419,4 +463,80 @@ const s = StyleSheet.create({
   statusLabel: { fontFamily: F.bold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   emptyText: { fontFamily: F.medium, fontSize: 13, color: C.textMuted, fontStyle: 'italic', textAlign: 'center', paddingVertical: 14 },
+
+  careDiscoveryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  careDiscoveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  careDiscoveryIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E6F4F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  careDiscoveryTitle: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.textPrimary,
+  },
+  careDiscoverySub: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  careDiscoveryBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  careDiscoveryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primary,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  careDiscoveryBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  careRequestsBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  careRequestsBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: C.primary,
+  },
 });

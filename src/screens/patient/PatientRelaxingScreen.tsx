@@ -515,10 +515,10 @@ export const PatientRelaxingScreen: React.FC<Props> = ({ navigation }) => {
   const { confirmedCaregiver } = useCaregiver();
 
   const onTabPress = (tab: BottomTab) => {
-    if (tab === 'Home')     navigation.navigate('PatientHomeScreen');
-    if (tab === 'Family')   navigation.navigate('PatientHomeScreen', { initialTab: 'Family' });
-    if (tab === 'Activity') navigation.navigate('PatientHomeScreen', { initialTab: 'Activity' });
-    if (tab === 'Search')   navigation.navigate('PatientHomeScreen', { initialTab: 'Search' });
+    if (tab === 'Home')     navigation.navigate('PatientTabs', { screen: 'HomeTab' });
+    if (tab === 'Family')   navigation.navigate('PatientTabs', { screen: 'FamilyTab' });
+    if (tab === 'Activity') navigation.navigate('PatientTabs', { screen: 'ActivitiesTab' });
+    if (tab === 'Search')   navigation.navigate('PatientTabs', { screen: 'CareTeamTab' });
   };
 
   const snapTo = useCallback((nextIdx: number) => {

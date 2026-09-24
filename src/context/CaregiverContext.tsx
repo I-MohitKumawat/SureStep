@@ -6,15 +6,17 @@
  */
 import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { CaregiverListing } from '../screens/patient/CaregiverSearchView';
-import { fetchConfirmedCaregiver, confirmCaregiver, removeCaregiver } from '../services/relationshipService';
+import { fetchConfirmedCaregiver, fetchMyCaregivers, confirmCaregiver, removeCaregiver } from '../services/relationshipService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type CaregiverContextValue = {
+  caregivers:            CaregiverListing[];
   confirmedCaregiver:    CaregiverListing | null;
   loading:               boolean;
   setConfirmedCaregiver: (c: CaregiverListing | null, patientPhone: string, patientName?: string) => Promise<void>;
-  reloadCaregiver:       (patientPhone: string, force?: boolean) => Promise<void>;
+  reloadCaregiver:       (patientPhone?: string, force?: boolean) => Promise<void>;
+  reloadCaregivers:      (force?: boolean) => Promise<void>;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -24,36 +26,60 @@ const CaregiverContext = createContext<CaregiverContextValue | undefined>(undefi
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
+  const [caregivers, setCaregivers] = useState<CaregiverListing[]>([]);
   const [confirmedCaregiver, setConfirmedCaregiverState] = useState<CaregiverListing | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const confirmedCaregiverRef = React.useRef(confirmedCaregiver);
-  React.useEffect(() => {
-    confirmedCaregiverRef.current = confirmedCaregiver;
-  }, [confirmedCaregiver]);
+  const hasLoadedRef = React.useRef(false);
 
   /**
-   * Sync context state with latest DB record.
+   * Sync context state with latest DB records (supports multiple caregivers).
    */
-  const reloadCaregiver = useCallback(
-    async (patientPhone: string, force = false) => {
-      if (!patientPhone) {
-        setConfirmedCaregiverState(null);
-        return;
-      }
-
-      // If we already have the caregiver, skip API fetch unless forced
-      if (confirmedCaregiverRef.current && !force) {
+  const reloadCaregivers = useCallback(
+    async (force = false) => {
+      if (hasLoadedRef.current && !force) {
         return;
       }
 
       setLoading(true);
       try {
-        const caregiver = await fetchConfirmedCaregiver(patientPhone);
-        setConfirmedCaregiverState(caregiver);
+        const team = await fetchMyCaregivers();
+        setCaregivers(team);
+        setConfirmedCaregiverState(team[0] || null);
+        hasLoadedRef.current = true;
+      } catch (error) {
+        console.warn('[CaregiverContext] reloadCaregivers failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  /**
+   * Backward-compatible sync with patientPhone argument.
+   */
+  const reloadCaregiver = useCallback(
+    async (patientPhone?: string, force = false) => {
+      setLoading(true);
+      try {
+        const team = await fetchMyCaregivers();
+        if (team.length > 0) {
+          setCaregivers(team);
+          setConfirmedCaregiverState(team[0]);
+          hasLoadedRef.current = true;
+        } else if (patientPhone) {
+          const single = await fetchConfirmedCaregiver(patientPhone);
+          setConfirmedCaregiverState(single);
+          setCaregivers(single ? [single] : []);
+        } else {
+          setCaregivers([]);
+          setConfirmedCaregiverState(null);
+        }
       } catch (error) {
         console.warn('[CaregiverContext] reloadCaregiver failed:', error);
         setConfirmedCaregiverState(null);
+        setCaregivers([]);
       } finally {
         setLoading(false);
       }
@@ -69,18 +95,24 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
       if (!patientPhone) return;
 
       // Optimistic update
-      setConfirmedCaregiverState(c ? { ...c, status: 'PENDING' } : null);
+      const pendingItem = c ? { ...c, status: 'PENDING' } : null;
+      setConfirmedCaregiverState(pendingItem);
+      if (pendingItem) {
+        setCaregivers((prev) => [pendingItem, ...prev.filter((item) => item.id !== pendingItem.id)]);
+      }
 
       try {
         if (c) {
           await confirmCaregiver(patientPhone, c, patientName);
         } else {
           await removeCaregiver(patientPhone);
+          setCaregivers([]);
         }
       } catch (error) {
         console.warn('[CaregiverContext] setConfirmedCaregiver failed, reverting state:', error);
         // Revert optimistic update
         setConfirmedCaregiverState(null);
+        setCaregivers((prev) => (c ? prev.filter((item) => item.id !== c.id) : prev));
       }
     },
     [],
@@ -88,12 +120,14 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo<CaregiverContextValue>(
     () => ({
+      caregivers,
       confirmedCaregiver,
       loading,
       setConfirmedCaregiver,
       reloadCaregiver,
+      reloadCaregivers,
     }),
-    [confirmedCaregiver, loading, setConfirmedCaregiver, reloadCaregiver],
+    [caregivers, confirmedCaregiver, loading, setConfirmedCaregiver, reloadCaregiver, reloadCaregivers],
   );
 
   return <CaregiverContext.Provider value={value}>{children}</CaregiverContext.Provider>;

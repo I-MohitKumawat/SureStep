@@ -8,6 +8,7 @@ import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayou
 import { MultiSelectChips, ChipOption } from '../../../components/onboarding/MultiSelectChips';
 import { C } from '../../../theme/colors';
 import { F } from '../../../theme/fonts';
+import { CAPABILITY_OPTIONS } from '../../../types/care.types';
 
 interface Step4Props {
   careCapabilities: string[];
@@ -19,19 +20,6 @@ interface Step4Props {
   onNext: () => void;
   onBack: () => void;
 }
-
-const CAPABILITY_OPTIONS: ChipOption[] = [
-  { id: 'hygiene_bathing', label: 'Bathing & Personal Hygiene', icon: 'water-outline' },
-  { id: 'mobility_transfers', label: 'Mobility & Transfers', icon: 'walk-outline' },
-  { id: 'medication_prompts', label: 'Medication Reminders', icon: 'medkit-outline' },
-  { id: 'meal_prep_feeding', label: 'Meal Prep & Feeding', icon: 'nutrition-outline' },
-  { id: 'wandering_prevention', label: 'Wandering Prevention & Safety', icon: 'shield-checkmark-outline' },
-  { id: 'behavioral_reassurance', label: 'Sundowning & Agitation Support', icon: 'heart-half-outline' },
-  { id: 'cognitive_stimulation', label: 'Companionship & Memory Games', icon: 'sparkles-outline' },
-  { id: 'bedridden_care', label: 'Bedridden & Pressure Sore Care', icon: 'bed-outline' },
-  { id: 'incontinence_care', label: 'Incontinence & Toileting', icon: 'fitness-outline' },
-  { id: 'vitals_monitoring', label: 'Vitals Monitoring (BP/SpO2)', icon: 'pulse-outline' },
-];
 
 const SPECIALIZATION_OPTIONS: ChipOption[] = [
   { id: 'alzheimers', label: "Alzheimer's Disease", icon: 'sparkles-outline' },

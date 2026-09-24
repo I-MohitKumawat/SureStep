@@ -121,7 +121,7 @@ export const CaregiverProfileEditScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const res = await getCaregiverProfile(user.id);
       if (res.data) {
-        const p = res.data;
+        const p = res.data?.data ?? res.data;
         setProfile(p);
         setYearsExp(p.yearsExperience ?? 0);
         setDementiaExp(p.dementiaExperience ?? false);

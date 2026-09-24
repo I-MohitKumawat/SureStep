@@ -13,25 +13,67 @@ import { searchCaregivers } from '../../services/relationshipService';
 import { Ionicons } from '@expo/vector-icons';
 
 export type CaregiverListing = {
-  id: string; name: string; specialty: string; patients: number;
-  rating: number; fee: string; emoji: string; bio: string;
-  availability: string; location: string;
+  id: string;
+  caregiverId?: string;
+  name: string;
+  specialty: string;
+  professional_role?: string | null;
+  professionalRole?: string | null;
+  patients: number;
+  patients_handled?: number;
+  rating: number | null;
+  ratingCount?: number;
+  rating_count?: number;
+  fee: string;
+  emoji: string;
+  bio: string;
+  bioSummary?: string | null;
+  fullBio?: string | null;
+  availability: string;
+  location: string;
+  service_city?: string | null;
+  serviceCity?: string | null;
+  service_radius_km?: number;
+  serviceRadiusKm?: number;
   profile_photo_url?: string | null;
+  photoUrl?: string | null;
   years_experience?: number;
+  yearsOfExperience?: number;
+  dementia_experience_years?: number;
+  dementiaExperienceYears?: number;
+  has_dementia_training?: boolean;
+  hasDementiaTraining?: boolean;
+  care_capabilities?: string[];
+  careCapabilities?: string[];
   specializations?: string[];
+  languages_spoken?: string[];
+  languagesSpoken?: string[];
+  availability_types?: string[];
+  availabilityTypes?: string[];
+  hourly_rate?: string;
+  hourlyRateInr?: number | null;
+  daily_rate?: string;
+  dailyRateInr?: number | null;
+  qualifications?: Array<{ id?: string; name: string; issuer?: string; year?: string | number; description?: string }>;
+  verification_status?: string;
+  verificationStatus?: string;
+  is_verified?: boolean;
+  is_discoverable?: boolean;
+  isDiscoverable?: boolean;
   status?: string;
   phone?: string;
-  availability_types?: string[];
-  hourly_rate?: string;
-  daily_rate?: string;
   about_me?: string;
   emergency_response?: boolean;
   can_assist_nearby?: boolean;
-  languages_spoken?: string[];
-  service_radius_km?: number;
   transportation_mode?: string;
   dementia_experience?: boolean;
-  patients_handled?: number;
+  relationshipId?: string;
+  relationship_id?: string;
+  ended_at?: string;
+  end_reason?: string;
+  end_notes?: string;
+  updated_at?: string;
+  updatedAt?: string;
 };
 
 const SPEC_COLORS: Record<string, string> = {
@@ -59,7 +101,14 @@ function SpecChip({ label }: { label: string }) {
   );
 }
 
-function Stars({ rating }: { rating: number }) {
+function Stars({ rating }: { rating: number | null }) {
+  if (rating == null) {
+    return (
+      <Text style={s.stars}>
+        <Text style={s.ratingNum}>New</Text>
+      </Text>
+    );
+  }
   return (
     <Text style={s.stars}>
       {'★'.repeat(Math.floor(rating))}{'☆'.repeat(5 - Math.floor(rating))}
@@ -176,7 +225,7 @@ export const CaregiverSearchView: React.FC<Props> = ({ onSelect }) => {
                         {[c.location, c.service_radius_km ? `${c.service_radius_km}km radius` : null].filter(Boolean).join(' · ')}
                       </Text>
                       <View style={s.metaRow}>
-                        <Stars rating={c.rating ?? 5.0} />
+                        <Stars rating={c.rating} />
                         {c.years_experience ? <Text style={s.exp}> · {c.years_experience}yr exp</Text> : null}
                       </View>
                       {specs.length > 0 && (

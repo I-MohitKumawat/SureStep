@@ -236,8 +236,8 @@ export const ActivityPlayScreen: React.FC<Props> = ({ navigation, route }) => {
     setRestartKey((k) => k + 1);
   };
 
-  // "Back to Activities" goes back to patient home screen with Activity tab preselected
-  const exitToActivities = () => navigation.navigate('PatientHomeScreen', { initialTab: 'Activity' });
+  // "Back to Activities" goes back to patient tabs with ActivitiesTab selected
+  const exitToActivities = () => navigation.navigate('PatientTabs', { screen: 'ActivitiesTab' });
 
   if (!activity) {
     return (

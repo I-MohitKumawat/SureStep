@@ -6,14 +6,11 @@ import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import { useCaregiver } from '../../hooks/useCaregiver';
-import { AiFab } from '../../components/shared/AiAssistantFab';
-import { IconHome, IconFamily, IconActivity, IconSearch, IconProfile } from '../../assets/icons/NavIcons';
+import { IconActivity } from '../../assets/icons/NavIcons';
 import { ACTIVITY_CATALOGUE, wasPlayedToday, type Activity, type ActivityCategory } from '../../activities/activityData';
 import type { PatientStackParams } from '../../types/navigation.types';
 
-type Props = NativeStackScreenProps<PatientStackParams, 'PatientActivitiesScreen'>;
-type Tab = 'Home' | 'Family' | 'Activity' | 'Search';
+type Props = any;
 
 // â”€â”€â”€ Inline SVG icons (guaranteed to render) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -309,47 +306,9 @@ export const PatientActivitiesView: React.FC<{ navigation: any }> = ({ navigatio
 };
 
 export const PatientActivitiesScreen: React.FC<Props> = ({ navigation }) => {
-  const { confirmedCaregiver } = useCaregiver();
-
-  const navTo = (tab: Tab) => {
-    if (tab === 'Home')     navigation.navigate('PatientHomeScreen');
-    if (tab === 'Family')   navigation.navigate('PatientHomeScreen', { initialTab: 'Family' });
-    if (tab === 'Activity') navigation.navigate('PatientHomeScreen', { initialTab: 'Activity' });
-    if (tab === 'Search')   navigation.navigate('PatientHomeScreen', { initialTab: 'Search' });
-  };
-
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={s.screen}>
       <PatientActivitiesView navigation={navigation} />
-
-      {/* Bottom nav */}
-      <View style={s.nav}>
-        {(['Home', 'Family'] as Tab[]).map((tab) => {
-          const Icon = tab === 'Home' ? IconHome : IconFamily;
-          return (
-            <Pressable key={tab} onPress={() => navTo(tab)} style={s.navTab}>
-              <Icon size={22} color="#9CA3AF" strokeWidth={1.8} />
-              <Text style={s.navLbl}>{tab}</Text>
-            </Pressable>
-          );
-        })}
-        <View style={s.fabSlot}><AiFab /></View>
-        {(['Activity', 'Search'] as Tab[]).map((tab) => {
-          const active = tab === 'Activity';
-          const Icon   = tab === 'Activity' ? IconActivity : confirmedCaregiver ? IconProfile : IconSearch;
-          const label  = tab === 'Search' && confirmedCaregiver ? confirmedCaregiver.name.split(' ')[0] : tab;
-          return (
-            <Pressable key={tab} onPress={() => navTo(tab)} style={s.navTab}>
-              {active ? (
-                <View style={s.actPill}><Icon size={20} color="#fff" strokeWidth={2.2} /></View>
-              ) : (
-                <Icon size={22} color="#9CA3AF" strokeWidth={1.8} />
-              )}
-              <Text style={[s.navLbl, active && { color: C.primary, fontFamily: F.bold }]} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
     </ScreenContainer>
   );
 };
@@ -361,9 +320,4 @@ const s = StyleSheet.create({
   title:     { fontFamily: F.extraBold, fontSize: 28, color: '#1C1C2E' },
   sub:       { fontFamily: F.medium, fontSize: 13, color: '#9CA3AF', marginTop: 3 },
   reportBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: C.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  nav:       { position: 'absolute', left: 0, right: 0, bottom: 0, height: 76, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#F3F4F6', flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: -3 }, shadowRadius: 12, elevation: 12, overflow: 'visible' },
-  navTab:    { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 3 },
-  navLbl:    { fontFamily: F.medium, fontSize: 10, color: '#9CA3AF' },
-  fabSlot:   { width: 72, alignItems: 'center', justifyContent: 'flex-start', marginTop: -40 },
-  actPill:   { width: 44, height: 34, borderRadius: 12, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
 });

@@ -11,21 +11,9 @@ import { useTasks } from '../../hooks/useTasks';
 import type { Task as ContextTask, TaskStatus } from '../../hooks/useTasks';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import {
-  IconHome,
-  IconFamily,
-  IconActivity,
-  IconSearch,
-  IconProfile,
-} from '../../assets/icons/NavIcons';
-import { CaregiverSearchView } from './CaregiverSearchView';
-import type { CaregiverListing } from './CaregiverSearchView';
-import { CaregiverDetailView } from './CaregiverDetailView';
-import { PatientActivitiesView } from './PatientActivitiesScreen';
 import { useAuth } from '../../hooks/useAuth';
 import { useCaregiver } from '../../hooks/useCaregiver';
 import { usePatientTracking } from '../../context/PatientTrackingContext';
-import { AiFab } from '../../components/shared/AiAssistantFab';
 import { writeLocationPing } from '../../utils/geofenceUtils';
 import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
@@ -42,9 +30,8 @@ import {
 } from '../../utils/deviceTelemetry';
 import { useNotifications } from '../../context/NotificationContext';
 
-type Props = NativeStackScreenProps<PatientStackParams, 'PatientHomeScreen'>;
+type Props = any;
 type ActionState = 'done' | 'missed' | 'unsure' | 'overdue' | null;
-type BottomTab = 'Home' | 'Family' | 'Activity' | 'Search';
 
 import { getTaskMeta, statusColors } from '../../utils/patientUtils';
 import { CaregiverProfileModal } from '../../components/patient/CaregiverProfileModal';
@@ -52,14 +39,6 @@ import { RoutineCard } from '../../components/patient/RoutineCard';
 import type { Task } from '../../components/patient/RoutineCard';
 import { UnlinkedCaregiverModal } from '../../components/patient/UnlinkedCaregiverModal';
 import { TaskInstructionsModal } from '../../components/patient/TaskInstructionsModal';
-
-type TabIconProps = { active: boolean };
-const TAB_ICON_COMPONENTS: Record<BottomTab, React.FC<TabIconProps>> = {
-  Home: ({ active }) => <IconHome size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Family: ({ active }) => <IconFamily size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Activity: ({ active }) => <IconActivity size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-  Search: ({ active }) => <IconSearch size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
-};
 
 function parseTaskTimeToToday(timeStr: string): Date {
   const [hours, minutes] = (timeStr || '').split(':').map(Number);
@@ -70,13 +49,10 @@ function parseTaskTimeToToday(timeStr: string): Date {
 
 // --- Main Screen --------------------------------------------------------------
 export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { status, user, firebaseUser } = useAuth();
+  const { status, user, firebaseUser, careContext } = useAuth();
   const { tasks, loadTasksForPatient, updateTaskStatus } = useTasks();
   const { setActivePatientId } = usePatientTracking();
   const isFocused = useIsFocused();
-  // Accept initialTab from route params (from Games/Activities/Family screens)
-  const initialTab = (route.params as any)?.initialTab as BottomTab | undefined;
-  const [activeTab, setActiveTab] = useState<BottomTab>(initialTab ?? 'Home');
   const [currentDateTime] = useState(new Date());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
@@ -84,7 +60,17 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const [helpTask, setHelpTask] = useState<Task | null>(null);
   const [viewingInstructionsTask, setViewingInstructionsTask] = useState<Task | null>(null);
 
-  // Active alarm task and snoozed list removed - handled globally by ReminderContext
+  // Backward compatibility redirect if route params include initialTab
+  useEffect(() => {
+    const initialTab = (route.params as any)?.initialTab;
+    if (initialTab === 'Activity') {
+      navigation.navigate('PatientTabs', { screen: 'ActivitiesTab' } as any);
+    } else if (initialTab === 'Family') {
+      navigation.navigate('PatientTabs', { screen: 'FamilyTab' } as any);
+    } else if (initialTab === 'Search' || initialTab === 'CareTeam') {
+      navigation.navigate('PatientTabs', { screen: 'CareTeamTab' } as any);
+    }
+  }, [(route.params as any)?.initialTab, navigation]);
 
   const { checkNotificationPermissions, requestNotificationPermissions } = useNotifications();
   const [notifPermissionGranted, setNotifPermissionGranted] = useState<boolean>(true);
@@ -124,10 +110,9 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Caregiver search sub-view state ─────────────────────
-  const [searchSubView, setSearchSubView] = useState<'list' | 'detail' | null>(null);
-  const [viewingCaregiver, setViewingCaregiver] = useState<CaregiverListing | null>(null);
-  const { confirmedCaregiver, setConfirmedCaregiver, reloadCaregiver, loading } = useCaregiver();
+  const { confirmedCaregiver, reloadCaregiver, loading } = useCaregiver();
+
+  const isFamilyManaged = careContext?.profiles?.patientOnboardingSource === 'FAMILY';
 
   const hasLinkedCaregiver = !!confirmedCaregiver && (
     confirmedCaregiver.status === 'CONFIRMED' ||
@@ -135,10 +120,6 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
     confirmedCaregiver.status === 'MEETING_COMPLETED' ||
     confirmedCaregiver.status === 'ASSESSMENT_PENDING' ||
     confirmedCaregiver.status === 'ACTIVE_CARE'
-  );
-  const hasPendingRequest = !!confirmedCaregiver && (
-    confirmedCaregiver.status === 'PENDING' ||
-    confirmedCaregiver.status === 'REQUESTED'
   );
 
   // Patient phone comes from auth — no AsyncStorage needed
@@ -357,13 +338,13 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
   const hasAlertedRef = useRef(false);
 
   React.useEffect(() => {
-    if (!loading && patientId) {
+    if (!loading && patientId && !isFamilyManaged) {
       if (!confirmedCaregiver && !hasAlertedRef.current) {
         hasAlertedRef.current = true;
         setShowWarningModal(true);
       }
     }
-  }, [loading, confirmedCaregiver, patientId]);
+  }, [loading, confirmedCaregiver, patientId, isFamilyManaged]);
 
   React.useEffect(() => {
     if (!patientId || patientTasks.length === 0) return;
@@ -415,224 +396,39 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-
-      {/* -- Family tab ---------------------------------------------------- */}
-      {activeTab === 'Family' ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerCard}>
-            <View>
-              <Text style={styles.greetingOverline}>FAMILY</Text>
-              <Text style={[styles.greetingName, { fontSize: 26 }]}>My Care Team</Text>
-            </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* -- Header --------------------------------------------------- */}
+        <View style={styles.headerCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greetingOverline}>{getGreeting()},</Text>
+            <Text style={styles.greetingName}>{displayName}</Text>
+            <Text style={styles.greetingDate}>{formattedDate}</Text>
           </View>
-          {hasLinkedCaregiver ? (
-            <View style={styles.mainRoutineCard}>
-              <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>YOUR CAREGIVER</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                {confirmedCaregiver.profile_photo_url ? (
-                  <Image source={{ uri: confirmedCaregiver.profile_photo_url }} style={styles.caregiverAvatar} />
-                ) : (
-                  <Ionicons name="person-circle-outline" size={42} color={C.primary} />
-                )}
-                <View>
-                  <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
-                  <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
-                </View>
-              </View>
-            </View>
-          ) : hasPendingRequest ? (
-            <View style={styles.mainRoutineCard}>
-              <Text style={[styles.sectionTitle, { marginBottom: 14, fontSize: 14, letterSpacing: 0.6 }]}>PENDING REQUEST</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 }}>
-                <Ionicons name="time-outline" size={36} color="#F59E0B" />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.textPrimary }}>{confirmedCaregiver.name}</Text>
-                  <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary }}>{confirmedCaregiver.specialty}</Text>
-                </View>
-              </View>
-              <View style={{ backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 10, padding: 12 }}>
-                <Text style={{ fontFamily: F.medium, fontSize: 13, color: '#92400E', lineHeight: 18 }}>
-                  Waiting for caregiver to accept your request. We'll update your dashboard as soon as they confirm!
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={[styles.mainRoutineCard, { alignItems: 'center', paddingVertical: 32 }]}>
-              <Ionicons name="people-outline" size={48} color={C.textMuted} style={{ marginBottom: 12 }} />
-              <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.textPrimary, textAlign: 'center', marginBottom: 6 }}>No caregiver linked yet</Text>
-              <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.textSecondary, textAlign: 'center' }}>
-                Go to the Search tab to find and link a caregiver.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => navigation.navigate('NotificationHistoryScreen')}
+              style={({ pressed }) => [
+                {
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: C.border,
+                },
+                pressed && { opacity: 0.72 },
+              ]}
+            >
+              <Ionicons name="notifications-outline" size={22} color={C.primary} />
+            </Pressable>
 
-      /* -- Activity tab — render activities list inline ----------- */
-      ) : activeTab === 'Activity' ? (
-        <PatientActivitiesView navigation={navigation} />
-
-      ) : activeTab === 'Search' && hasLinkedCaregiver ? (
-        // -- Redesigned Caregiver Profile ---------------------------------
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Hero Profile Card */}
-          <View style={[styles.mainRoutineCard, { paddingVertical: 24, alignItems: 'center', marginBottom: 16 }]}>
-            <View style={styles.caregiverProfileAvatarWrap}>
-              {confirmedCaregiver.profile_photo_url ? (
-                <Image source={{ uri: confirmedCaregiver.profile_photo_url }} style={styles.caregiverProfileAvatarImage} />
-              ) : (
-                <Ionicons name="person-outline" size={54} color={C.textMuted} />
-              )}
-            </View>
-
-            {/* Verification Badge */}
-            <View style={styles.verificationBadge}>
-              <Ionicons name="checkmark-circle" size={14} color="#065F46" style={{ marginRight: 4 }} />
-              <Text style={styles.verificationBadgeText}>Verified Care Partner</Text>
-            </View>
-
-            <Text style={styles.caregiverProfileName}>{confirmedCaregiver.name}</Text>
-            <Text style={styles.caregiverProfileSpecialty}>{confirmedCaregiver.specialty || 'Professional Caregiver'}</Text>
-            
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-              <Ionicons name="location-outline" size={14} color={C.textMuted} style={{ marginRight: 4 }} />
-              <Text style={styles.caregiverProfileLocation}>{confirmedCaregiver.location || 'Bangalore, India'}</Text>
-            </View>
-          </View>
-
-          {/* Quick Stats Rows */}
-          <View style={[styles.mainRoutineCard, { marginBottom: 16 }]}>
-            <Text style={styles.caregiverProfileSectionLabel}>PROFESSIONAL INFO</Text>
-            
-            <View style={styles.caregiverProfileRow}>
-              <View style={styles.caregiverProfileIconWrap}>
-                <Ionicons name="briefcase-outline" size={18} color={C.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.caregiverProfileFieldLabel}>Experience</Text>
-                <Text style={styles.caregiverProfileFieldValue}>
-                  {confirmedCaregiver.years_experience ? `${confirmedCaregiver.years_experience} Years of Professional Care` : 'Not specified'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.caregiverProfileRow}>
-              <View style={styles.caregiverProfileIconWrap}>
-                <Ionicons name="language-outline" size={18} color={C.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.caregiverProfileFieldLabel}>Languages Spoken</Text>
-                <Text style={styles.caregiverProfileFieldValue}>
-                  {confirmedCaregiver.languages_spoken && confirmedCaregiver.languages_spoken.length > 0
-                    ? confirmedCaregiver.languages_spoken.join(', ')
-                    : 'English'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.caregiverProfileRow}>
-              <View style={styles.caregiverProfileIconWrap}>
-                <Ionicons name="call-outline" size={18} color={C.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.caregiverProfileFieldLabel}>Phone Number</Text>
-                <Text style={styles.caregiverProfileFieldValue}>{confirmedCaregiver.phone || 'Not provided'}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Specializations (rendered as chips) */}
-          {confirmedCaregiver.specializations && confirmedCaregiver.specializations.length > 0 && (
-            <View style={[styles.mainRoutineCard, { marginBottom: 16 }]}>
-              <Text style={styles.caregiverProfileSectionLabel}>SPECIALIZATIONS</Text>
-              <View style={styles.caregiverProfileChipRow}>
-                {confirmedCaregiver.specializations.map((spec) => (
-                  <View key={spec} style={styles.caregiverProfileChip}>
-                    <Text style={styles.caregiverProfileChipText}>{spec}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Bio */}
-          <View style={styles.mainRoutineCard}>
-            <Text style={styles.caregiverProfileSectionLabel}>ABOUT</Text>
-            <Text style={styles.caregiverProfileBioText}>
-              {confirmedCaregiver.bio || 'No description available.'}
-            </Text>
-          </View>
-        </ScrollView>
-      ) : activeTab === 'Search' && searchSubView === 'detail' && viewingCaregiver ? (
-        <CaregiverDetailView
-          caregiver={viewingCaregiver}
-          linkStatus={
-            confirmedCaregiver?.id === viewingCaregiver.id
-              ? (confirmedCaregiver.status || 'PENDING')
-              : null
-          }
-          onBack={() => {
-            if (confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED') {
-              // Already requested/confirmed — back goes to Home, not the search list
-              setActiveTab('Home');
-              setSearchSubView(null);
-              setViewingCaregiver(null);
-            } else {
-              setSearchSubView('list');
-              setViewingCaregiver(null);
-            }
-          }}
-          onConfirm={async (c) => {
-            // Pass patient name so it's written to Supabase at confirm time
-            await setConfirmedCaregiver(c, patientId ?? '', displayName);
-            // Stay on the same detail screen and reload caregiver status
-            if (patientId) {
-              await reloadCaregiver(patientId, true);
-            }
-          }}
-        />
-      ) : activeTab === 'Search' ? (
-        <CaregiverSearchView
-          onSelect={(c) => {
-            setViewingCaregiver(c);
-            setSearchSubView('detail');
-          }}
-        />
-      ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* -- Header --------------------------------------------------- */}
-          <View style={styles.headerCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.greetingOverline}>{getGreeting()},</Text>
-              <Text style={styles.greetingName}>{displayName}</Text>
-              <Text style={styles.greetingDate}>{formattedDate}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {hasLinkedCaregiver && (
               <Pressable
-                onPress={() => navigation.navigate('NotificationHistoryScreen')}
-                style={({ pressed }) => [
-                  {
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: '#FFFFFF',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: C.border,
-                  },
-                  pressed && { opacity: 0.72 },
-                ]}
-              >
-                <Ionicons name="notifications-outline" size={22} color={C.primary} />
-              </Pressable>
-
-              {hasLinkedCaregiver && (
-                <Pressable
-                  onPress={() => {
-                    setViewingCaregiver(confirmedCaregiver);
-                    setSearchSubView('detail');
-                    setActiveTab('Search');
-                  }}
+                onPress={() => {
+                  navigation.navigate('CaregiverProfileScreen', { caregiver: confirmedCaregiver });
+                }}
                   style={({ pressed }) => [styles.caregiverTile, pressed && { opacity: 0.82 }]}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
@@ -745,8 +541,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             onClose={() => setShowWarningModal(false)}
             onSearch={() => {
               setShowWarningModal(false);
-              setActiveTab('Search');
-              setSearchSubView('list');
+              navigation.navigate('CareDiscoveryScreen');
             }}
           />
           <TaskInstructionsModal
@@ -755,82 +550,6 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
             onClose={() => setViewingInstructionsTask(null)}
           />
         </ScrollView>
-      )}
-
-      {/* -- Bottom Nav: Left 2 | FAB center | Right 2 ---------------- */}
-      <View style={styles.bottomBarBand}>
-        {/* Left tabs */}
-        <View style={styles.bottomBar}>
-          {(['Home', 'Family'] as BottomTab[]).map((tab) => {
-            const isActive = activeTab === tab;
-            const IconComponent = TAB_ICON_COMPONENTS[tab];
-            return (
-              <Pressable
-                key={tab}
-                onPress={() => setActiveTab(tab)}  // inline — no navigation.navigate()
-                style={styles.bottomTab}
-              >
-                <View style={styles.bottomTabIconWrap}>
-                  <IconComponent active={isActive} />
-                </View>
-                <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>{tab}</Text>
-                {isActive && <View style={styles.activeIndicator} />}
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Center FAB slot */}
-        <View style={styles.fabSlot}>
-          <AiFab />
-        </View>
-
-        {/* Right tabs */}
-        <View style={styles.bottomBar}>
-          {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
-            const isActive = activeTab === tab;
-            const IconComponent =
-              tab === 'Search' && hasLinkedCaregiver
-                ? IconProfile
-                : TAB_ICON_COMPONENTS[tab];
-            const label =
-              tab === 'Search'
-                ? (hasLinkedCaregiver ? 'Caregiver Profile' : 'Search')
-                : tab;
-            return (
-              <Pressable
-                key={tab}
-                onPress={() => {
-                  // All tabs render inline — no navigation.navigate()
-                  setActiveTab(tab);
-                  if (tab === 'Search') {
-                    if (hasLinkedCaregiver) {
-                      setViewingCaregiver(confirmedCaregiver);
-                      setSearchSubView('detail');
-                    } else {
-                      setSearchSubView('list');
-                    }
-                  }
-                }}
-                style={styles.bottomTab}
-              >
-                <View style={styles.bottomTabIconWrap}>
-                  <IconComponent active={isActive} />
-                </View>
-                <Text
-                  style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                >
-                  {label}
-                </Text>
-                {isActive && <View style={styles.activeIndicator} />}
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
     </ScreenContainer>
   );
 };

@@ -29,6 +29,8 @@ import { CaregiverWellbeingScreen }       from '../screens/caregiver/CaregiverWe
 import { CaregiverProfileEditScreen }     from '../screens/caregiver/CaregiverProfileEditScreen';
 import { CaregiverSettingsScreen }        from '../screens/caregiver/CaregiverSettingsScreen';
 import { CaregiverCareCircleScreen }      from '../screens/caregiver/CaregiverCareCircleScreen';
+import { CareRequestDetailScreen }        from '../screens/shared/CareRequestDetailScreen';
+import { CareRequestsListScreen }         from '../screens/shared/CareRequestsListScreen';
 import { NotificationHistoryScreen }      from '../screens/shared/NotificationHistoryScreen';
 import { NotificationSettingsScreen }     from '../screens/shared/NotificationSettingsScreen';
 import { NotificationTestScreen }         from '../screens/shared/NotificationTestScreen';
@@ -39,6 +41,8 @@ const Stack = createNativeStackNavigator<CaregiverStackParams>();
 const CaregiverStack: React.FC = () => (
   <Stack.Navigator initialRouteName="CaregiverTriageScreen" screenOptions={{ headerShown: false }}>
     <Stack.Screen name="CaregiverTriageScreen"          component={CaregiverTriageScreen} />
+    <Stack.Screen name="CareRequestDetailScreen"        component={CareRequestDetailScreen} />
+    <Stack.Screen name="CareRequestsListScreen"         component={CareRequestsListScreen} />
     <Stack.Screen name="CaregiverPatientDetailScreen"   component={CaregiverPatientDetailScreen} />
     <Stack.Screen name="CaregiverAssessmentScreen"      component={CaregiverAssessmentScreen} />
     <Stack.Screen name="CaregiverAssessmentViewScreen"  component={CaregiverAssessmentViewScreen} />

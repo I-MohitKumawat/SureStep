@@ -97,7 +97,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
         if (rel) {
           if (rel.status === 'PENDING') {
             setPending(true);
-            setSuccess(`Request pending for patient ${rel.patient_name}. The caregiver will review and approve.`);
+            setSuccess(`Request pending for patient ${rel.patient_name}. The Care Circle will review and approve.`);
           } else if (rel.status === 'CONFIRMED') {
             await refresh();
             navigation.replace('FamilyFeedScreen');
@@ -186,7 +186,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
       const fullPhone = `+91${clean}`;
       await requestAccessByPhone(fullPhone);
       setPending(true);
-      setSuccess('Request sent! The caregiver will review and approve your access.');
+      setSuccess('Request sent! An authorized Care Circle member will review and approve your access.');
     } catch (e: any) {
       setError(e?.response?.data?.error?.message ?? 'Could not send request. Check the number and try again.');
     } finally { setLoading(false); }
@@ -234,7 +234,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
           <View style={s.card}>
             <Text style={s.cardTitle}>Enter Invite Code</Text>
             <Text style={s.cardSub}>
-              Ask the caregiver to generate a 6-character code and share it with you.
+              Ask the patient or an authorized Care Circle member to generate a 6-character code and share it with you.
             </Text>
             <TextInput
               style={s.codeInput}
@@ -275,7 +275,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
           <View style={s.card}>
             <Text style={s.cardTitle}>Find by Phone Number</Text>
             <Text style={s.cardSub}>
-              Enter the patient's registered phone number. The caregiver will approve your request.
+              Enter the patient's registered phone number. An authorized Care Circle member will approve your request.
             </Text>
             
             <View style={s.phoneInputContainer}>

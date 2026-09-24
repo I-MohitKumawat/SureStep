@@ -59,6 +59,10 @@ type Props = {
   onNavigateCareCircle?: () => void;
   familyCount?: number;
   assignedCaregiver?: string;
+  resignation?: any;
+  onRequestEndCare?: () => void;
+  onViewResignation?: () => void;
+  onWithdrawResignation?: () => void;
 };
 
 const CAPSULE_HEIGHT = 84;
@@ -78,6 +82,7 @@ export const DashboardHomeTab: React.FC<Props> = ({
   patientState, onRefreshLocation,
   relationshipStatus, carePlan, onNavigateAssessment, onNavigateAssessmentView, onCompleteMeeting, onNavigateCareCircle,
   familyCount = 0, assignedCaregiver = '—',
+  resignation, onRequestEndCare, onViewResignation, onWithdrawResignation,
 }) => {
   const [activeFilter, setActiveFilter] = useState<'missed' | 'pending' | 'completed' | null>(null);
 
@@ -529,6 +534,74 @@ export const DashboardHomeTab: React.FC<Props> = ({
         </View>
       )}
 
+      {/* Care Arrangement & Resignation Section */}
+      {relationshipStatus && relationshipStatus !== 'ENDED' && (
+        <View style={localStyles.careArrangementCard}>
+          <View style={localStyles.careArrangementTop}>
+            <View style={localStyles.careArrangementLeft}>
+              <View style={[
+                localStyles.statusIconWrap,
+                resignation?.status === 'PENDING' ? localStyles.statusIconWrapAmber : localStyles.statusIconWrapTeal,
+              ]}>
+                <Ionicons
+                  name={resignation?.status === 'PENDING' ? 'time-outline' : 'shield-checkmark-outline'}
+                  size={20}
+                  color={resignation?.status === 'PENDING' ? '#B45309' : C.primary}
+                />
+              </View>
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={localStyles.careArrangementTitle}>
+                  {resignation?.status === 'PENDING' ? 'End-Care Request Pending' : 'Care Arrangement'}
+                </Text>
+                <Text style={localStyles.careArrangementDesc}>
+                  {resignation?.status === 'PENDING'
+                    ? `You requested to end care (${(resignation.reason || '').replace(/_/g, ' ').toLowerCase()}). Pending patient review.`
+                    : `Active care relationship with ${patientName}`}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={localStyles.careArrangementActions}>
+            {resignation?.status === 'PENDING' ? (
+              <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+                <Pressable
+                  style={({ pressed }) => [
+                    localStyles.btnSecondary,
+                    { flex: 1 },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={onViewResignation}
+                >
+                  <Text style={localStyles.btnSecondaryText}>View Request</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    localStyles.btnDangerOutline,
+                    { flex: 1 },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={onWithdrawResignation}
+                >
+                  <Text style={localStyles.btnDangerOutlineText}>Withdraw</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [
+                  localStyles.requestEndCareBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={onRequestEndCare}
+              >
+                <Ionicons name="exit-outline" size={16} color="#B45309" style={{ marginRight: 6 }} />
+                <Text style={localStyles.requestEndCareBtnText}>Request to End Care</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
+
       <DashboardActionSection
         patientName={patientName}
         patientPhone={patientPhone}
@@ -670,6 +743,106 @@ const localStyles = StyleSheet.create({
   },
   riskHighText: {
     color: '#991B1B',
+  },
+  careArrangementCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  careArrangementTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  careArrangementLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  statusIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIconWrapTeal: {
+    backgroundColor: '#E6F4F1',
+  },
+  statusIconWrapAmber: {
+    backgroundColor: '#FEF3C7',
+  },
+  careArrangementTitle: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.textPrimary,
+  },
+  careArrangementDesc: {
+    fontFamily: F.regular,
+    fontSize: 12.5,
+    color: C.textSecondary,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  careArrangementActions: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  requestEndCareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  requestEndCareBtnText: {
+    fontFamily: F.semiBold,
+    fontSize: 13,
+    color: '#B45309',
+  },
+  btnSecondary: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  btnSecondaryText: {
+    fontFamily: F.semiBold,
+    fontSize: 13,
+    color: C.textPrimary,
+  },
+  btnDangerOutline: {
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  btnDangerOutlineText: {
+    fontFamily: F.semiBold,
+    fontSize: 13,
+    color: '#DC2626',
   },
 });
 

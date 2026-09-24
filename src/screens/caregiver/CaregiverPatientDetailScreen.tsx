@@ -15,7 +15,21 @@
  * Result: 77KB monolith → ~250-line orchestrator + 3 focused tab components + 1 shared styles file.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useIsFocused } from '@react-navigation/native';
 import type { CaregiverStackParams } from '../../types/navigation.types';
@@ -37,10 +51,28 @@ import {
   deactivateRoutineTemplate,
 } from '../../services/taskService';
 import { getCarePlan } from '../../services/carePlanService';
-import { fetchPatientRelationship, completeMeeting } from '../../services/relationshipService';
+import {
+  fetchPatientRelationship,
+  completeMeeting,
+  fetchCaregiverResignation,
+  submitCaregiverResignation,
+  withdrawCaregiverResignation,
+  type CaregiverResignationRecord,
+  type CaregiverResignationReason,
+} from '../../services/relationshipService';
 import { getCareCircleForPatient } from '../../services/familyService';
 import { getCategoryIcon } from '../../components/shared/RoutineCapsule';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
+
+const CAREGIVER_RESIGNATION_OPTIONS: { reason: CaregiverResignationReason; label: string; desc: string }[] = [
+  { reason: 'PERSONAL_CIRCUMSTANCES', label: 'Personal Circumstances', desc: 'Family or personal situation requires ending care' },
+  { reason: 'SCHEDULE_CONFLICT', label: 'Schedule Conflict', desc: 'Timing or shift availability has changed' },
+  { reason: 'OUTSIDE_SERVICE_AREA', label: 'Outside Service Area', desc: 'Relocation or distance makes visits difficult' },
+  { reason: 'CARE_NEEDS_CHANGED', label: 'Care Needs Changed', desc: 'Patient requirements differ from my capabilities' },
+  { reason: 'CAPACITY_CONSTRAINT', label: 'Capacity Constraint', desc: 'Caseload or working hours are full' },
+  { reason: 'ROLE_NO_LONGER_SUITABLE', label: 'Role No Longer Suitable', desc: 'Care arrangement is no longer a mutual fit' },
+  { reason: 'OTHER', label: 'Other', desc: 'Other circumstances (specify in notes)' },
+];
 
 import {
   IconDashboard, IconBell, IconActivity,
@@ -93,6 +125,13 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const [carePlan, setCarePlan] = useState<any | null>(null);
   const [familyCount, setFamilyCount] = useState(0);
   const [assignedCaregiver, setAssignedCaregiver] = useState('—');
+  const [currentRelationshipId, setCurrentRelationshipId] = useState<string | null>(null);
+  const [resignation, setResignation] = useState<CaregiverResignationRecord | null>(null);
+  const [showResignationModal, setShowResignationModal] = useState(false);
+  const [showViewResignationModal, setShowViewResignationModal] = useState(false);
+  const [resignationReason, setResignationReason] = useState<CaregiverResignationReason>('PERSONAL_CIRCUMSTANCES');
+  const [resignationNotes, setResignationNotes] = useState('');
+  const [submittingResignation, setSubmittingResignation] = useState(false);
 
   const loadRelationshipAndCarePlan = useCallback(async () => {
     try {
@@ -103,6 +142,18 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
       ]);
       if (rel) {
         setRelStatus(rel.status);
+        setCurrentRelationshipId(rel.id);
+        try {
+          const resRecord = await fetchCaregiverResignation(rel.id);
+          setResignation(resRecord);
+        } catch (e) {
+          console.warn('Failed to fetch resignation record:', e);
+          setResignation(null);
+        }
+      } else {
+        setRelStatus(null);
+        setCurrentRelationshipId(null);
+        setResignation(null);
       }
       setCarePlan(plan);
       if (circleRes?.data?.data?.members) {
@@ -116,6 +167,64 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
       console.warn('Failed to load relationship, care plan, or care circle:', err);
     }
   }, [patientId]);
+
+  const handleSubmitResignation = async () => {
+    if (!currentRelationshipId) {
+      Alert.alert('Error', 'No active care relationship found.');
+      return;
+    }
+    if (!resignationReason) {
+      Alert.alert('Selection Required', 'Please select a reason for resigning.');
+      return;
+    }
+    setSubmittingResignation(true);
+    try {
+      const res = await submitCaregiverResignation(currentRelationshipId, {
+        reason: resignationReason,
+        notes: resignationNotes.trim() || undefined,
+      });
+      setResignation(res);
+      setShowResignationModal(false);
+      setResignationNotes('');
+      Alert.alert(
+        'Request Submitted',
+        'Your request to end care has been submitted to the family and patient. Care remains active until acknowledged or accepted.',
+      );
+      void loadRelationshipAndCarePlan();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to submit resignation request.';
+      Alert.alert('Submission Error', msg);
+    } finally {
+      setSubmittingResignation(false);
+    }
+  };
+
+  const handleWithdrawResignation = () => {
+    if (!currentRelationshipId) return;
+    Alert.alert(
+      'Withdraw Request',
+      'Are you sure you want to withdraw your request to end care? You will continue providing care as scheduled.',
+      [
+        { text: 'Keep Request', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await withdrawCaregiverResignation(currentRelationshipId);
+              setResignation(res);
+              setShowViewResignationModal(false);
+              Alert.alert('Request Withdrawn', 'Your resignation request has been successfully withdrawn.');
+              void loadRelationshipAndCarePlan();
+            } catch (err: any) {
+              const msg = err?.response?.data?.message || err?.message || 'Failed to withdraw resignation request.';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // Load templates only — templates change rarely (user-triggered), no need to poll
   const loadTemplates = useCallback(async () => {
@@ -454,6 +563,10 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             onNavigateCareCircle={() => navigation.navigate('CaregiverCareCircleScreen', { patientId, patientName })}
             familyCount={familyCount}
             assignedCaregiver={assignedCaregiver}
+            resignation={resignation}
+            onRequestEndCare={() => setShowResignationModal(true)}
+            onViewResignation={() => setShowViewResignationModal(true)}
+            onWithdrawResignation={handleWithdrawResignation}
           />
         )}
       </ScrollView>
@@ -562,6 +675,483 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Resignation Request Modal */}
+      <Modal
+        visible={showResignationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!submittingResignation) setShowResignationModal(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={resignStyles.modalOverlay}
+        >
+          <Pressable
+            style={resignStyles.modalDismissArea}
+            onPress={() => {
+              if (!submittingResignation) setShowResignationModal(false);
+            }}
+          />
+          <View style={resignStyles.modalSheet}>
+            <View style={resignStyles.modalHandle} />
+            <Text style={resignStyles.modalTitle}>Request to End Care</Text>
+            <Text style={resignStyles.modalSub}>
+              Submit a formal request to resign from care for {patientName}.
+            </Text>
+
+            {/* Warning Callout */}
+            <View style={resignStyles.noticeBanner}>
+              <Feather name="alert-triangle" size={18} color="#B45309" style={{ marginTop: 2 }} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={resignStyles.noticeTitle}>Care Remains Active</Text>
+                <Text style={resignStyles.noticeText}>
+                  Care does not end immediately. You must continue providing care until the patient or family acknowledges this request.
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={resignStyles.formScroll} contentContainerStyle={{ paddingBottom: 16 }}>
+              <Text style={resignStyles.fieldLabel}>REASON FOR RESIGNATION</Text>
+              {CAREGIVER_RESIGNATION_OPTIONS.map(opt => {
+                const isSelected = resignationReason === opt.reason;
+                return (
+                  <Pressable
+                    key={opt.reason}
+                    style={[
+                      resignStyles.reasonOption,
+                      isSelected && resignStyles.reasonOptionSelected,
+                    ]}
+                    onPress={() => setResignationReason(opt.reason)}
+                  >
+                    <View style={[resignStyles.radioCircle, isSelected && resignStyles.radioCircleSelected]}>
+                      {isSelected && <View style={resignStyles.radioDot} />}
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={[resignStyles.reasonTitle, isSelected && resignStyles.reasonTitleSelected]}>
+                        {opt.label}
+                      </Text>
+                      <Text style={resignStyles.reasonDesc}>{opt.desc}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={resignStyles.fieldLabel}>HANDOVER NOTES (OPTIONAL)</Text>
+                  <Text style={resignStyles.charCount}>{resignationNotes.length}/500</Text>
+                </View>
+                <TextInput
+                  style={resignStyles.notesInput}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={500}
+                  placeholder="Provide context, notice period, or patient handover recommendations..."
+                  placeholderTextColor={C.textMuted}
+                  value={resignationNotes}
+                  onChangeText={setResignationNotes}
+                  textAlignVertical="top"
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={resignStyles.actionRow}>
+              <Pressable
+                style={resignStyles.cancelBtn}
+                onPress={() => setShowResignationModal(false)}
+                disabled={submittingResignation}
+              >
+                <Text style={resignStyles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[resignStyles.submitBtn, submittingResignation && { opacity: 0.7 }]}
+                onPress={handleSubmitResignation}
+                disabled={submittingResignation}
+              >
+                {submittingResignation ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={resignStyles.submitBtnText}>Submit Request</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* View Resignation Modal */}
+      <Modal
+        visible={showViewResignationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowViewResignationModal(false)}
+      >
+        <Pressable style={resignStyles.modalOverlay} onPress={() => setShowViewResignationModal(false)}>
+          <Pressable style={resignStyles.modalSheet} onPress={e => e.stopPropagation()}>
+            <View style={resignStyles.modalHandle} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={resignStyles.modalTitle}>Care Resignation Details</Text>
+              {resignation && (
+                <View
+                  style={[
+                    resignStyles.statusBadge,
+                    resignation.status === 'PENDING'
+                      ? { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }
+                      : resignation.status === 'ACCEPTED'
+                      ? { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }
+                      : { backgroundColor: '#F3F4F6', borderColor: '#D1D5DB' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      resignStyles.statusBadgeText,
+                      resignation.status === 'PENDING'
+                        ? { color: '#B45309' }
+                        : resignation.status === 'ACCEPTED'
+                        ? { color: '#DC2626' }
+                        : { color: '#4B5563' },
+                    ]}
+                  >
+                    {resignation.status}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {resignation ? (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: 12 }}>
+                <View style={resignStyles.detailCard}>
+                  <Text style={resignStyles.detailCardLabel}>REASON</Text>
+                  <Text style={resignStyles.detailCardValue}>
+                    {CAREGIVER_RESIGNATION_OPTIONS.find(o => o.reason === resignation.reason)?.label ?? resignation.reason}
+                  </Text>
+                  <Text style={resignStyles.detailCardSub}>
+                    {CAREGIVER_RESIGNATION_OPTIONS.find(o => o.reason === resignation.reason)?.desc ?? ''}
+                  </Text>
+
+                  {resignation.notes ? (
+                    <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border }}>
+                      <Text style={resignStyles.detailCardLabel}>NOTES & HANDOVER</Text>
+                      <Text style={resignStyles.detailCardText}>{resignation.notes}</Text>
+                    </View>
+                  ) : null}
+
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border }}>
+                    <Text style={resignStyles.detailCardLabel}>REQUESTED ON</Text>
+                    <Text style={resignStyles.detailCardText}>
+                      {new Date(resignation.requested_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    </Text>
+                  </View>
+
+                  {resignation.responded_at && (
+                    <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border }}>
+                      <Text style={resignStyles.detailCardLabel}>
+                        {resignation.status === 'ACCEPTED' ? 'ACCEPTED ON' : 'RESPONDED ON'}
+                      </Text>
+                      <Text style={resignStyles.detailCardText}>
+                        {new Date(resignation.responded_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {resignation.status === 'PENDING' && (
+                  <View style={resignStyles.pendingReminderBox}>
+                    <Feather name="info" size={16} color="#0D9488" style={{ marginTop: 2 }} />
+                    <Text style={resignStyles.pendingReminderText}>
+                      Care remains active until accepted by the patient or family. If your situation changes, you can withdraw this request below.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            ) : (
+              <Text style={{ color: C.textMuted, marginVertical: 20 }}>No resignation record found.</Text>
+            )}
+
+            <View style={resignStyles.actionRow}>
+              {resignation?.status === 'PENDING' && (
+                <Pressable
+                  style={resignStyles.withdrawBtn}
+                  onPress={handleWithdrawResignation}
+                >
+                  <Text style={resignStyles.withdrawBtnText}>Withdraw Request</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={[
+                  resignStyles.closeBtn,
+                  resignation?.status !== 'PENDING' && { flex: 1 },
+                ]}
+                onPress={() => setShowViewResignationModal(false)}
+              >
+                <Text style={resignStyles.closeBtnText}>Close</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScreenContainer>
   );
 };
+
+const resignStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalDismissArea: {
+    flex: 1,
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '85%',
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontFamily: F.bold,
+    fontSize: 20,
+    color: C.textPrimary,
+  },
+  modalSub: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textSecondary,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  noticeTitle: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#92400E',
+  },
+  noticeText: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: '#78350F',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  formScroll: {
+    maxHeight: 340,
+  },
+  fieldLabel: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    color: C.textSecondary,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  charCount: {
+    fontFamily: F.regular,
+    fontSize: 11,
+    color: C.textMuted,
+  },
+  reasonOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    backgroundColor: '#FAFAFA',
+    marginBottom: 8,
+  },
+  reasonOptionSelected: {
+    borderColor: '#0E7A67',
+    backgroundColor: '#F0FDF4',
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleSelected: {
+    borderColor: '#0E7A67',
+  },
+  radioDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#0E7A67',
+  },
+  reasonTitle: {
+    fontFamily: F.semiBold,
+    fontSize: 14,
+    color: C.textPrimary,
+  },
+  reasonTitleSelected: {
+    color: '#065F46',
+  },
+  reasonDesc: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textSecondary,
+    marginTop: 1,
+  },
+  notesInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    padding: 12,
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textPrimary,
+    minHeight: 76,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 8,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  cancelBtnText: {
+    fontFamily: F.semiBold,
+    fontSize: 14,
+    color: C.textSecondary,
+  },
+  submitBtn: {
+    flex: 1.5,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitBtnText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#fff',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusBadgeText: {
+    fontFamily: F.bold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  detailCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+  },
+  detailCardLabel: {
+    fontFamily: F.bold,
+    fontSize: 10,
+    color: C.textSecondary,
+    letterSpacing: 0.6,
+  },
+  detailCardValue: {
+    fontFamily: F.bold,
+    fontSize: 15,
+    color: C.textPrimary,
+    marginTop: 2,
+  },
+  detailCardSub: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: C.textSecondary,
+    marginTop: 2,
+  },
+  detailCardText: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textPrimary,
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  pendingReminderBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  pendingReminderText: {
+    flex: 1,
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: '#0F766E',
+    lineHeight: 17,
+  },
+  withdrawBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  withdrawBtnText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#DC2626',
+  },
+  closeBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: {
+    fontFamily: F.semiBold,
+    fontSize: 13,
+    color: C.textPrimary,
+  },
+});

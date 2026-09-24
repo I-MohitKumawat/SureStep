@@ -15,6 +15,7 @@ import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayou
 import { MultiSelectChips, ChipOption } from '../../../components/onboarding/MultiSelectChips';
 import { C } from '../../../theme/colors';
 import { F } from '../../../theme/fonts';
+import { SHIFT_OPTIONS as AVAILABILITY_OPTIONS } from '../../../types/care.types';
 
 interface Step7Props {
   availabilityTypes: string[];
@@ -31,18 +32,6 @@ interface Step7Props {
   onNext: () => void;
   onBack: () => void;
 }
-
-const AVAILABILITY_OPTIONS: ChipOption[] = [
-  { id: 'DAY_SHIFT', label: 'Day Shifts', icon: 'sunny-outline' },
-  { id: 'EVENING_SHIFT', label: 'Evening Shifts', icon: 'partly-sunny-outline' },
-  { id: 'OVERNIGHT', label: 'Overnight Care', icon: 'moon-outline' },
-  { id: 'LIVE_IN', label: '24-Hour / Live-in', icon: 'home-outline' },
-  { id: 'WEEKEND', label: 'Weekend Only', icon: 'calendar-outline' },
-  { id: 'FULL_TIME', label: 'Full-time', icon: 'time-outline' },
-  { id: 'PART_TIME', label: 'Part-time', icon: 'hourglass-outline' },
-  { id: 'RESPITE', label: 'Respite / Relief Care', icon: 'heart-outline' },
-  { id: 'ON_CALL', label: 'On-call Emergency', icon: 'call-outline' },
-];
 
 const RADIUS_PRESETS = [
   { label: '5 km', value: 5 },

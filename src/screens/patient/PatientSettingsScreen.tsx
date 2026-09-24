@@ -173,7 +173,7 @@ export const PatientSettingsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.label}>Care Circle Connection</Text>
           <Pressable
-            onPress={() => navigation.navigate('PatientHomeScreen', { initialTab: 'Search' })}
+            onPress={() => navigation.navigate('PatientTabs', { screen: 'CareTeamTab' })}
             style={({ pressed }) => [styles.profileButton, pressed && { opacity: 0.88 }]}
           >
             <Text style={styles.profileButtonText}>Manage connected caregiver</Text>
