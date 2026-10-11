@@ -173,11 +173,16 @@ export const confirmCaregiver = async (
 
 /**
  * Remove a caregiver linkage for a patient.
+ * Requires targeted caregiverId to prevent accidental bulk removal.
  * @deprecated Legacy endpoint. Use canonical endCareRelationship instead.
  */
-export const removeCaregiver = async (patientPhone: string): Promise<void> => {
+export const removeCaregiver = async (patientPhone: string, caregiverId: string): Promise<void> => {
+  if (!caregiverId) {
+    throw new Error('caregiverId is required to remove a caregiver');
+  }
   await apiClient.delete('/relationships/caregiver', {
-    params: { patientPhone },
+    params: { patientPhone, caregiverId },
+    data: { caregiverId },
   });
 };
 

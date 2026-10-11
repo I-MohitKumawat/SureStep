@@ -34,6 +34,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { useAuth } from '../../hooks/useAuth';
+import { useFamilyContext } from '../../context/FamilyContext';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { PatientStackParams, FamilyStackParams } from '../../types/navigation.types';
@@ -65,10 +66,24 @@ const DAY_LABELS = [
 export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
   const { caregiver, targetPatientId, targetPatientName } = route.params;
   const { user } = useAuth();
+  const { patient: familyPatient } = useFamilyContext();
 
   const isFamilyUser = user?.role === 'FAMILY';
-  const effectivePatientId = targetPatientId || user?.id || '';
-  const effectivePatientName = targetPatientName || (isFamilyUser ? 'Patient' : user?.name || 'You');
+
+  // Invariant: Patient identity resolution
+  // For self-managed PATIENT role: explicitly use authenticated patient's ID.
+  // For FAMILY role: require selected patient ID from validated route params or family context.
+  // NEVER fallback to user.id when user is FAMILY.
+  let resolvedPatientId: string | null = null;
+  let resolvedPatientName: string = '';
+
+  if (user?.role === 'PATIENT') {
+    resolvedPatientId = user.id;
+    resolvedPatientName = user.name || 'You';
+  } else if (user?.role === 'FAMILY') {
+    resolvedPatientId = targetPatientId || familyPatient?.id || null;
+    resolvedPatientName = targetPatientName || familyPatient?.name || 'Patient';
+  }
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [scheduleType, setScheduleType] = useState<CareRequestScheduleType>('RECURRING');
@@ -137,10 +152,6 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
 
-    if (!effectivePatientId) {
-      errors.patient = 'Care recipient is required.';
-    }
-
     if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
       errors.startDate = 'Start date must be in YYYY-MM-DD format.';
     }
@@ -177,11 +188,27 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
       errors.notes = 'Context notes cannot exceed 1000 characters.';
     }
 
+    if (!resolvedPatientId) {
+      errors.patient = isFamilyUser
+        ? 'A patient must be selected to request care on their behalf.'
+        : 'Patient account details could not be resolved.';
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async () => {
+    if (!resolvedPatientId) {
+      Alert.alert(
+        'Missing Patient Context',
+        isFamilyUser
+          ? 'A patient must be selected to request care on their behalf. Please select a patient first.'
+          : 'Patient account details could not be found. Please sign in again.',
+      );
+      return;
+    }
+
     if (!validate()) {
       Alert.alert('Validation Error', 'Please check the highlighted fields before submitting.');
       return;
@@ -189,7 +216,7 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
 
     // Build payload respecting strict schedule invariants
     const payload: CreateCareRequestPayload = {
-      patientId: effectivePatientId,
+      patientId: resolvedPatientId,
       caregiverId: caregiver.id,
       scheduleType,
       startDate,
@@ -281,14 +308,27 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
                 <Ionicons name="person" size={20} color={C.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.recipientName}>{effectivePatientName}</Text>
+                <Text style={styles.recipientName}>{resolvedPatientName || (isFamilyUser ? 'No Patient Selected' : 'You')}</Text>
                 <Text style={styles.recipientContext}>
                   {isFamilyUser
-                    ? `Care arranged on behalf of patient by ${user?.name || 'Family'}`
+                    ? (resolvedPatientId
+                        ? `Care arranged on behalf of patient by ${user?.name || 'Family'}`
+                        : 'No linked patient selected. Please select a patient before requesting care.')
                     : 'Requesting personal care assistance (Self)'}
                 </Text>
               </View>
             </View>
+
+            {!resolvedPatientId && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+                <Text style={styles.errorBannerText}>
+                  {isFamilyUser
+                    ? 'A patient must be selected to request care on their behalf. Please navigate from your linked patient dashboard.'
+                    : 'Unable to resolve your patient profile. Please sign in again.'}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.privacyNoteBox}>
               <Ionicons name="shield-outline" size={14} color="#059669" style={{ marginRight: 6, marginTop: 1 }} />
@@ -529,7 +569,7 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Recipient:</Text>
-              <Text style={styles.summaryVal}>{effectivePatientName}</Text>
+              <Text style={styles.summaryVal}>{resolvedPatientName || (isFamilyUser ? 'Patient' : 'You')}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Schedule:</Text>
@@ -558,9 +598,13 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
             </View>
 
             <Pressable
-              style={({ pressed }) => [styles.submitBtn, pressed && styles.submitBtnPressed, submitting && { opacity: 0.7 }]}
+              style={({ pressed }) => [
+                styles.submitBtn,
+                pressed && styles.submitBtnPressed,
+                (submitting || !resolvedPatientId) && { opacity: 0.6 },
+              ]}
               onPress={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || !resolvedPatientId}
             >
               {submitting ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
@@ -955,5 +999,22 @@ const styles = StyleSheet.create({
     fontFamily: F.bold,
     fontSize: 15,
     color: '#FFFFFF',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 8,
+    marginTop: 10,
+    marginBottom: 6,
+    padding: 10,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: '#B91C1C',
   },
 });

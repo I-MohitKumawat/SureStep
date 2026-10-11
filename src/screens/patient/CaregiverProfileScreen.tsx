@@ -13,21 +13,32 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { CaregiverDetailView } from './CaregiverDetailView';
 import { useCaregiver } from '../../hooks/useCaregiver';
+import { useAuth } from '../../hooks/useAuth';
+import { useFamilyContext } from '../../context/FamilyContext';
 import {
   fetchCaregiverDiscoveryProfile,
   type CaregiverListing,
 } from '../../services/relationshipService';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import type { PatientStackParams } from '../../types/navigation.types';
+import type { PatientStackParams, FamilyStackParams } from '../../types/navigation.types';
 
-type Props = NativeStackScreenProps<PatientStackParams, 'CaregiverProfileScreen'>;
+type Props =
+  | NativeStackScreenProps<PatientStackParams, 'CaregiverProfileScreen'>
+  | NativeStackScreenProps<FamilyStackParams, 'CaregiverProfileScreen'>;
 
 export const CaregiverProfileScreen: React.FC<Props> = ({ route, navigation }) => {
+  const { user } = useAuth();
+  const { patient: familyPatient } = useFamilyContext();
+  const isFamilyUser = user?.role === 'FAMILY';
+
   const initialCaregiver = route.params?.caregiver;
   const caregiverId = initialCaregiver?.id || route.params?.caregiverId;
-  const targetPatientId = route.params?.targetPatientId;
-  const targetPatientName = route.params?.targetPatientName;
+  const routeTargetPatientId = route.params?.targetPatientId;
+  const routeTargetPatientName = route.params?.targetPatientName;
+
+  const targetPatientId = routeTargetPatientId || (isFamilyUser ? familyPatient?.id : undefined);
+  const targetPatientName = routeTargetPatientName || (isFamilyUser ? familyPatient?.name : undefined);
 
   const { caregivers } = useCaregiver();
 

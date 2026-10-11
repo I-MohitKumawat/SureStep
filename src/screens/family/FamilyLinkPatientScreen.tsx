@@ -100,7 +100,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
             setSuccess(`Request pending for patient ${rel.patient_name}. The Care Circle will review and approve.`);
           } else if (rel.status === 'CONFIRMED') {
             await refresh();
-            navigation.replace('FamilyFeedScreen');
+            navigation.replace('FamilyTabs');
           }
         }
       } catch (err) {
@@ -131,7 +131,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
     try {
       await redeemInviteCode(code.trim().toUpperCase());
       await refresh();
-      navigation.replace('FamilyFeedScreen');
+      navigation.replace('FamilyTabs');
     } catch (e: any) {
       setError(e?.response?.data?.error?.message ?? 'Invalid or expired code. Please check and try again.');
     } finally { setLoading(false); }
@@ -146,7 +146,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
         await redeemInviteCode(clipboardCode);
         await refresh();
         setShowScanner(false);
-        navigation.replace('FamilyFeedScreen');
+        navigation.replace('FamilyTabs');
       } catch (e: any) {
         setIsScannedSuccess(false);
         Alert.alert('Scan Failed', e?.response?.data?.error?.message ?? 'Invalid code.');
@@ -168,7 +168,7 @@ export const FamilyLinkPatientScreen: React.FC<Props> = ({ navigation }) => {
         await redeemInviteCode(modalCode.trim().toUpperCase());
         await refresh();
         setShowScanner(false);
-        navigation.replace('FamilyFeedScreen');
+        navigation.replace('FamilyTabs');
       } catch (e: any) {
         setIsScannedSuccess(false);
         Alert.alert('Scan Failed', e?.response?.data?.error?.message ?? 'Invalid code.');

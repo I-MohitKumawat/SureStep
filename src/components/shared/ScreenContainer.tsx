@@ -1,4 +1,4 @@
-﻿import React, { ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
@@ -10,11 +10,12 @@ const DEFAULT_EDGES: Edge[] = ['bottom', 'left', 'right'];
 type ScreenContainerProps = {
   children: ReactNode | ((theme: any) => ReactNode);
   style?: ViewStyle | ViewStyle[];
+  className?: string;
   /** Which edges apply safe-area padding (e.g. include `top` when `headerShown: false`). */
   edges?: Edge[];
 };
 
-export const ScreenContainer = ({ children, style, edges = DEFAULT_EDGES }: ScreenContainerProps) => {
+export const ScreenContainer = ({ children, style, className, edges = DEFAULT_EDGES }: ScreenContainerProps) => {
   const theme = useTheme();
 
   return (
@@ -28,6 +29,7 @@ export const ScreenContainer = ({ children, style, edges = DEFAULT_EDGES }: Scre
       ]}
     >
       <View
+        className={className}
         style={[
           styles.inner,
           {

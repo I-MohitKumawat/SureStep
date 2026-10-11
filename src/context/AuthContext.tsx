@@ -23,6 +23,7 @@ import { setFirebaseTokenResolver, clearFirebaseTokenResolver } from '../service
 import { connectSocket, disconnectSocket, setSocketTokenResolver } from '../services/socketClient';
 import { getMe } from '../services/userService';
 import { bootstrapFcmToken } from '../services/fcmTokenService';
+import { bootstrapExpoPushToken } from '../services/expoPushService';
 import locationService from '../services/locationService';
 import {
   requestBackgroundLocationPermission,
@@ -144,6 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('[AUTH] Status transition -> authenticated');
       setStatus('authenticated');
       void bootstrapFcmToken();
+      void bootstrapExpoPushToken();
 
       if (resolvedUser.role === 'PATIENT') {
         void (async () => {

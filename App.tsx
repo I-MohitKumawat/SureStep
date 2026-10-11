@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler';
+import './global.css';
 import React from 'react';
 import messaging from '@react-native-firebase/messaging';
 import * as Location from 'expo-location';

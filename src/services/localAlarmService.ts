@@ -32,6 +32,12 @@ export async function bootstrapLocalNotifications(): Promise<void> {
   });
 
   if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'General',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+    });
+
     await Notifications.setNotificationChannelAsync('reminders', {
       name: 'Reminders',
       importance: Notifications.AndroidImportance.HIGH,

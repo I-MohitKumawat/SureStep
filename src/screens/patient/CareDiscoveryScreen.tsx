@@ -22,16 +22,17 @@ import {
   type FilterState,
 } from '../../components/discovery/DiscoveryFilterModal';
 import { useAuth } from '../../hooks/useAuth';
+import { useFamilyContext } from '../../context/FamilyContext';
 import {
   fetchCaregiversDiscovery,
   type CaregiverListing,
 } from '../../services/relationshipService';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import type { PatientStackParams } from '../../types/navigation.types';
+import type { PatientStackParams, FamilyStackParams } from '../../types/navigation.types';
 
-type NavigationProp = NativeStackNavigationProp<PatientStackParams, 'CareDiscoveryScreen'>;
-type ScreenRouteProp = RouteProp<PatientStackParams, 'CareDiscoveryScreen'>;
+type NavigationProp = NativeStackNavigationProp<PatientStackParams & FamilyStackParams, 'CareDiscoveryScreen'>;
+type ScreenRouteProp = RouteProp<PatientStackParams & FamilyStackParams, 'CareDiscoveryScreen'>;
 
 interface QuickPill {
   key: string;
@@ -53,8 +54,11 @@ export const CareDiscoveryScreen: React.FC = () => {
   const route = useRoute<ScreenRouteProp>();
   const { user } = useAuth();
 
-  const targetPatientId = route.params?.targetPatientId;
-  const targetPatientName = route.params?.targetPatientName;
+  const { patient: familyPatient, isLoading: isFamilyLoading } = useFamilyContext();
+
+  const isFamilyUser = user?.role === 'FAMILY';
+  const effectivePatientId = route.params?.targetPatientId || (isFamilyUser ? familyPatient?.id : undefined);
+  const effectivePatientName = route.params?.targetPatientName || (isFamilyUser ? familyPatient?.name : undefined);
 
   // Search & Filter State
   const [query, setQuery] = useState('');
@@ -120,17 +124,28 @@ export const CareDiscoveryScreen: React.FC = () => {
         languages: filters.languages.length > 0 ? filters.languages : undefined,
         availability: availability.length > 0 ? availability : undefined,
         sortBy,
-        targetPatientId,
+        targetPatientId: effectivePatientId,
         page: pageNum,
         limit: 15,
       };
     },
-    [query, activePill, filters, targetPatientId],
+    [query, activePill, filters, effectivePatientId],
   );
 
   // Fetch list
   const loadCaregivers = useCallback(
     async (pageNum: number, isRefresh = false) => {
+      if (isFamilyUser && !effectivePatientId) {
+        if (isFamilyLoading) {
+          setLoading(true);
+          return;
+        }
+        setLoading(false);
+        setCaregivers([]);
+        setError('A linked patient is required to search for caregivers. Please link a patient in your Care Circle first.');
+        return;
+      }
+
       if (pageNum === 1) {
         if (!isRefresh) setLoading(true);
       } else {
@@ -164,7 +179,7 @@ export const CareDiscoveryScreen: React.FC = () => {
         setRefreshing(false);
       }
     },
-    [getEffectiveOptions],
+    [getEffectiveOptions, isFamilyUser, effectivePatientId, isFamilyLoading],
   );
 
   // Debounced search / filter change trigger
@@ -197,8 +212,8 @@ export const CareDiscoveryScreen: React.FC = () => {
     navigation.navigate('CaregiverProfileScreen', {
       caregiver,
       caregiverId: caregiver.id,
-      targetPatientId,
-      targetPatientName,
+      targetPatientId: effectivePatientId,
+      targetPatientName: effectivePatientName,
     });
   };
 
@@ -226,9 +241,9 @@ export const CareDiscoveryScreen: React.FC = () => {
 
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>Find Care</Text>
-          {targetPatientName ? (
+          {effectivePatientName ? (
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              For {targetPatientName}
+              For {effectivePatientName}
             </Text>
           ) : null}
         </View>
@@ -252,14 +267,14 @@ export const CareDiscoveryScreen: React.FC = () => {
       </View>
 
       {/* Target Patient Matching Context Banner (Family or Patient view) */}
-      {targetPatientName && (
+      {effectivePatientName && (
         <View style={styles.matchingBanner}>
           <View style={styles.bannerIconWrap}>
             <Ionicons name="heart-circle" size={24} color={C.primary} />
           </View>
           <View style={styles.bannerTextWrap}>
             <Text style={styles.bannerTitle}>
-              Finding care for <Text style={{ fontFamily: F.bold }}>{targetPatientName}</Text>
+              Finding care for <Text style={{ fontFamily: F.bold }}>{effectivePatientName}</Text>
             </Text>
             <Text style={styles.bannerSub}>
               Showing available caregivers matching care requirements
@@ -375,7 +390,7 @@ export const CareDiscoveryScreen: React.FC = () => {
             <CaregiverCard
               caregiver={item}
               onPress={handleSelectCaregiver}
-              targetPatientName={targetPatientName}
+              targetPatientName={effectivePatientName}
             />
           )}
           contentContainerStyle={styles.listContent}

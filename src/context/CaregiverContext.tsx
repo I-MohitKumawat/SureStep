@@ -14,7 +14,7 @@ type CaregiverContextValue = {
   caregivers:            CaregiverListing[];
   confirmedCaregiver:    CaregiverListing | null;
   loading:               boolean;
-  setConfirmedCaregiver: (c: CaregiverListing | null, patientPhone: string, patientName?: string) => Promise<void>;
+  setConfirmedCaregiver: (c: CaregiverListing | null, patientPhone: string, patientName?: string, targetCaregiverId?: string) => Promise<void>;
   reloadCaregiver:       (patientPhone?: string, force?: boolean) => Promise<void>;
   reloadCaregivers:      (force?: boolean) => Promise<void>;
 };
@@ -89,10 +89,13 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
 
   /**
    * Confirm or remove a caregiver link.
+   * Removing a caregiver requires a targetCaregiverId to prevent bulk deletion.
    */
   const setConfirmedCaregiver = useCallback(
-    async (c: CaregiverListing | null, patientPhone: string, patientName?: string) => {
+    async (c: CaregiverListing | null, patientPhone: string, patientName?: string, targetCaregiverId?: string) => {
       if (!patientPhone) return;
+
+      const caregiverIdToRemove = targetCaregiverId || (c ? undefined : undefined);
 
       // Optimistic update
       const pendingItem = c ? { ...c, status: 'PENDING' } : null;
@@ -104,9 +107,11 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
       try {
         if (c) {
           await confirmCaregiver(patientPhone, c, patientName);
+        } else if (caregiverIdToRemove) {
+          await removeCaregiver(patientPhone, caregiverIdToRemove);
+          setCaregivers((prev) => prev.filter((item) => item.id !== caregiverIdToRemove));
         } else {
-          await removeCaregiver(patientPhone);
-          setCaregivers([]);
+          console.warn('[CaregiverContext] removeCaregiver requires an explicit targetCaregiverId; bulk removal prevented');
         }
       } catch (error) {
         console.warn('[CaregiverContext] setConfirmedCaregiver failed, reverting state:', error);

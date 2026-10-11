@@ -46,6 +46,7 @@ import {
   withdrawCareRequest,
   type CareRequestError,
 } from '../../services/careRequestService';
+import { getSocket } from '../../services/socketClient';
 
 type Props = NativeStackScreenProps<any, 'CareRequestDetailScreen'>;
 
@@ -101,6 +102,32 @@ export const CareRequestDetailScreen: React.FC<Props> = ({ route, navigation }) 
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !requestId) return;
+
+    const handleCareRequestEvent = (data: any) => {
+      if (data?.requestId === requestId || data?.request?.id === requestId || !data?.requestId) {
+        console.log('[CareRequestDetailScreen] Socket event received for request:', requestId);
+        void loadDetail();
+      }
+    };
+
+    socket.on('care_request:accepted', handleCareRequestEvent);
+    socket.on('care_request:declined', handleCareRequestEvent);
+    socket.on('care_request:withdrawn', handleCareRequestEvent);
+    socket.on('care_request:expired', handleCareRequestEvent);
+    socket.on('relationship:change', handleCareRequestEvent);
+
+    return () => {
+      socket.off('care_request:accepted', handleCareRequestEvent);
+      socket.off('care_request:declined', handleCareRequestEvent);
+      socket.off('care_request:withdrawn', handleCareRequestEvent);
+      socket.off('care_request:expired', handleCareRequestEvent);
+      socket.off('relationship:change', handleCareRequestEvent);
+    };
+  }, [requestId, loadDetail]);
 
   // ── Action Handlers ────────────────────────────────────────────────────────
 

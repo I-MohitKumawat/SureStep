@@ -31,6 +31,7 @@ import {
   getIncomingCareRequests,
   getOutgoingCareRequests,
 } from '../../services/careRequestService';
+import { getSocket } from '../../services/socketClient';
 
 type Props = NativeStackScreenProps<any, 'CareRequestsListScreen'>;
 
@@ -68,6 +69,32 @@ export const CareRequestsListScreen: React.FC<Props> = ({ route, navigation }) =
   useEffect(() => {
     setLoading(true);
     void loadRequests();
+  }, [loadRequests]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleCareRequestEvent = (data: any) => {
+      console.log('[CareRequestsListScreen] Socket event received, refreshing:', data);
+      void loadRequests();
+    };
+
+    socket.on('care_request:created', handleCareRequestEvent);
+    socket.on('care_request:accepted', handleCareRequestEvent);
+    socket.on('care_request:declined', handleCareRequestEvent);
+    socket.on('care_request:withdrawn', handleCareRequestEvent);
+    socket.on('care_request:expired', handleCareRequestEvent);
+    socket.on('relationship:change', handleCareRequestEvent);
+
+    return () => {
+      socket.off('care_request:created', handleCareRequestEvent);
+      socket.off('care_request:accepted', handleCareRequestEvent);
+      socket.off('care_request:declined', handleCareRequestEvent);
+      socket.off('care_request:withdrawn', handleCareRequestEvent);
+      socket.off('care_request:expired', handleCareRequestEvent);
+      socket.off('relationship:change', handleCareRequestEvent);
+    };
   }, [loadRequests]);
 
   const onRefresh = useCallback(() => {

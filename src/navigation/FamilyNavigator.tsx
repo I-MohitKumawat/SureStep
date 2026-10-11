@@ -7,9 +7,11 @@
  *   - Once linked → show FamilyTabs bottom tab navigator
  */
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { FamilyStackParams, FamilyTabParams } from '../types/navigation.types';
+import { C } from '../theme/colors';
 
 import { PatientStateProvider }    from '../context/PatientStateContext';
 import { FamilyProvider, useFamilyContext } from '../context/FamilyContext';
@@ -56,8 +58,16 @@ const FamilyTabs: React.FC = () => (
 const FamilyStack: React.FC = () => {
   const { hasPatient, isLoading } = useFamilyContext();
 
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }}>
+        <ActivityIndicator size="large" color={C.primary} />
+      </View>
+    );
+  }
+
   const initialRoute: keyof FamilyStackParams =
-    !isLoading && !hasPatient ? 'FamilyLinkPatientScreen' : 'FamilyTabs';
+    !hasPatient ? 'FamilyLinkPatientScreen' : 'FamilyTabs';
 
   return (
     <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>

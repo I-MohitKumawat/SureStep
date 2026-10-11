@@ -136,11 +136,20 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
 
   if (!hasPatient) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg, padding: 24 }}>
-        <Ionicons name="link-outline" size={64} color={C.textMuted} style={{ marginBottom: 16 }} />
-        <Text style={{ fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, marginBottom: 8, textAlign: 'center' }}>Not Linked Yet</Text>
-        <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.textSecondary, textAlign: 'center', marginBottom: 24 }}>You haven't joined a care circle yet.</Text>
-        <Pressable style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32 }} onPress={() => navigation.navigate('FamilyLinkPatientScreen')}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg, padding: 28 }}>
+        <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: C.primaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+          <Ionicons name="people" size={44} color={C.primary} />
+        </View>
+        <Text style={{ fontFamily: F.extraBold, fontSize: 22, color: C.textPrimary, marginBottom: 10, textAlign: 'center' }}>
+          Connect to Your Loved One
+        </Text>
+        <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 28, maxWidth: 320 }}>
+          Join your loved one's Care Circle to view their live location, daily routine progress, safety status, and alerts.
+        </Text>
+        <Pressable
+          style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 36, shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}
+          onPress={() => navigation.navigate('FamilyLinkPatientScreen')}
+        >
           <Text style={{ fontFamily: F.bold, fontSize: 16, color: '#fff' }}>Join a Care Circle</Text>
         </Pressable>
       </View>
