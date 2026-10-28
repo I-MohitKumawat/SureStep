@@ -20,7 +20,8 @@
   },
   "include": [
     "App.tsx",
-    "src/**/*"
+    "src/**/*",
+    "nativewind-env.d.ts"
   ],
   "extends": "expo/tsconfig.base.json"
 }

@@ -1,0 +1,33 @@
+diff --git a/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js b/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js
+index ef8c26e..5d63849 100644
+--- a/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js
++++ b/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js
+@@ -11,7 +11,7 @@ function wrapJSX(jsx) {
+         if (process.env.NODE_ENV !== "test")
+             require("./components");
+         type = (0, react_native_safe_area_context_1.maybeHijackSafeAreaProvider)(type);
+-        if (props && props.cssInterop === false) {
++        if (props && (props.cssInterop === false || (!props.className && typeof props.style === "function"))) {
+             delete props.cssInterop;
+         }
+         else {
+diff --git a/node_modules/react-native-css-interop/dist/shared.js b/node_modules/react-native-css-interop/dist/shared.js
+index 1aadcfc..7cda387 100644
+--- a/node_modules/react-native-css-interop/dist/shared.js
++++ b/node_modules/react-native-css-interop/dist/shared.js
+@@ -101,6 +101,15 @@ function assignToTarget(parent, value, config, options = {}) {
+                     target.push(value);
+             }
+         }
++        else if (typeof target === "function") {
++            const originalFn = target;
++            parent[prop] = (state) => {
++                const originalResult = originalFn(state);
++                return Array.isArray(originalResult)
++                    ? [...originalResult, value]
++                    : [originalResult, value];
++            };
++        }
+         else if (typeof target === "object" &&
+             target &&
+             !(exports.PLACEHOLDER_SYMBOL in target)) {
