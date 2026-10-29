@@ -24,6 +24,7 @@ export interface CircleMember {
   phone?: string;
   photo_url?: string | null;
   role_in_circle: 'OWNER' | 'MEMBER' | 'CAREGIVER';
+  user_global_role?: 'PATIENT' | 'FAMILY' | 'CAREGIVER';
   is_owner: boolean;
   joined_at: string;
   permissions?: string[];
@@ -84,21 +85,26 @@ export async function listMyCareCircles(): Promise<CareCircle[]> {
     const payload = res.data;
     if (!payload) return [];
 
-    if (Array.isArray(payload.circles)) {
-      return payload.circles;
-    }
-    if (Array.isArray(payload.data?.circles)) {
-      return payload.data.circles;
-    }
+    const rawList: any[] = Array.isArray(payload.circles)
+      ? payload.circles
+      : Array.isArray(payload.data?.circles)
+        ? payload.data.circles
+        : Array.isArray(payload.circle ?? payload.data)
+          ? (payload.circle ?? payload.data)
+          : (payload.circle ?? payload.data)?.id
+            ? [payload.circle ?? payload.data]
+            : [];
 
-    const single = payload.circle ?? payload.data;
-    if (Array.isArray(single)) {
-      return single;
-    }
-    if (single && typeof single === 'object' && single.id) {
-      return [single];
-    }
-    return [];
+    return rawList.filter(Boolean).map((c: any) => ({
+      ...c,
+      id: c.id,
+      name: c.name,
+      owner_id: c.owner_id ?? c.ownerId,
+      created_at: c.created_at ?? c.createdAt,
+      role_in_circle: c.role_in_circle ?? c.callerRole,
+      is_owner: c.role_in_circle === 'OWNER' || c.callerRole === 'OWNER' || Boolean(c.is_owner),
+      owner_name: c.owner_name ?? c.ownerName,
+    }));
   } catch (err) {
     console.warn('[careCircleService] listMyCareCircles error:', err);
     return [];
@@ -156,6 +162,7 @@ export async function listCircleMembers(circleId: string): Promise<CircleMember[
       phone: m.phone,
       photo_url: m.photo_url,
       role_in_circle: m.role_in_circle,
+      user_global_role: m.user_global_role,
       is_owner: m.role_in_circle === 'OWNER' || Boolean(m.is_owner),
       joined_at: m.joined_at,
       permissions: Array.isArray(m.permissions)

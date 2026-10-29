@@ -92,11 +92,29 @@ export const createCareNote = (content: string, is_pinned?: boolean) =>
 export const deleteCareNote = (id: string) =>
   apiClient.delete(`/family/care-notes/${id}`);
 
-export const validateInviteCode = (code: string) =>
-  apiClient.post<{ success: boolean; data: { valid: boolean; patientName: string; code: string } }>('/family/invite-code/validate', { code });
+export const validateInviteCode = async (code: string) => {
+  const clean = (code || '').trim();
+  const res = await apiClient.get(`/care-circles/invitations/${encodeURIComponent(clean)}`);
+  const data = res.data?.data ?? res.data;
+  const circleName = data?.circleName ?? data?.circle_name ?? '';
+  return {
+    ...res,
+    data: {
+      success: true,
+      data: {
+        valid: Boolean(data?.id || data?.circleId || data?.circle_id),
+        patientName: circleName,
+        circleName,
+        ownerName: data?.ownerName ?? data?.owner_name ?? '',
+        code: clean,
+        expiresAt: data?.expiresAt ?? data?.expires_at,
+      },
+    },
+  };
+};
 
 export const redeemInviteCode = (code: string) =>
-  apiClient.post<{ success: boolean; data: { relationship: any; message: string } }>('/family/invite-code/redeem', { code });
+  apiClient.post(`/care-circles/invitations/${encodeURIComponent((code || '').trim())}/join`);
 
 export const requestAccessByPhone = (patient_phone: string) =>
   apiClient.post<{ success: boolean; data: { relationship: any; message: string } }>('/family/request-access', { patient_phone });
