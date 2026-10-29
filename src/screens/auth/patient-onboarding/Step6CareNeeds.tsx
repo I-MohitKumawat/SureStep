@@ -78,11 +78,11 @@ export const Step6CareNeeds: React.FC<Step6Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'What kind of help would be useful?' : 'What support is most needed?'}
+      title={isSelf ? 'Areas Where We Can Help' : 'Daily Support Needs'}
       subtitle={
         isSelf
-          ? 'Select the areas where SureStep can assist you best. You can select multiple.'
-          : 'Choose the primary features to enable for their daily care plan.'
+          ? 'Select what kind of assistance will make your days smoother and safer. Choose all that apply.'
+          : 'Select the primary support features to enable for their daily care plan.'
       }
       currentStep={6}
       iconName="heart"
@@ -113,18 +113,18 @@ export const Step6CareNeeds: React.FC<Step6Props> = ({
 
 const s = StyleSheet.create({
   section: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontFamily: F.bold,
+    fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 4,
   },
   sectionHint: {
     fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textSecondary,
+    fontSize: 13,
+    color: '#52605D',
     marginBottom: 10,
   },
   cardGroup: {

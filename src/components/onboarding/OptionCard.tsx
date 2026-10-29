@@ -3,7 +3,7 @@
  * Selectable card component for onboarding options.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
@@ -28,12 +28,12 @@ export const OptionCard: React.FC<OptionCardProps> = ({
   badge,
 }) => {
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
-      style={({ pressed }) => [
+      activeOpacity={0.88}
+      style={[
         s.card,
         selected && s.cardSelected,
-        pressed && s.cardPressed,
       ]}
     >
       {icon ? (
@@ -67,7 +67,7 @@ export const OptionCard: React.FC<OptionCardProps> = ({
           {selected && <View style={s.radioDot} />}
         </View>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 

@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -135,9 +136,10 @@ export const MedicationModal: React.FC<MedicationModalProps> = ({
               {TIME_OPTIONS.map((time) => {
                 const selected = timesOfDay.includes(time);
                 return (
-                  <Pressable
+                  <TouchableOpacity
                     key={time}
                     onPress={() => toggleTime(time)}
+                    activeOpacity={0.7}
                     style={[s.timeChip, selected && s.timeChipSelected]}
                   >
                     <Text
@@ -148,7 +150,7 @@ export const MedicationModal: React.FC<MedicationModalProps> = ({
                     >
                       {time}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -167,14 +169,14 @@ export const MedicationModal: React.FC<MedicationModalProps> = ({
 
             {/* Actions */}
             <View style={s.buttonRow}>
-              <Pressable onPress={onCancel} style={s.cancelBtn}>
+              <TouchableOpacity onPress={onCancel} style={s.cancelBtn} activeOpacity={0.7}>
                 <Text style={s.cancelBtnText}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={handleSave} style={s.saveBtn}>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSave} style={s.saveBtn} activeOpacity={0.88}>
                 <Text style={s.saveBtnText}>
                   {initialItem ? 'Update' : 'Add Medication'}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
@@ -193,7 +195,7 @@ const s = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    backgroundColor: C.surface,
+    backgroundColor: '#FAF8F5',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
@@ -210,7 +212,7 @@ const s = StyleSheet.create({
   sheetTitle: {
     fontFamily: F.bold,
     fontSize: 18,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   errorText: {
     color: C.error,
@@ -221,20 +223,20 @@ const s = StyleSheet.create({
   label: {
     fontFamily: F.semiBold,
     fontSize: 13,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 6,
     marginTop: 10,
   },
   input: {
-    height: 48,
+    height: 50,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
+    borderColor: '#E5E0D8',
+    borderRadius: 14,
     paddingHorizontal: 14,
     fontSize: 15,
     fontFamily: F.regular,
-    color: C.textPrimary,
-    backgroundColor: '#F9FAFB',
+    color: '#161E1C',
+    backgroundColor: '#FFFFFF',
   },
   inputMulti: {
     height: 80,
@@ -250,18 +252,18 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
   },
   timeChipSelected: {
-    backgroundColor: C.primary,
-    borderColor: C.primary,
+    backgroundColor: '#0E7A67',
+    borderColor: '#0E7A67',
   },
   timeChipText: {
     fontFamily: F.medium,
     fontSize: 13,
-    color: '#374151',
+    color: '#161E1C',
   },
   timeChipTextSelected: {
     color: '#FFFFFF',
@@ -275,25 +277,31 @@ const s = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 24,
+    height: 50,
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    borderColor: '#E5E0D8',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelBtnText: {
     fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textSecondary,
+    color: '#52605D',
   },
   saveBtn: {
     flex: 2,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: C.primary,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#0E7A67',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0E7A67',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    elevation: 3,
   },
   saveBtnText: {
     fontFamily: F.bold,

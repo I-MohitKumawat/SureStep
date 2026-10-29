@@ -6,10 +6,10 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
@@ -30,12 +30,12 @@ interface Step3Props {
 }
 
 const LIVING_ARRANGEMENTS = [
-  { id: 'ALONE', title: 'Living Alone', desc: 'Independent household', icon: 'home-outline' as const },
-  { id: 'WITH_SPOUSE', title: 'With Spouse / Partner', desc: 'Living with their partner', icon: 'heart-outline' as const },
-  { id: 'WITH_FAMILY', title: 'With Family / Children', desc: 'Multi-generational home', icon: 'people-outline' as const },
-  { id: 'WITH_CAREGIVER', title: 'With In-Home Caregiver', desc: 'Assisted by a personal aide', icon: 'medkit-outline' as const },
-  { id: 'ASSISTED_LIVING', title: 'Assisted Living / Facility', desc: 'Residential senior community', icon: 'business-outline' as const },
-  { id: 'OTHER', title: 'Other Arrangement', desc: 'Different living setup', icon: 'help-circle-outline' as const },
+  { id: 'ALONE', title: 'Living Independently', desc: 'Solo household', icon: 'home-outline' as const },
+  { id: 'WITH_SPOUSE', title: 'With Spouse / Partner', desc: 'Living together at home', icon: 'heart-outline' as const },
+  { id: 'WITH_FAMILY', title: 'With Family / Children', desc: 'Multi-generational household', icon: 'people-outline' as const },
+  { id: 'WITH_CAREGIVER', title: 'With In-Home Caregiver', desc: 'Assisted daily by a care aide', icon: 'medkit-outline' as const },
+  { id: 'ASSISTED_LIVING', title: 'Senior Living Community', desc: 'Residential assisted community', icon: 'business-outline' as const },
+  { id: 'OTHER', title: 'Other Arrangement', desc: 'Custom living environment', icon: 'help-circle-outline' as const },
 ];
 
 export const Step3LivingSituation: React.FC<Step3Props> = ({
@@ -89,11 +89,11 @@ export const Step3LivingSituation: React.FC<Step3Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Where do you live?' : 'Where do they live?'}
+      title={isSelf ? 'Your Home & Living Setup' : 'Home & Living Setup'}
       subtitle={
         isSelf
-          ? 'Helps configure safe boundaries and localize emergency responses.'
-          : 'Helps configure home safety zones and contextual care.'
+          ? 'Helps us tailor your safe boundaries and localize nearby care support.'
+          : 'Helps us set up home safety boundaries and emergency coverage.'
       }
       currentStep={3}
       iconName="home"
@@ -116,20 +116,18 @@ export const Step3LivingSituation: React.FC<Step3Props> = ({
               autoCapitalize="words"
             />
           </View>
-          <Pressable
+          <TouchableOpacity
             onPress={handleDetectLocation}
             disabled={detecting}
-            style={({ pressed }) => [
-              s.detectBtn,
-              pressed && s.detectBtnPressed,
-            ]}
+            activeOpacity={0.7}
+            style={s.detectBtn}
           >
             {detecting ? (
-              <ActivityIndicator size="small" color={C.primary} />
+              <ActivityIndicator size="small" color="#0E7A67" />
             ) : (
-              <Ionicons name="locate" size={20} color={C.primary} />
+              <Ionicons name="locate" size={20} color="#0E7A67" />
             )}
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -137,7 +135,7 @@ export const Step3LivingSituation: React.FC<Step3Props> = ({
       <View style={s.section}>
         <Text style={s.sectionTitle}>Living Arrangement *</Text>
         <Text style={s.sectionHint}>
-          {isSelf ? 'Who do you currently live with?' : 'Who lives in the home with them?'}
+          {isSelf ? 'Who do you currently live with?' : 'Who lives at home with them?'}
         </Text>
         <View style={s.cardGroup}>
           {LIVING_ARRANGEMENTS.map((arr) => (
@@ -161,15 +159,15 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    fontFamily: F.bold,
+    fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 4,
   },
   sectionHint: {
     fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textSecondary,
+    fontSize: 13,
+    color: '#52605D',
     marginBottom: 10,
   },
   inputRow: {
@@ -181,12 +179,12 @@ const s = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    height: 52,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     borderRadius: 14,
     paddingHorizontal: 14,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
   inputIcon: {
     marginRight: 8,
@@ -195,21 +193,21 @@ const s = StyleSheet.create({
     flex: 1,
     fontFamily: F.regular,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   detectBtn: {
-    width: 50,
-    height: 50,
+    width: 52,
+    height: 52,
     borderRadius: 14,
-    backgroundColor: '#E0F5F0',
+    backgroundColor: '#E6F4F1',
     borderWidth: 1.5,
-    borderColor: C.primaryLight,
+    borderColor: '#C2E8E0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   detectBtnPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.97 }],
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   cardGroup: {
     gap: 2,

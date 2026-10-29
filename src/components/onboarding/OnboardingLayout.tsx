@@ -7,10 +7,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -70,14 +70,15 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
           {/* Top navigation row */}
           <View style={s.topNav}>
             {onBack ? (
-              <Pressable
+              <TouchableOpacity
                 onPress={onBack}
-                style={({ pressed }) => [s.backBtn, pressed && s.pressedOpacity]}
-                hitSlop={12}
+                style={s.backBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name="chevron-back" size={20} color="#161E1C" />
                 <Text style={s.backBtnText}>Back</Text>
-              </Pressable>
+              </TouchableOpacity>
             ) : (
               <View style={{ width: 60 }} />
             )}
@@ -89,13 +90,14 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
             </View>
 
             {onSkip ? (
-              <Pressable
+              <TouchableOpacity
                 onPress={onSkip}
-                style={({ pressed }) => [s.skipBtn, pressed && s.pressedOpacity]}
-                hitSlop={12}
+                style={s.skipBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={s.skipBtnText}>{skipLabel}</Text>
-              </Pressable>
+              </TouchableOpacity>
             ) : (
               <View style={{ width: 60 }} />
             )}
@@ -140,13 +142,13 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
         {/* Bottom CTA Footer */}
         <View style={s.footer}>
           {footerExtra}
-          <Pressable
+          <TouchableOpacity
             onPress={onNext}
             disabled={isNextDisabled || isNextLoading}
-            style={({ pressed }) => [
+            activeOpacity={0.88}
+            style={[
               s.continueBtn,
               isNextDisabled && s.continueBtnDisabled,
-              pressed && !isNextDisabled && s.continueBtnPressed,
             ]}
           >
             {isNextLoading ? (
@@ -165,11 +167,11 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
                   name="arrow-forward"
                   size={18}
                   color={isNextDisabled ? '#9CA3AF' : '#FFFFFF'}
-                  style={{ marginLeft: 6 }}
+                  style={{ marginLeft: 8 }}
                 />
               </View>
             )}
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

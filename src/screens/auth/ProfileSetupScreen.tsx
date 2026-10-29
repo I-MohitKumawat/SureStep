@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Platform, Pressable,
-  ScrollView, StyleSheet, Switch, Text, TextInput, View,
+  ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
@@ -1031,12 +1031,12 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
 
             {/* Pill next button (matches highlight style in bottom right) */}
             <View style={s.ctaContainer}>
-              <Pressable
+              <TouchableOpacity
                 onPress={handleNext}
                 disabled={submitting}
-                style={({ pressed }) => [
+                activeOpacity={0.88}
+                style={[
                   s.pillBtn,
-                  pressed && s.pillBtnPressed,
                   submitting && s.pillBtnDisabled,
                 ]}
               >
@@ -1049,7 +1049,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                       : "Next: complete setup ›"}
                   </Text>
                 )}
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </>

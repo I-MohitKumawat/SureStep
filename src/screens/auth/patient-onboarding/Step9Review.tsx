@@ -3,7 +3,7 @@
  * Step 9: Summary review screen with direct edit links to previous steps.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
 import { C } from '../../../theme/colors';
@@ -56,21 +56,22 @@ export const Step9Review: React.FC<Step9Props> = ({
   const renderSectionHeader = (title: string, stepNumber: number) => (
     <View style={s.cardHeader}>
       <Text style={s.cardTitle}>{title}</Text>
-      <Pressable
+      <TouchableOpacity
         onPress={() => onJumpToStep(stepNumber)}
-        style={({ pressed }) => [s.editBtn, pressed && { opacity: 0.7 }]}
-        hitSlop={8}
+        style={s.editBtn}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="pencil" size={14} color={C.primary} />
+        <Ionicons name="pencil" size={13} color="#0E7A67" />
         <Text style={s.editText}>Edit</Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Review Your Details' : 'Review Care Setup'}
-      subtitle="Please verify the information below before completing setup."
+      title={isSelf ? 'Review Your Care Setup' : 'Review Care Setup'}
+      subtitle="Everything looks ready. You can tap Edit on any section to make adjustments."
       currentStep={9}
       iconName="checkmark-done-circle"
       onBack={onBack}
@@ -104,7 +105,7 @@ export const Step9Review: React.FC<Step9Props> = ({
 
       {/* 2. Communication */}
       <View style={s.summaryCard}>
-        {renderSectionHeader('Communication', 2)}
+        {renderSectionHeader('Language & Formats', 2)}
         <View style={s.row}>
           <Text style={s.label}>Primary:</Text>
           <Text style={s.value}>{data.primaryLanguage || 'English'}</Text>
@@ -119,7 +120,7 @@ export const Step9Review: React.FC<Step9Props> = ({
 
       {/* 3. Living Situation */}
       <View style={s.summaryCard}>
-        {renderSectionHeader('Living Situation', 3)}
+        {renderSectionHeader('Home & Living Setup', 3)}
         <View style={s.row}>
           <Text style={s.label}>City:</Text>
           <Text style={s.value}>{data.city || 'Not provided'}</Text>
@@ -132,7 +133,7 @@ export const Step9Review: React.FC<Step9Props> = ({
 
       {/* 4. Health Status */}
       <View style={s.summaryCard}>
-        {renderSectionHeader('Health & Cognitive Status', 4)}
+        {renderSectionHeader('Memory & Health Support', 4)}
         <View style={s.row}>
           <Text style={s.label}>Status:</Text>
           <Text style={s.value}>{data.diagnosisStatus || 'None'}</Text>
@@ -145,7 +146,7 @@ export const Step9Review: React.FC<Step9Props> = ({
         ) : null}
         {data.stage && data.stage !== 'None' ? (
           <View style={s.row}>
-            <Text style={s.label}>Stage:</Text>
+            <Text style={s.label}>Support Level:</Text>
             <Text style={s.value}>{data.stage}</Text>
           </View>
         ) : null}
@@ -153,7 +154,7 @@ export const Step9Review: React.FC<Step9Props> = ({
 
       {/* 5. Medications */}
       <View style={s.summaryCard}>
-        {renderSectionHeader('Medications', 5)}
+        {renderSectionHeader('Daily Medications', 5)}
         <View style={s.row}>
           <Text style={s.label}>Takes Regular Meds:</Text>
           <Text style={s.value}>{data.takesMedication ? 'Yes' : 'No'}</Text>
@@ -171,7 +172,7 @@ export const Step9Review: React.FC<Step9Props> = ({
 
       {/* 6. Care Needs */}
       <View style={s.summaryCard}>
-        {renderSectionHeader('Care & Support Needs', 6)}
+        {renderSectionHeader('Daily Support Needs', 6)}
         <Text style={s.value}>
           {data.careNeeds.length > 0
             ? data.careNeeds.map((n) => n.replace(/_/g, ' ')).join(', ')
@@ -191,7 +192,7 @@ export const Step9Review: React.FC<Step9Props> = ({
 
       {/* 8. Emergency Contact */}
       <View style={s.summaryCard}>
-        {renderSectionHeader('Emergency Contact', 8)}
+        {renderSectionHeader('Trusted Contact', 8)}
         <View style={s.row}>
           <Text style={s.label}>Name:</Text>
           <Text style={s.value}>{data.emergencyContactName}</Text>
@@ -226,11 +227,11 @@ const s = StyleSheet.create({
     color: C.error,
   },
   summaryCard: {
-    backgroundColor: C.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     marginBottom: 12,
   },
   cardHeader: {
@@ -238,14 +239,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5E0D8',
     paddingBottom: 8,
     marginBottom: 10,
   },
   cardTitle: {
     fontFamily: F.bold,
     fontSize: 14,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   editBtn: {
     flexDirection: 'row',
@@ -259,7 +260,7 @@ const s = StyleSheet.create({
   editText: {
     fontFamily: F.bold,
     fontSize: 12,
-    color: '#0E5A4A',
+    color: '#0A5D50',
   },
   row: {
     flexDirection: 'row',
@@ -269,19 +270,19 @@ const s = StyleSheet.create({
   label: {
     fontFamily: F.regular,
     fontSize: 13,
-    color: C.textSecondary,
+    color: '#52605D',
   },
   value: {
     fontFamily: F.medium,
     fontSize: 13,
-    color: C.textPrimary,
+    color: '#161E1C',
     flexShrink: 1,
     textAlign: 'right',
   },
   bulletItem: {
     fontFamily: F.regular,
     fontSize: 12,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginTop: 2,
   },
 });

@@ -28,35 +28,35 @@ interface Step4Props {
 }
 
 const DIAGNOSIS_OPTIONS = [
-  { id: 'DIAGNOSED', title: 'Diagnosed by a Doctor', desc: 'Formally confirmed medical diagnosis', icon: 'medical-outline' as const },
-  { id: 'SUSPECTED', title: 'Suspected / Symptoms Present', desc: 'Memory issues noticed, awaiting official diagnosis', icon: 'eye-outline' as const },
-  { id: 'NO_DEMENTIA', title: 'No Known Dementia', desc: 'Using SureStep for general senior routine and safety', icon: 'shield-checkmark-outline' as const },
-  { id: 'NOT_SURE', title: 'Not Sure / Under Evaluation', desc: 'Currently being examined or unassessed', icon: 'help-circle-outline' as const },
+  { id: 'DIAGNOSED', title: 'Doctor-Confirmed Diagnosis', desc: 'Formal assessment provided by a medical doctor', icon: 'medical-outline' as const },
+  { id: 'SUSPECTED', title: 'Memory Changes Noticed', desc: 'Experiencing memory slips or seeking reassurance', icon: 'eye-outline' as const },
+  { id: 'NO_DEMENTIA', title: 'General Senior Wellbeing & Routine', desc: 'Using SureStep for daily rhythm, safety, and routine', icon: 'shield-checkmark-outline' as const },
+  { id: 'NOT_SURE', title: 'Under Evaluation / Exploring', desc: 'Currently being assessed or exploring options', icon: 'help-circle-outline' as const },
 ];
 
 const DEMENTIA_TYPES: ChipOption[] = [
-  { id: "Alzheimer's", label: "Alzheimer's Disease" },
-  { id: 'Vascular', label: 'Vascular Dementia' },
-  { id: 'Lewy Body', label: 'Lewy Body Dementia' },
-  { id: 'Frontotemporal', label: 'Frontotemporal (FTD)' },
-  { id: 'MCI', label: 'Mild Cognitive Impairment' },
+  { id: "Alzheimer's", label: "Alzheimer's" },
+  { id: 'Vascular', label: 'Vascular' },
+  { id: 'Lewy Body', label: 'Lewy Body' },
+  { id: 'Frontotemporal', label: 'Frontotemporal' },
+  { id: 'MCI', label: 'Mild Cognitive Changes' },
   { id: 'Mixed / Other', label: 'Mixed / Other' },
   { id: 'Unknown', label: 'Not Sure / Unspecified' },
 ];
 
 const STAGE_OPTIONS = [
-  { id: 'Mild', title: 'Early / Mild', desc: 'Independent with occasional memory slips' },
-  { id: 'Moderate', title: 'Moderate', desc: 'Requires regular assistance with daily activities' },
-  { id: 'Severe', title: 'Advanced / Severe', desc: 'Needs full-time comprehensive supervision' },
-  { id: 'Unknown', title: 'Not Sure / Unassessed', desc: 'Stage has not been determined' },
+  { id: 'Mild', title: 'Early / Mild Support', desc: 'Mainly independent; appreciates gentle daily prompts' },
+  { id: 'Moderate', title: 'Moderate Support', desc: 'Benefits from regular structure and daily reminders' },
+  { id: 'Severe', title: 'Comprehensive Care', desc: 'Requires full-time support and active oversight' },
+  { id: 'Unknown', title: 'Unspecified / Adapting', desc: 'Support level will be adjusted as needs evolve' },
 ];
 
 const CONDITION_OPTIONS: ChipOption[] = [
   { id: 'Hypertension', label: 'High Blood Pressure', icon: 'pulse-outline' },
   { id: 'Diabetes', label: 'Diabetes', icon: 'water-outline' },
   { id: 'Heart Disease', label: 'Heart Condition', icon: 'heart-outline' },
-  { id: 'Mobility Impairment', label: 'Mobility / Walking Issues', icon: 'walk-outline' },
-  { id: 'Sensory Loss', label: 'Vision / Hearing Loss', icon: 'glasses-outline' },
+  { id: 'Mobility Impairment', label: 'Mobility / Walking Support', icon: 'walk-outline' },
+  { id: 'Sensory Loss', label: 'Vision / Hearing Sensitivity', icon: 'glasses-outline' },
   { id: 'None', label: 'None / Not Applicable', icon: 'checkmark-outline' },
 ];
 
@@ -93,11 +93,11 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Tell us about your health' : 'Health & Cognitive Status'}
+      title={isSelf ? 'Memory & Health Context' : 'Memory & Health Context'}
       subtitle={
         isSelf
-          ? 'Helps us tailor your reminder paces and cognitive baseline tests.'
-          : 'Helps caregivers and family configure appropriate safety thresholds.'
+          ? 'Tell us what kind of memory support feels most helpful for your routine.'
+          : 'Helps us configure respectful, appropriately paced cognitive assistance.'
       }
       currentStep={4}
       iconName="fitness"
@@ -108,7 +108,7 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
       {/* Dementia Diagnosis Status */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>
-          {isSelf ? 'Have you been diagnosed with memory loss or dementia?' : 'Diagnosis Status *'}
+          {isSelf ? 'What best describes your memory support situation?' : 'Memory Care Status *'}
         </Text>
         <View style={s.cardGroup}>
           {DIAGNOSIS_OPTIONS.map((opt) => (
@@ -121,7 +121,6 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
               onPress={() => {
                 onUpdate({
                   diagnosisStatus: opt.id,
-                  // If switching to NO_DEMENTIA or NOT_SURE, fill sensible defaults
                   dementiaType: opt.id === 'NO_DEMENTIA' ? 'None' : dementiaType,
                   stage: opt.id === 'NO_DEMENTIA' ? 'None' : stage,
                 });
@@ -135,7 +134,7 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
       {showDementiaDetails && (
         <>
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Type of Condition (if known) *</Text>
+            <Text style={s.sectionTitle}>Condition Type (if known) *</Text>
             <MultiSelectChips
               options={DEMENTIA_TYPES}
               selectedIds={dementiaType ? [dementiaType] : []}
@@ -145,7 +144,7 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
           </View>
 
           <View style={[s.section, { marginTop: 14 }]}>
-            <Text style={s.sectionTitle}>Approximate Stage *</Text>
+            <Text style={s.sectionTitle}>Support Level *</Text>
             <View style={s.cardGroup}>
               {STAGE_OPTIONS.map((st) => (
                 <OptionCard
@@ -163,8 +162,8 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
 
       {/* Other Health Conditions */}
       <View style={[s.section, { marginTop: 14 }]}>
-        <Text style={s.sectionTitle}>Other Health Conditions (Optional)</Text>
-        <Text style={s.sectionHint}>Select any co-existing conditions</Text>
+        <Text style={s.sectionTitle}>Other Health Factors (Optional)</Text>
+        <Text style={s.sectionHint}>Select any co-existing needs</Text>
         <MultiSelectChips
           options={CONDITION_OPTIONS}
           selectedIds={otherConditions}
@@ -177,18 +176,18 @@ export const Step4HealthStatus: React.FC<Step4Props> = ({
 
 const s = StyleSheet.create({
   section: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontFamily: F.bold,
+    fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 4,
   },
   sectionHint: {
     fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textSecondary,
+    fontSize: 13,
+    color: '#52605D',
     marginBottom: 10,
   },
   cardGroup: {

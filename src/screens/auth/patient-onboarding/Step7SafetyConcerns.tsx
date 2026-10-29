@@ -21,44 +21,44 @@ interface Step7Props {
 const SAFETY_OPTIONS = [
   {
     id: 'wandering',
-    title: 'Wandering / Getting Lost',
-    desc: 'Leaving home unexpectedly or difficulty finding the way back',
+    title: 'Wandering or Wayfinding Difficulty',
+    desc: 'Leaving home unexpectedly or difficulty navigating back',
     icon: 'walk-outline' as const,
   },
   {
     id: 'falls',
-    title: 'Falls & Balance Unsteadiness',
-    desc: 'Tripping, loss of balance, or requiring walking support',
+    title: 'Balance & Fall Vulnerability',
+    desc: 'Occasional unsteadiness or requiring walking assistance',
     icon: 'alert-circle-outline' as const,
   },
   {
     id: 'confusion',
-    title: 'Confusion & Disorientation',
-    desc: 'Uncertainty about time, location, or familiar surroundings',
+    title: 'Orientation & Familiarity Lapses',
+    desc: 'Moments of uncertainty about time, location, or surroundings',
     icon: 'help-circle-outline' as const,
   },
   {
     id: 'night_restlessness',
-    title: 'Night Wandering / Sundowning',
-    desc: 'Heightened anxiety, wakefulness, or restlessness in the evening',
+    title: 'Evening Restlessness',
+    desc: 'Heightened anxiety or wakefulness during evening hours',
     icon: 'moon-outline' as const,
   },
   {
     id: 'phone_difficulty',
-    title: 'Trouble Using a Phone',
-    desc: 'Difficulty answering calls, unlocking the screen, or reading messages',
+    title: 'Phone & Screen Hurdles',
+    desc: 'Difficulty answering calls, unlocking screens, or reading text',
     icon: 'phone-portrait-outline' as const,
   },
   {
     id: 'forgetting_meals',
-    title: 'Forgetting Meals or Water',
-    desc: 'Skipping hydration or meal times without reminders',
+    title: 'Hydration & Meal Consistency',
+    desc: 'Skipping water or meals without a friendly prompt',
     icon: 'restaurant-outline' as const,
   },
   {
     id: 'none',
     title: 'No Immediate Safety Concerns',
-    desc: 'General monitoring is sufficient at this time',
+    desc: 'General monitoring and peace of mind is sufficient',
     icon: 'checkmark-circle-outline' as const,
   },
 ];
@@ -89,11 +89,11 @@ export const Step7SafetyConcerns: React.FC<Step7Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Safety Situations to Watch' : 'Specific Safety Concerns'}
+      title={isSelf ? 'Safety & Peace of Mind' : 'Safety & Peace of Mind'}
       subtitle={
         isSelf
-          ? 'Let us know if you experience any of these so we can provide gentle support.'
-          : 'Enables tailored alerts and sensitivity thresholds for their care team.'
+          ? 'Tell us if any of these situations ever come up, so we can be ready with gentle protection.'
+          : 'Configures sensible notifications and gentle safeguards for their daily care circle.'
       }
       currentStep={7}
       iconName="shield-checkmark"
@@ -124,18 +124,18 @@ export const Step7SafetyConcerns: React.FC<Step7Props> = ({
 
 const s = StyleSheet.create({
   section: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontFamily: F.bold,
+    fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 4,
   },
   sectionHint: {
     fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textSecondary,
+    fontSize: 13,
+    color: '#52605D',
     marginBottom: 10,
   },
   cardGroup: {

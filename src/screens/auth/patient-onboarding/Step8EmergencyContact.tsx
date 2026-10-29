@@ -53,11 +53,11 @@ export const Step8EmergencyContact: React.FC<Step8Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Who is your emergency contact?' : 'Primary Emergency Contact'}
+      title={isSelf ? 'Your Trusted Emergency Contact' : 'Trusted Emergency Contact'}
       subtitle={
         isSelf
-          ? 'Someone we can call immediately if you press the SOS button or need assistance.'
-          : 'Who should be contacted immediately in an urgent or SOS situation?'
+          ? 'Someone you trust whom we can reach immediately if you ever need urgent help or tap the SOS button.'
+          : 'The person who will be contacted immediately during an SOS or urgent situation.'
       }
       currentStep={8}
       iconName="call"
@@ -120,11 +120,11 @@ export const Step8EmergencyContact: React.FC<Step8Props> = ({
 
       {/* Trust & Linking Notice */}
       <View style={s.noticeCard}>
-        <Ionicons name="shield-checkmark" size={20} color={C.primary} style={{ marginTop: 2 }} />
+        <Ionicons name="shield-checkmark" size={20} color="#0E7A67" style={{ marginTop: 2 }} />
         <View style={{ flex: 1 }}>
-          <Text style={s.noticeTitle}>Automatic Care Circle Link</Text>
+          <Text style={s.noticeTitle}>Direct Emergency Reachability</Text>
           <Text style={s.noticeText}>
-            If this phone number is registered on SureStep, they will be linked to your Care Circle. If not, their number is safely stored for direct SOS emergency calls without requiring an account.
+            This trusted contact can receive emergency calls immediately when the SOS button is triggered. If they already use SureStep, they will also be connected to your circle.
           </Text>
         </View>
       </View>
@@ -139,18 +139,18 @@ const s = StyleSheet.create({
   fieldLabel: {
     fontFamily: F.semiBold,
     fontSize: 14,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 6,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    height: 52,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     borderRadius: 14,
     paddingHorizontal: 14,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
   inputIcon: {
     marginRight: 10,
@@ -159,7 +159,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontFamily: F.regular,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   relationChips: {
     flexDirection: 'row',
@@ -170,44 +170,44 @@ const s = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 15,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
   },
   relPillSelected: {
-    backgroundColor: '#E6F4F1',
-    borderColor: '#0E5A4A',
-    borderWidth: 2,
+    backgroundColor: '#0E7A67',
+    borderColor: '#0E7A67',
+    borderWidth: 1.5,
   },
   relPillText: {
     fontFamily: F.medium,
     fontSize: 13,
-    color: '#374151',
+    color: '#161E1C',
   },
   relPillTextSelected: {
-    color: '#0E5A4A',
+    color: '#FFFFFF',
     fontFamily: F.bold,
   },
   noticeCard: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#F0FBF8',
+    backgroundColor: '#E6F4F1',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#C6EBE2',
+    borderColor: '#C2E8E0',
     padding: 14,
     marginTop: 8,
   },
   noticeTitle: {
     fontFamily: F.bold,
     fontSize: 13,
-    color: C.primaryDark,
+    color: '#084C41',
     marginBottom: 2,
   },
   noticeText: {
     fontFamily: F.regular,
     fontSize: 12,
-    color: '#4B5563',
-    lineHeight: 17,
+    color: '#52605D',
+    lineHeight: 18,
   },
 });

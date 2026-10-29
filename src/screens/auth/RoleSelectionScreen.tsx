@@ -6,10 +6,10 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -95,10 +95,10 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
         >
           {/* Top navigation row */}
           <View style={s.topNav}>
-            <Pressable onPress={handleBack} style={s.backBtn} hitSlop={12}>
+            <TouchableOpacity onPress={handleBack} style={s.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={20} color={C.textSecondary} />
               <Text style={s.backBtnText}>Back</Text>
-            </Pressable>
+            </TouchableOpacity>
 
             {phoneDisplay ? (
               <Text style={s.phoneSubtitle}>{phoneDisplay}</Text>
@@ -132,13 +132,13 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
             {INTENT_OPTIONS.map((opt) => {
               const isSelected = selectedIntent === opt.id;
               return (
-                <Pressable
+                <TouchableOpacity
                   key={opt.id}
                   onPress={() => setSelectedIntent(opt.id)}
-                  style={({ pressed }) => [
+                  activeOpacity={0.88}
+                  style={[
                     s.optionCard,
                     isSelected && s.optionCardSelected,
-                    pressed && s.optionCardPressed,
                   ]}
                 >
                   <View style={[s.iconBox, isSelected && s.iconBoxSelected]}>
@@ -156,26 +156,26 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
                   <View style={[s.radioCircle, isSelected && s.radioCircleSelected]}>
                     {isSelected && <View style={s.radioDot} />}
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               );
             })}
           </View>
 
           {/* Bottom CTA */}
           <View style={s.footer}>
-            <Pressable
+            <TouchableOpacity
               onPress={handleContinue}
               disabled={!selectedIntent}
-              style={({ pressed }) => [
+              activeOpacity={0.88}
+              style={[
                 s.continueBtn,
                 !selectedIntent && s.continueBtnDisabled,
-                pressed && selectedIntent && s.continueBtnPressed,
               ]}
             >
               <Text style={[s.continueBtnText, !selectedIntent && s.continueBtnTextDisabled]}>
                 Continue →
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}

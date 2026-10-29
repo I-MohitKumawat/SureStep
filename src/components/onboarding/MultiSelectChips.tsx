@@ -3,7 +3,7 @@
  * Reusable pill chip group for quick, tactile multi-selection.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
@@ -33,13 +33,13 @@ export const MultiSelectChips: React.FC<MultiSelectChipsProps> = ({
       {options.map((opt) => {
         const isSelected = selectedIds.includes(opt.id);
         return (
-          <Pressable
+          <TouchableOpacity
             key={opt.id}
             onPress={() => onToggle(opt.id)}
-            style={({ pressed }) => [
+            activeOpacity={0.8}
+            style={[
               s.chip,
               isSelected && s.chipSelected,
-              pressed && s.chipPressed,
             ]}
           >
             {opt.icon ? (
@@ -61,7 +61,7 @@ export const MultiSelectChips: React.FC<MultiSelectChipsProps> = ({
                 style={{ marginLeft: 6 }}
               />
             ) : null}
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>

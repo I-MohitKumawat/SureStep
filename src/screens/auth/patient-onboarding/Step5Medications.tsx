@@ -3,7 +3,7 @@
  * Step 5: Regular medications toggle and structured medication list.
  */
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
 import { MedicationModal } from '../../../components/onboarding/MedicationModal';
@@ -70,11 +70,11 @@ export const Step5Medications: React.FC<Step5Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Do you take regular medication?' : 'Regular Medications'}
+      title={isSelf ? 'Daily Routine & Medications' : 'Daily Routine & Medications'}
       subtitle={
         isSelf
-          ? 'SureStep will chime in with friendly reminders so you never miss a dose.'
-          : 'Set up medication reminders with times of day and dosage.'
+          ? 'SureStep can gently chime in so taking daily medication is effortless and timely.'
+          : 'Set up friendly prompts with times of day and dosage for their daily routine.'
       }
       currentStep={5}
       iconName="medkit"
@@ -84,35 +84,37 @@ export const Step5Medications: React.FC<Step5Props> = ({
     >
       {/* Takes Medication Toggle */}
       <View style={s.toggleRow}>
-        <Pressable
+        <TouchableOpacity
           onPress={() => onUpdate({ takesMedication: false, medications: [] })}
+          activeOpacity={0.8}
           style={[s.toggleBtn, !takesMedication && s.toggleBtnSelected]}
         >
           <Ionicons
             name={!takesMedication ? 'checkmark-circle' : 'ellipse-outline'}
             size={20}
-            color={!takesMedication ? C.primary : '#9CA3AF'}
+            color={!takesMedication ? '#0E7A67' : '#9CA3AF'}
             style={{ marginRight: 8 }}
           />
           <Text style={[s.toggleBtnText, !takesMedication && s.toggleBtnTextSelected]}>
             No, None
           </Text>
-        </Pressable>
+        </TouchableOpacity>
 
-        <Pressable
+        <TouchableOpacity
           onPress={() => onUpdate({ takesMedication: true })}
+          activeOpacity={0.8}
           style={[s.toggleBtn, takesMedication && s.toggleBtnSelected]}
         >
           <Ionicons
             name={takesMedication ? 'checkmark-circle' : 'ellipse-outline'}
             size={20}
-            color={takesMedication ? C.primary : '#9CA3AF'}
+            color={takesMedication ? '#0E7A67' : '#9CA3AF'}
             style={{ marginRight: 8 }}
           />
           <Text style={[s.toggleBtnText, takesMedication && s.toggleBtnTextSelected]}>
             Yes, Takes Meds
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       {/* Medication List */}
@@ -122,10 +124,10 @@ export const Step5Medications: React.FC<Step5Props> = ({
             <Text style={s.sectionTitle}>
               Medication Schedule ({medications.length})
             </Text>
-            <Pressable onPress={openAdd} style={s.addBtn}>
+            <TouchableOpacity onPress={openAdd} style={s.addBtn} activeOpacity={0.88}>
               <Ionicons name="add" size={18} color="#FFFFFF" />
               <Text style={s.addBtnText}>Add</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
 
           {medications.length === 0 ? (
@@ -133,7 +135,7 @@ export const Step5Medications: React.FC<Step5Props> = ({
               <Ionicons name="bandage-outline" size={32} color="#D1D5DB" />
               <Text style={s.emptyTitle}>No medications added yet</Text>
               <Text style={s.emptySub}>
-                Tap &quot;Add Medication&quot; above to list names and dosage.
+                Tap &quot;Add&quot; above to list names and dosage.
               </Text>
             </View>
           ) : (
@@ -150,7 +152,7 @@ export const Step5Medications: React.FC<Step5Props> = ({
                   <View style={s.timesRow}>
                     {med.times_of_day?.map((time) => (
                       <View key={time} style={s.timePill}>
-                        <Ionicons name="time-outline" size={12} color={C.primary} style={{ marginRight: 4 }} />
+                        <Ionicons name="time-outline" size={12} color="#0E7A67" style={{ marginRight: 4 }} />
                         <Text style={s.timePillText}>{time}</Text>
                       </View>
                     ))}
@@ -162,12 +164,12 @@ export const Step5Medications: React.FC<Step5Props> = ({
                 </View>
 
                 <View style={s.medActions}>
-                  <Pressable onPress={() => openEdit(med)} style={s.actionBtn} hitSlop={8}>
-                    <Ionicons name="pencil" size={18} color={C.primary} />
-                  </Pressable>
-                  <Pressable onPress={() => handleRemove(med.id)} style={s.actionBtn} hitSlop={8}>
+                  <TouchableOpacity onPress={() => openEdit(med)} style={s.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+                    <Ionicons name="pencil" size={18} color="#0E7A67" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleRemove(med.id)} style={s.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
                     <Ionicons name="trash-outline" size={18} color={C.error} />
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
               </View>
             ))
@@ -202,24 +204,24 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     paddingHorizontal: 12,
   },
   toggleBtnSelected: {
     backgroundColor: '#E6F4F1',
-    borderColor: '#0E5A4A',
+    borderColor: '#0E7A67',
     borderWidth: 2,
   },
   toggleBtnText: {
     fontFamily: F.medium,
     fontSize: 14,
-    color: '#374151',
+    color: '#161E1C',
   },
   toggleBtnTextSelected: {
     fontFamily: F.bold,
-    color: '#0E5A4A',
+    color: '#084C41',
   },
   medsSection: {
     marginTop: 6,
@@ -231,9 +233,9 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontFamily: F.bold,
+    fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   addBtn: {
     flexDirection: 'row',
@@ -241,7 +243,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: C.primary,
+    backgroundColor: '#0E7A67',
     gap: 4,
   },
   addBtnText: {
@@ -255,14 +257,14 @@ const s = StyleSheet.create({
     padding: 30,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     borderStyle: 'dashed',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
   emptyTitle: {
     fontFamily: F.semiBold,
     fontSize: 14,
-    color: C.textSecondary,
+    color: '#52605D',
     marginTop: 10,
   },
   emptySub: {
@@ -275,11 +277,11 @@ const s = StyleSheet.create({
   medCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     marginBottom: 10,
   },
   medInfo: {
@@ -294,18 +296,20 @@ const s = StyleSheet.create({
   medName: {
     fontFamily: F.bold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   dosageBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#FAF8F5',
+    borderWidth: 1,
+    borderColor: '#E5E0D8',
   },
   dosageText: {
     fontFamily: F.medium,
     fontSize: 11,
-    color: '#374151',
+    color: '#52605D',
   },
   timesRow: {
     flexDirection: 'row',
@@ -319,17 +323,17 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: '#EAF7F4',
+    backgroundColor: '#E6F4F1',
   },
   timePillText: {
     fontFamily: F.medium,
     fontSize: 11,
-    color: C.primary,
+    color: '#0A5D50',
   },
   instructions: {
     fontFamily: F.regular,
     fontSize: 12,
-    color: C.textSecondary,
+    color: '#52605D',
     marginTop: 2,
   },
   medActions: {

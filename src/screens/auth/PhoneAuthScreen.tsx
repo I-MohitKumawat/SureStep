@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -179,7 +180,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
 
               {/* TOP HEADER / BACK BUTTON */}
               <View style={styles.headerRow}>
-                <Pressable onPress={handleBack} style={styles.backButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
                   <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
                     <Path
                       d="M19 12H5M5 12L12 19M5 12L12 5"
@@ -189,7 +190,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                       strokeLinejoin="round"
                     />
                   </Svg>
-                </Pressable>
+                </TouchableOpacity>
               </View>
 
               {/* LOGO AREA */}
@@ -299,14 +300,14 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                         </View>
                       ) : null}
 
-                      <Pressable
-                        style={({ pressed }) => [
+                      <TouchableOpacity
+                        style={[
                           styles.loginButton,
                           !isPhoneReady && styles.loginButtonDisabled,
-                          pressed && isPhoneReady && styles.loginButtonPressed,
                         ]}
                         onPress={() => void handleSendCode()}
-                        disabled={!isPhoneReady}
+                        disabled={!isPhoneReady || loading}
+                        activeOpacity={0.88}
                       >
                         {loading ? (
                           <ActivityIndicator color="#FFFFFF" />
@@ -316,7 +317,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                             <Text style={[styles.buttonArrow, !isPhoneReady && styles.loginTextDisabled]}>▸</Text>
                           </>
                         )}
-                      </Pressable>
+                      </TouchableOpacity>
                     </>
                   ) : (
                     <>
@@ -374,14 +375,14 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                         </View>
                       ) : null}
 
-                      <Pressable
-                        style={({ pressed }) => [
+                      <TouchableOpacity
+                        style={[
                           styles.loginButton,
                           !isOtpReady && styles.loginButtonDisabled,
-                          pressed && isOtpReady && styles.loginButtonPressed,
                         ]}
                         onPress={() => void handleVerifyCode()}
-                        disabled={!isOtpReady}
+                        disabled={!isOtpReady || loading}
+                        activeOpacity={0.88}
                       >
                         {loading ? (
                           <ActivityIndicator color="#FFFFFF" />
@@ -391,26 +392,28 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                             <Text style={[styles.buttonArrow, !isOtpReady && styles.loginTextDisabled]}>▸</Text>
                           </>
                         )}
-                      </Pressable>
+                      </TouchableOpacity>
 
                       {/* RESEND / CHANGE NUMBER SECONDARY ACTIONS */}
                       <View style={styles.otpActionsRow}>
-                        <Pressable
+                        <TouchableOpacity
                           onPress={() => void handleSendCode()}
                           disabled={loading}
-                          style={({ pressed }) => [styles.secondaryActionButton, pressed && { opacity: 0.7 }]}
-                          hitSlop={8}
+                          style={styles.secondaryActionButton}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
                           <Text style={styles.resendActionText}>Resend Code</Text>
-                        </Pressable>
+                        </TouchableOpacity>
                         <Text style={[styles.actionDivider, { color: theme.colors.borderSubtle }]}>•</Text>
-                        <Pressable
+                        <TouchableOpacity
                           onPress={handleBack}
-                          style={({ pressed }) => [styles.secondaryActionButton, pressed && { opacity: 0.7 }]}
-                          hitSlop={8}
+                          style={styles.secondaryActionButton}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
                           <Text style={[styles.changeNumberActionText, { color: theme.colors.textSecondary }]}>Change Number</Text>
-                        </Pressable>
+                        </TouchableOpacity>
                       </View>
                     </>
                   )}
@@ -456,12 +459,12 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                       data={countries}
                       keyExtractor={(item) => item.code}
                       renderItem={({ item }) => (
-                        <Pressable
-                          style={({ pressed }) => [
+                        <TouchableOpacity
+                          style={[
                             styles.countryItem,
                             { borderBottomColor: theme.colors.borderSubtle },
-                            pressed && { backgroundColor: theme.colors.background }
                           ]}
+                          activeOpacity={0.7}
                           onPress={() => {
                             setSelectedCountry(item);
                             setCountryModalVisible(false);
@@ -470,7 +473,7 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           <Text style={styles.countryItemFlag}>{item.flag}</Text>
                           <Text style={[styles.countryItemName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
                           <Text style={[styles.countryItemCode, { color: theme.colors.textSecondary }]}>{item.code}</Text>
-                        </Pressable>
+                        </TouchableOpacity>
                       )}
                     />
                   </View>
@@ -648,7 +651,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   loginButtonDisabled: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E5E0D8',
     shadowOpacity: 0,
     elevation: 0,
   },

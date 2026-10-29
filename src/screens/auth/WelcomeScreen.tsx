@@ -1,8 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { useTheme } from '../../theme/ThemeContext';
@@ -14,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 type Props = NativeStackScreenProps<AuthStackParams, 'WelcomeScreen'>;
 
 export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { status, firebaseUser, logout, loginDevMode } = useAuth();
+  const { status, firebaseUser, logout } = useAuth();
 
   // Mid-onboarding: Firebase session exists but DB profile not yet created
   const isOnboarding = status === 'no_role' || status === 'no_profile';
@@ -24,103 +23,89 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
       edges={['top', 'bottom', 'left', 'right']}
       style={styles.container}
     >
-
       {(theme) => (
         <>
-
           {/* SKY BACKGROUND */}
-
           <LinearGradient
-            colors={['#57CFF2', '#BFEFFF', theme.colors.background,]}
+            colors={['#57CFF2', '#BFEFFF', theme.colors.background]}
             locations={[0, 0.45, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={styles.gradient}
           />
 
-      {/* CONTENT */}
-      <View style={styles.content}>
-
-        {/* LOGO AREA */}
-        <View style={styles.heroSection}>
-
-          {/* PIN SHAPE */}
-          <View style={styles.pinWrapper}>
-
-            {/* Outer PIN */}
-            <View style={styles.pinOuter}>
-
-              {/* Inner Dark */}
-              <View style={styles.pinInner}>
-
-                {/* FACE */}
-                <View style={styles.faceCircle}>
-                  <View style={styles.eyesRow}>
-                    <View style={styles.eye} />
-                    <View style={styles.eye} />
+          {/* CONTENT */}
+          <View style={styles.content}>
+            {/* LOGO AREA */}
+            <View style={styles.heroSection}>
+              {/* PIN SHAPE */}
+              <View style={styles.pinWrapper}>
+                {/* Outer PIN */}
+                <View style={styles.pinOuter}>
+                  {/* Inner Dark */}
+                  <View style={styles.pinInner}>
+                    {/* FACE */}
+                    <View style={styles.faceCircle}>
+                      <View style={styles.eyesRow}>
+                        <View style={styles.eye} />
+                        <View style={styles.eye} />
+                      </View>
+                      <View style={styles.smile} />
+                    </View>
                   </View>
-
-                  <View style={styles.smile} />
                 </View>
+                {/* PIN DOT */}
+                <View style={styles.pinDot} />
               </View>
+
+              <Text style={styles.brandText}>SURESTEP</Text>
+              <Text style={styles.taglineText}>Your daily care companion</Text>
             </View>
 
-            {/* PIN DOT */}
-            <View style={styles.pinDot} />
+            {/* BOTTOM SECTION */}
+            <View style={styles.bottomSection}>
+              {/* SLANTED SURFACE */}
+              <View style={styles.slantBg} pointerEvents="none" />
+
+              {isOnboarding ? (
+                // Mid-onboarding: user is Firebase-authenticated but hasn't finished DB setup
+                <View style={styles.ctaWrapper}>
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() => status === 'no_role'
+                      ? navigation.navigate('RoleSelectionScreen')
+                      : navigation.navigate('ProfileSetupScreen', { role: 'PATIENT' })
+                    }
+                    style={styles.ctaButton}
+                  >
+                    <Text style={styles.ctaText}>
+                      Continue as{' '}
+                      <Text style={{ fontFamily: F.extraBold }}>{firebaseUser?.phoneNumber ?? 'your number'}</Text>
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.7} onPress={() => logout()} style={styles.signOutLink}>
+                    <Text style={styles.signOutLinkText}>Sign out / use a different number</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                // Unified Sign In entry point
+                <View style={styles.ctaWrapper}>
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() => navigation.navigate('PhoneAuthScreen')}
+                    style={styles.ctaButton}
+                  >
+                    <Text style={styles.ctaText}>Sign In with Phone</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.secondaryText}>
+                    New to SureStep? Sign in to set up your profile.
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <Text style={styles.brandText}>
-            SURESTEP
-          </Text>
-
-          <Text style={styles.secondaryText}>
-            Your daily care companion
-          </Text>
-        </View>
-
-        {/* BOTTOM SECTION */}
-        <View style={styles.bottomSection}>
-
-          {/* SLANTED SURFACE */}
-          <View style={styles.slantBg} pointerEvents="none" />
-
-          {isOnboarding ? (
-            // Mid-onboarding: user is Firebase-authenticated but hasn't finished DB setup
-            <>
-              <Pressable
-                onPress={() => status === 'no_role'
-                  ? navigation.navigate('RoleSelectionScreen')
-                  : navigation.navigate('ProfileSetupScreen', { role: 'PATIENT' })
-                }
-                style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
-              >
-                <Text style={styles.ctaText}>
-                  Continue as{' '}
-                  <Text style={{ fontFamily: F.extraBold }}>{firebaseUser?.phoneNumber ?? 'your number'}</Text>
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => logout()} style={styles.signOutLink}>
-                <Text style={styles.signOutLinkText}>Sign out / use a different number</Text>
-              </Pressable>
-            </>
-          ) : (
-            // Unified Sign In entry point
-            <>
-              <Pressable
-                onPress={() => navigation.navigate('PhoneAuthScreen')}
-                style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
-              >
-                <Text style={styles.ctaText}>Sign In with Phone</Text>
-              </Pressable>
-              <Text style={styles.secondaryText}>
-                New to SureStep? Sign in to set up your profile.
-              </Text>
-            </>
-          )}
-
-        </View>
-      </View>
-      </>
-    )}
+        </>
+      )}
     </ScreenContainer>
   );
 };
@@ -243,10 +228,16 @@ const styles = StyleSheet.create({
   brandText: {
     fontFamily: F.extraBold,
     fontSize: 28,
-
     color: '#2D2342',
-
     letterSpacing: 9,
+  },
+
+  taglineText: {
+    fontFamily: F.medium,
+    fontSize: 14,
+    color: '#2D2342',
+    textAlign: 'center',
+    marginTop: 6,
   },
 
   bottomSection: {
@@ -255,6 +246,7 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     paddingTop: 44,
     alignItems: 'center',
+    width: '100%',
   },
 
   slantBg: {
@@ -269,14 +261,20 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 60,
   },
 
+  ctaWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
   ctaButton: {
     width: '100%',
     height: 58,
     borderRadius: 29,
-    backgroundColor: C.primary,
+    backgroundColor: '#0E7A67',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: C.primaryDark,
+    shadowColor: '#0A5D50',
     shadowOpacity: 0.28,
     shadowOffset: {
       width: 0,
@@ -284,7 +282,6 @@ const styles = StyleSheet.create({
     },
     shadowRadius: 12,
     elevation: 6,
-    zIndex: 10,
     marginBottom: 16,
   },
 
