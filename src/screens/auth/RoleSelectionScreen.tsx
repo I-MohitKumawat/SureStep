@@ -53,7 +53,7 @@ const INTENT_OPTIONS: IntentOption[] = [
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, loginDevMode } = useAuth();
   const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent | null>(null);
 
   const handleContinue = () => {
@@ -174,6 +174,30 @@ export const RoleSelectionScreen: React.FC<Props> = ({ navigation }) => {
             >
               <Text style={[s.continueBtnText, !selectedIntent && s.continueBtnTextDisabled]}>
                 Continue →
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => loginDevMode('FAMILY')}
+              style={({ pressed }) => [
+                { marginTop: 14, alignItems: 'center', padding: 8 },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <Text style={{ color: '#0E7A67', fontFamily: F.bold, fontSize: 14, textDecorationLine: 'underline' }}>
+                ⚡ Quick Dev Mode: Enter as Family (Ananya) →
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => loginDevMode('PATIENT')}
+              style={({ pressed }) => [
+                { marginTop: 6, alignItems: 'center', padding: 8 },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <Text style={{ color: C.textSecondary, fontFamily: F.medium, fontSize: 12, textDecorationLine: 'underline' }}>
+                Enter as Patient (Ramesh) →
               </Text>
             </Pressable>
           </View>

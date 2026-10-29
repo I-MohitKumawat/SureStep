@@ -105,7 +105,12 @@ export type CaregiverStackParams = {
 export type FamilyStackParams = {
   FamilyLinkPatientScreen: undefined;
   FamilyTabs:              undefined;
+  FamilyHomeScreen:        undefined;
   FamilyFeedScreen:        undefined;
+  FamilyPatientOverviewScreen: { patientId: string; patientName?: string; initialTab?: 'Overview' | 'Routines' | 'Safety' | 'People' | 'Memories' };
+  FamilyPatientRoutinesScreen: { patientId: string; patientName?: string; initialFilter?: 'all' | 'active' | 'paused' };
+  FamilyRoutineEditorScreen:   { patientId: string; patientName?: string; mode: 'create' | 'edit'; routine?: any };
+  FamilyPeopleScreen:      undefined;
   CareDiscoveryScreen:     { targetPatientId: string; targetPatientName?: string };
   CaregiverProfileScreen:  { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
   CareRequestScreen:       { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
@@ -123,11 +128,18 @@ export type FamilyStackParams = {
 };
 
 export type FamilyTabParams = {
+  HomeTab:                 undefined;
+  PeopleTab:               undefined;
+  AlertsTab:               undefined;
+  CareTab:                 undefined;
+  FamilyHomeScreen:        undefined;
   FamilyFeedScreen:        undefined;
+  FamilyPeopleScreen:      undefined;
   FamilyMapScreen:         { patientId?: string } | undefined;
   FamilyAlertsScreen:      undefined;
   FamilyMessagesScreen:    { patientId?: string } | undefined;
   FamilySettingsScreen:    undefined;
+  CareRequestsListScreen:  undefined;
 };
 
 // ─── Doctor Stack ─────────────────────────────────────────────────────────────

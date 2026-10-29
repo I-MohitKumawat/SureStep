@@ -2,18 +2,16 @@ import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
-export type FamilyTab = 'Home' | 'Map' | 'Alerts' | 'Messages' | 'Settings';
+export type FamilyTab = 'Home' | 'People' | 'Alerts' | 'Care';
 
 export const FamilyBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const tabs = [
-    { name: 'Home', icon: 'home-outline', iconActive: 'home', screen: 'FamilyFeedScreen' },
-    { name: 'Map', icon: 'map-outline', iconActive: 'map', screen: 'FamilyMapScreen' },
-    { name: 'Alerts', icon: 'notifications-outline', iconActive: 'notifications', screen: 'FamilyAlertsScreen' },
-    { name: 'Messages', icon: 'chatbubble-outline', iconActive: 'chatbubble', screen: 'FamilyMessagesScreen' },
-    { name: 'Settings', icon: 'settings-outline', iconActive: 'settings', screen: 'FamilySettingsScreen' },
+    { name: 'Home', icon: 'home-outline', iconActive: 'home', screen: 'HomeTab' },
+    { name: 'People', icon: 'people-outline', iconActive: 'people', screen: 'PeopleTab' },
+    { name: 'Alerts', icon: 'notifications-outline', iconActive: 'notifications', screen: 'AlertsTab' },
+    { name: 'Care', icon: 'heart-outline', iconActive: 'heart', screen: 'CareTab' },
   ] as const;
 
   const activeRouteName = state.routes[state.index]?.name;
@@ -22,7 +20,13 @@ export const FamilyBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation
     <View style={styles.container}>
       <View style={styles.bar}>
         {tabs.map((tab) => {
-          const isActive = activeRouteName === tab.screen;
+          const isActive =
+            activeRouteName === tab.screen ||
+            (tab.screen === 'HomeTab' && (activeRouteName === 'FamilyFeedScreen' || activeRouteName === 'FamilyHomeScreen')) ||
+            (tab.screen === 'PeopleTab' && activeRouteName === 'FamilyPeopleScreen') ||
+            (tab.screen === 'AlertsTab' && activeRouteName === 'FamilyAlertsScreen') ||
+            (tab.screen === 'CareTab' && activeRouteName === 'CareRequestsListScreen');
+
           const iconName = isActive ? tab.iconActive : tab.icon;
 
           return (
@@ -36,13 +40,12 @@ export const FamilyBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation
             >
               <Ionicons
                 name={iconName}
-                size={22}
-                color={isActive ? C.primary : C.textMuted}
+                size={24}
+                color={isActive ? '#0E7A67' : '#52605D'}
               />
               <Text style={[styles.label, isActive && styles.labelActive]}>
-                {tab.name === 'Home' ? 'Dashboard' : (tab.name === 'Alerts' ? 'Notifications' : tab.name)}
+                {tab.name}
               </Text>
-              {isActive && <View style={styles.activeIndicator} />}
             </Pressable>
           );
         })}
@@ -59,13 +62,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingBottom: 24, // for safe area
-    paddingTop: 10,
+    borderTopColor: '#E5E0D8',
+    paddingBottom: 20, // for safe area
+    paddingTop: 8,
     shadowColor: '#000000',
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.04,
     shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 8,
     zIndex: 100,
   },
@@ -79,25 +82,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
     paddingVertical: 4,
-    position: 'relative',
   },
   label: {
     fontFamily: F.medium,
     fontSize: 11,
-    color: C.textMuted,
+    color: '#52605D',
     marginTop: 4,
   },
   labelActive: {
-    color: C.primary,
+    color: '#0E7A67',
     fontFamily: F.bold,
-  },
-  activeIndicator: {
-    position: 'absolute',
-    top: -10,
-    width: 24,
-    height: 3,
-    backgroundColor: C.primary,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
   },
 });

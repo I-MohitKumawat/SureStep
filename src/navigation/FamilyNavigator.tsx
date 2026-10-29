@@ -18,7 +18,12 @@ import { FamilyProvider, useFamilyContext } from '../context/FamilyContext';
 import { TaskProvider }            from '../context/TaskContext';
 
 import { FamilyLinkPatientScreen } from '../screens/family/FamilyLinkPatientScreen';
+import { FamilyHomeScreen }        from '../screens/family/FamilyHomeScreen';
 import { FamilyFeedScreen }        from '../screens/family/FamilyFeedScreen';
+import { FamilyPatientOverviewScreen } from '../screens/family/FamilyPatientOverviewScreen';
+import { FamilyPatientRoutinesScreen } from '../screens/family/FamilyPatientRoutinesScreen';
+import { FamilyRoutineEditorScreen }   from '../screens/family/FamilyRoutineEditorScreen';
+import { FamilyPeopleScreen }      from '../screens/family/FamilyPeopleScreen';
 import { FamilyMapScreen }         from '../screens/family/FamilyMapScreen';
 import { FamilyAlertsScreen }      from '../screens/family/FamilyAlertsScreen';
 import { FamilyStoriesScreen }     from '../screens/family/FamilyStoriesScreen';
@@ -39,18 +44,17 @@ import { CareRequestsListScreen } from '../screens/shared/CareRequestsListScreen
 const Stack = createNativeStackNavigator<FamilyStackParams>();
 const Tab = createBottomTabNavigator<FamilyTabParams>();
 
-/** Bottom tab navigator containing the main dashboard views. */
+/** Bottom tab navigator containing the 4 primary approved family views: Home | People | Alerts | Care */
 const FamilyTabs: React.FC = () => (
   <Tab.Navigator
     tabBar={(props) => <FamilyBottomBar {...props} />}
     screenOptions={{ headerShown: false }}
-    initialRouteName="FamilyFeedScreen"
+    initialRouteName="HomeTab"
   >
-    <Tab.Screen name="FamilyFeedScreen"     component={FamilyFeedScreen} />
-    <Tab.Screen name="FamilyMapScreen"      component={FamilyMapScreen} />
-    <Tab.Screen name="FamilyAlertsScreen"   component={FamilyAlertsScreen} />
-    <Tab.Screen name="FamilyMessagesScreen" component={FamilyMessagesScreen} />
-    <Tab.Screen name="FamilySettingsScreen" component={FamilySettingsScreen} />
+    <Tab.Screen name="HomeTab"   component={FamilyHomeScreen} />
+    <Tab.Screen name="PeopleTab" component={FamilyPeopleScreen} />
+    <Tab.Screen name="AlertsTab" component={FamilyAlertsScreen} />
+    <Tab.Screen name="CareTab"   component={CareRequestsListScreen as any} />
   </Tab.Navigator>
 );
 
@@ -66,23 +70,29 @@ const FamilyStack: React.FC = () => {
     );
   }
 
-  const initialRoute: keyof FamilyStackParams =
-    !hasPatient ? 'FamilyLinkPatientScreen' : 'FamilyTabs';
+  // Always land on FamilyTabs so user sees the approved Family Home
+  const initialRoute: keyof FamilyStackParams = 'FamilyTabs';
 
   return (
     <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="FamilyLinkPatientScreen" component={FamilyLinkPatientScreen} />
-      <Stack.Screen name="FamilyTabs"              component={FamilyTabs} />
-      <Stack.Screen name="FamilyStoriesScreen"     component={FamilyStoriesScreen} />
-      <Stack.Screen name="CareDiscoveryScreen"     component={CareDiscoveryScreen} />
-      <Stack.Screen name="CaregiverProfileScreen"  component={CaregiverProfileScreen} />
-      <Stack.Screen name="CareRequestScreen"       component={CareRequestScreen} />
-      <Stack.Screen name="CareRequestDetailScreen" component={CareRequestDetailScreen} />
-      <Stack.Screen name="CareRequestsListScreen"  component={CareRequestsListScreen} />
-      <Stack.Screen name="NotificationHistoryScreen" component={NotificationHistoryScreen} />
-      <Stack.Screen name="NotificationSettingsScreen" component={NotificationSettingsScreen} />
-      <Stack.Screen name="NotificationTestScreen"     component={NotificationTestScreen} />
-      <Stack.Screen name="PatientProfileScreen"    component={PatientProfileScreen} />
+      <Stack.Screen name="FamilyTabs"                  component={FamilyTabs} />
+      <Stack.Screen name="FamilyHomeScreen"            component={FamilyHomeScreen} />
+      <Stack.Screen name="FamilyPatientOverviewScreen" component={FamilyPatientOverviewScreen} />
+      <Stack.Screen name="FamilyPatientRoutinesScreen" component={FamilyPatientRoutinesScreen} />
+      <Stack.Screen name="FamilyRoutineEditorScreen"   component={FamilyRoutineEditorScreen} />
+      <Stack.Screen name="FamilyPeopleScreen"          component={FamilyPeopleScreen} />
+      <Stack.Screen name="FamilyLinkPatientScreen"     component={FamilyLinkPatientScreen} />
+      <Stack.Screen name="FamilyMapScreen"             component={FamilyMapScreen} />
+      <Stack.Screen name="FamilyStoriesScreen"         component={FamilyStoriesScreen} />
+      <Stack.Screen name="CareDiscoveryScreen"         component={CareDiscoveryScreen} />
+      <Stack.Screen name="CaregiverProfileScreen"      component={CaregiverProfileScreen} />
+      <Stack.Screen name="CareRequestScreen"           component={CareRequestScreen} />
+      <Stack.Screen name="CareRequestDetailScreen"     component={CareRequestDetailScreen} />
+      <Stack.Screen name="CareRequestsListScreen"      component={CareRequestsListScreen} />
+      <Stack.Screen name="NotificationHistoryScreen"   component={NotificationHistoryScreen} />
+      <Stack.Screen name="NotificationSettingsScreen"  component={NotificationSettingsScreen} />
+      <Stack.Screen name="NotificationTestScreen"      component={NotificationTestScreen} />
+      <Stack.Screen name="PatientProfileScreen"        component={PatientProfileScreen} />
     </Stack.Navigator>
   );
 };
