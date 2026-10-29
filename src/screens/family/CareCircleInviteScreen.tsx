@@ -16,7 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { FamilyStackParams } from '../../types/navigation.types';
-import { generateCircleInvite } from '../../services/careCircleService';
+import {
+  generateCircleInvite,
+  getActiveCircleInvite,
+} from '../../services/careCircleService';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
@@ -26,15 +29,38 @@ export const CareCircleInviteScreen: React.FC<Props> = ({ route, navigation }) =
   const insets = useSafeAreaInsets();
   const { circleId } = route.params;
 
-  const [role, setRole] = useState<'MEMBER' | 'CAREGIVER'>('MEMBER');
   const [code, setCode] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
-  const handleGenerate = async (selectedRole = role) => {
+  // Load the current code without invalidating it. Regeneration is explicit.
+  useEffect(() => {
+    let active = true;
+    const loadActiveInvite = async () => {
+      try {
+        const invite = await getActiveCircleInvite(circleId);
+        if (!active) return;
+        setCode(invite?.code ?? null);
+        setExpiresAt(invite?.expires_at ?? null);
+      } catch (err: any) {
+        if (active) {
+          Alert.alert('Error', err?.message || 'Failed to load the invitation code.');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadActiveInvite();
+    return () => {
+      active = false;
+    };
+  }, [circleId]);
+
+  const handleGenerate = async () => {
     try {
       setGenerating(true);
-      const res = await generateCircleInvite(circleId, selectedRole);
+      const res = await generateCircleInvite(circleId);
       setCode(res.code);
       setExpiresAt(res.expires_at);
     } catch (err: any) {
@@ -44,9 +70,16 @@ export const CareCircleInviteScreen: React.FC<Props> = ({ route, navigation }) =
     }
   };
 
-  useEffect(() => {
-    void handleGenerate();
-  }, [circleId]);
+  const handleRegenerate = () => {
+    Alert.alert(
+      'Generate New Code?',
+      'This immediately invalidates the current invitation code. Anyone using the old code will not be able to join.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Generate New Code', style: 'destructive', onPress: () => void handleGenerate() },
+      ]
+    );
+  };
 
   const handleShare = async () => {
     if (!code) return;
@@ -72,88 +105,66 @@ export const CareCircleInviteScreen: React.FC<Props> = ({ route, navigation }) =
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>Invite to Care Circle</Text>
-          <Text style={styles.headerSubtitle}>Generate a 6-digit access code</Text>
+          <Text style={styles.headerSubtitle}>Share one 6-digit code with Patients, family, or caregivers</Text>
         </View>
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.label}>Role to Invite</Text>
-        <View style={styles.roleToggleRow}>
-          <TouchableOpacity
-            style={[styles.roleBtn, role === 'MEMBER' && styles.roleBtnActive]}
-            onPress={() => {
-              setRole('MEMBER');
-              handleGenerate('MEMBER');
-            }}
-          >
-            <Ionicons
-              name="people-outline"
-              size={18}
-              color={role === 'MEMBER' ? '#0E7A67' : '#52605D'}
-            />
-            <Text style={[styles.roleBtnText, role === 'MEMBER' && styles.roleBtnTextActive]}>
-              Family Member
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.roleBtn, role === 'CAREGIVER' && styles.roleBtnActive]}
-            onPress={() => {
-              setRole('CAREGIVER');
-              handleGenerate('CAREGIVER');
-            }}
-          >
-            <Ionicons
-              name="medkit-outline"
-              size={18}
-              color={role === 'CAREGIVER' ? '#0E7A67' : '#52605D'}
-            />
-            <Text style={[styles.roleBtnText, role === 'CAREGIVER' && styles.roleBtnTextActive]}>
-              Caregiver
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Code Display Box */}
         <View style={styles.codeCard}>
-          <Text style={styles.codeLabel}>Invitation Code</Text>
-          {generating ? (
+          <Text style={styles.codeLabel}>Active Invitation Code</Text>
+          {loading || generating ? (
             <ActivityIndicator size="large" color="#0E7A67" style={{ marginVertical: 16 }} />
           ) : (
             <Text style={styles.codeText}>{code || '------'}</Text>
           )}
 
           <Text style={styles.expiryText}>
-            {expiresAt
-              ? `Expires in 72 hours (${new Date(expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})`
-              : 'Single-use code • 72-hour validity'}
+            {code && expiresAt
+              ? `Expires ${new Date(expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+              : code
+              ? 'Single-use code • 72-hour validity'
+              : 'No active invitation code'}
           </Text>
         </View>
 
         <View style={styles.noteCard}>
           <Ionicons name="information-circle-outline" size={18} color="#0E7A67" style={{ marginTop: 2 }} />
           <Text style={styles.noteCardText}>
-            Patients, caregivers, and family members can enter this 6-digit code in their SureStep app. Once submitted, you'll see a join request under the People tab to accept them into your Care Circle.
+            The invited person's role is taken from their SureStep account: a Patient joins as a Patient, a family member as a family member, and a professional as a caregiver. Once they submit the code, you'll see a join request under the People tab to accept.
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.shareBtn, !code && { opacity: 0.6 }]}
-          onPress={handleShare}
-          disabled={!code || generating}
-        >
-          <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.shareBtnText}>Share Code</Text>
-        </TouchableOpacity>
+        {code ? (
+          <>
+            <TouchableOpacity
+              style={[styles.shareBtn, generating && { opacity: 0.6 }]}
+              onPress={handleShare}
+              disabled={generating}
+            >
+              <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.shareBtnText}>Share Code</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.regenerateBtn}
-          onPress={() => handleGenerate()}
-          disabled={generating}
-        >
-          <Ionicons name="refresh-outline" size={16} color="#0E7A67" />
-          <Text style={styles.regenerateBtnText}>Generate New Code</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.regenerateBtn}
+              onPress={handleRegenerate}
+              disabled={generating}
+            >
+              <Ionicons name="refresh-outline" size={16} color="#0E7A67" />
+              <Text style={styles.regenerateBtnText}>Generate New Code</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            style={[styles.shareBtn, (generating || loading) && { opacity: 0.6 }]}
+            onPress={() => void handleGenerate()}
+            disabled={generating || loading}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.shareBtnText}>Generate Invitation Code</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

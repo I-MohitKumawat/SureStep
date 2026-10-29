@@ -46,10 +46,7 @@ import { getPatientProfile } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
 import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { useAlerts } from '../../context/AlertContext';
-import {
-  getRoutineTemplates,
-  deactivateRoutineTemplate,
-} from '../../services/taskService';
+import { getRoutineTemplates } from '../../services/taskService';
 import { getCarePlan } from '../../services/carePlanService';
 import {
   fetchPatientRelationship,

@@ -28,8 +28,9 @@ import { FamilyStackParams } from '../../types/navigation.types';
 import {
   listCircleMembers,
   updateMemberPermissions,
-  CircleMember,
 } from '../../services/careCircleService';
+import { useFamilyContext } from '../../context/FamilyContext';
+import { useAuth } from '../../context/AuthContext';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
@@ -67,6 +68,27 @@ const DELEGATABLE_PERMISSIONS: PermissionItem[] = [
 export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const { circleId, memberId, memberName } = route.params;
+  const { user } = useAuth();
+  const { isOwner, hasPermission, careCircle } = useFamilyContext();
+
+  const actorMember = careCircle.find((m) => m.user_id === user?.id);
+  const canManage = isOwner || hasPermission('Manage Member Permissions');
+  const isSelf = actorMember?.id === memberId;
+  const canEdit = canManage && !isSelf;
+  const actorPermissions = isOwner
+    ? DELEGATABLE_PERMISSIONS.map((item) => item.key)
+    : actorMember?.permissions ?? [];
+
+  /**
+   * A delegated manager may only toggle permissions they hold themselves and can
+   * never grant or revoke `Manage Member Permissions` (Owner-controlled).
+   */
+  const canToggle = (permissionKey: string) => {
+    if (!canEdit) return false;
+    if (isOwner) return true;
+    if (permissionKey === 'Manage Member Permissions') return false;
+    return actorPermissions.includes(permissionKey);
+  };
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,6 +123,14 @@ export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation
   };
 
   const handleSave = async () => {
+    if (!canManage) {
+      Alert.alert('Not allowed', 'You need "Manage Member Permissions" to change this member\'s access.');
+      return;
+    }
+    if (isSelf) {
+      Alert.alert('Not allowed', 'You cannot modify your own permissions.');
+      return;
+    }
     try {
       setSaving(true);
       await updateMemberPermissions(circleId, memberId, permissions);
@@ -131,12 +161,12 @@ export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation
         <TouchableOpacity
           style={[styles.saveHeaderBtn, saving && { opacity: 0.6 }]}
           onPress={handleSave}
-          disabled={saving || loading}
+          disabled={saving || loading || !canEdit}
         >
           {saving ? (
             <ActivityIndicator size="small" color="#0E7A67" />
           ) : (
-            <Text style={styles.saveHeaderText}>Save</Text>
+            <Text style={[styles.saveHeaderText, !canEdit && { opacity: 0.4 }]}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -150,12 +180,17 @@ export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Owner Notice Card */}
+          {/* Authority Notice Card */}
           <View style={styles.noticeCard}>
             <Ionicons name="information-circle-outline" size={20} color="#0E7A67" />
             <Text style={styles.noticeCardText}>
-              Safe Zone configuration and emergency incident resolution are non-delegable and
-              remain exclusive to the Care Circle Owner.
+              {isOwner
+                ? 'Safe Zone configuration and emergency incident resolution are non-delegable and remain exclusive to the Care Circle Owner.'
+                : isSelf
+                ? 'You cannot modify your own permissions. Ask the Circle Owner to make changes.'
+                : !canManage
+                ? 'You need "Manage Member Permissions" to change this member\'s access.'
+                : 'You can only delegate permissions you hold yourself. "Manage Member Permissions" is controlled by the Circle Owner.'}
             </Text>
           </View>
 
@@ -163,8 +198,9 @@ export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation
           <View style={styles.permList}>
             {DELEGATABLE_PERMISSIONS.map((item) => {
               const isEnabled = permissions.includes(item.key);
+              const editable = canToggle(item.key);
               return (
-                <View key={item.key} style={styles.permItem}>
+                <View key={item.key} style={[styles.permItem, !editable && { opacity: 0.55 }]}>
                   <View style={styles.permTextWrap}>
                     <Text style={styles.permTitle}>{item.title}</Text>
                     <Text style={styles.permDesc}>{item.description}</Text>
@@ -172,6 +208,7 @@ export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation
                   <Switch
                     value={isEnabled}
                     onValueChange={() => togglePermission(item.key)}
+                    disabled={!editable}
                     trackColor={{ false: '#E5E0D8', true: '#0E7A67' }}
                     thumbColor="#FFFFFF"
                   />
@@ -182,9 +219,9 @@ export const CareCirclePermissionsScreen: React.FC<Props> = ({ route, navigation
 
           {/* Primary Save Button */}
           <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+            style={[styles.saveBtn, (saving || !canEdit) && { opacity: 0.7 }]}
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || !canEdit}
           >
             {saving ? (
               <ActivityIndicator color="#FFFFFF" size="small" />

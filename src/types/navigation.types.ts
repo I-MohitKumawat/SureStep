@@ -23,7 +23,6 @@ export type AuthStackParams = {
   PatientOnboardingScreen:  { intent: OnboardingIntent; returnToStep?: number };
   FamilyOnboardingScreen:   { intent?: OnboardingIntent; returnToStep?: number } | undefined;
   CaregiverOnboardingScreen: { intent?: OnboardingIntent; returnToStep?: number } | undefined;
-  InviteAcceptScreen:       { token: string };
 };
 
 import type { CaregiverListing } from '../screens/patient/CaregiverSearchView';

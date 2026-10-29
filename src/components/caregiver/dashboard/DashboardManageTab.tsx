@@ -5,7 +5,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   LayoutAnimation,
   Platform,
@@ -51,19 +50,6 @@ const ChevronUpIcon = () => (
   </Svg>
 );
 
-const EditIcon = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke={C.primary} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" stroke={C.primary} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const DeleteIcon = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke="#DC2626" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
 type Props = {
   patientName: string;
   patientId: string;
@@ -71,10 +57,6 @@ type Props = {
   templates: any[];
   loading: boolean;
   onRefresh: () => void;
-  onOpenAdd: () => void;
-  onOpenEdit: (routine: any) => void;
-  onDeleteTemplate: (templateId: string) => void;
-  onUpdateTaskStatus: (taskId: string, status: string) => void;
 };
 
 type TabType = 'daily_flow' | 'care_plan';
@@ -86,10 +68,6 @@ export const DashboardManageTab: React.FC<Props> = ({
   templates,
   loading,
   onRefresh,
-  onOpenAdd,
-  onOpenEdit,
-  onDeleteTemplate,
-  onUpdateTaskStatus,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('daily_flow');
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
@@ -200,14 +178,6 @@ export const DashboardManageTab: React.FC<Props> = ({
             </Text>
           </Pressable>
         </View>
-
-        <Pressable
-          style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}
-          onPress={onOpenAdd}
-        >
-          <Text style={styles.addBtnPlus}>＋</Text>
-          <Text style={styles.addBtnText}>Add Template</Text>
-        </Pressable>
       </View>
 
       {loading ? (
@@ -333,37 +303,6 @@ export const DashboardManageTab: React.FC<Props> = ({
                       {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
                     </View>
                   </Pressable>
-
-                  {/* Template Controls Row */}
-                  <View style={styles.templateActions}>
-                    <Pressable
-                      style={({ pressed }) => [styles.templateControlBtn, pressed && { opacity: 0.7 }]}
-                      onPress={() => onOpenEdit(template)}
-                    >
-                      <EditIcon />
-                      <Text style={styles.templateControlText}>Edit</Text>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [styles.templateControlBtn, pressed && { opacity: 0.7 }]}
-                      onPress={() => {
-                        Alert.alert(
-                          'Delete Routine Template',
-                          `Are you sure you want to delete "${template.title}"? Daily tasks will no longer be generated from this template.`,
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Delete',
-                              style: 'destructive',
-                              onPress: () => onDeleteTemplate(template.id),
-                            },
-                          ]
-                        );
-                      }}
-                    >
-                      <DeleteIcon />
-                      <Text style={[styles.templateControlText, { color: '#DC2626' }]}>Delete</Text>
-                    </Pressable>
-                  </View>
 
                   {/* Expanded Custom Ordered Steps */}
                   {isExpanded && (

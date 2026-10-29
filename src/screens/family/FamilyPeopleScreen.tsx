@@ -23,6 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { useFamilyContext } from '../../context/FamilyContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   listJoinRequests,
   reviewJoinRequest,
@@ -38,6 +39,7 @@ type NavigationProp = NativeStackNavigationProp<FamilyStackParams>;
 
 export const FamilyPeopleScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const { user } = useAuth();
   const {
     activeCircle,
     patients,
@@ -55,7 +57,7 @@ export const FamilyPeopleScreen: React.FC = () => {
   const canManagePermissions = isOwner || hasPermission('Manage Member Permissions');
 
   const loadRequests = useCallback(async () => {
-    if (!activeCircle || !isOwner) return;
+    if (!activeCircle || !canManagePermissions) return;
     setLoadingRequests(true);
     try {
       const reqs = await listJoinRequests(activeCircle.id);
@@ -63,7 +65,7 @@ export const FamilyPeopleScreen: React.FC = () => {
     } finally {
       setLoadingRequests(false);
     }
-  }, [activeCircle, isOwner]);
+  }, [activeCircle, canManagePermissions]);
 
   useEffect(() => {
     void loadRequests();
@@ -132,7 +134,7 @@ export const FamilyPeopleScreen: React.FC = () => {
           <Text style={styles.headerSub}>Patients and Care Circle members</Text>
         </View>
 
-        {activeCircle && (
+        {activeCircle && canManagePermissions && (
           <Pressable
             style={styles.inviteHeaderBtn}
             onPress={() => navigation.navigate('CareCircleInviteScreen', { circleId: activeCircle.id })}
@@ -173,8 +175,8 @@ export const FamilyPeopleScreen: React.FC = () => {
           </View>
         ) : (
           <>
-            {/* ─── Pending Join Requests (Owner only) ───────────────────────── */}
-            {isOwner && joinRequests.length > 0 && (
+            {/* ─── Pending Join Requests (Owner or Manage Member Permissions) ── */}
+            {canManagePermissions && joinRequests.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Pending Join Requests ({joinRequests.length})</Text>
                 {joinRequests.map((req) => (
@@ -263,13 +265,15 @@ export const FamilyPeopleScreen: React.FC = () => {
                   <Text style={styles.sectionTitle}>Care Circle Roster</Text>
                   <Text style={styles.circleContextName}>{activeCircle.name}</Text>
                 </View>
-                <Pressable
-                  style={styles.addMemberBtn}
-                  onPress={() => navigation.navigate('CareCircleInviteScreen', { circleId: activeCircle.id })}
-                >
-                  <Feather name="plus" size={16} color="#0E7A67" style={{ marginRight: 4 }} />
-                  <Text style={styles.addMemberBtnText}>Add</Text>
-                </Pressable>
+                {canManagePermissions && (
+                  <Pressable
+                    style={styles.addMemberBtn}
+                    onPress={() => navigation.navigate('CareCircleInviteScreen', { circleId: activeCircle.id })}
+                  >
+                    <Feather name="plus" size={16} color="#0E7A67" style={{ marginRight: 4 }} />
+                    <Text style={styles.addMemberBtnText}>Add</Text>
+                  </Pressable>
+                )}
               </View>
 
               {careCircle.map((member) => {
@@ -284,7 +288,7 @@ export const FamilyPeopleScreen: React.FC = () => {
                     key={member.id}
                     style={styles.memberCard}
                     onPress={() => {
-                      if (canManagePermissions && !member.is_owner) {
+                      if (canManagePermissions && !member.is_owner && member.user_id !== user?.id) {
                         navigation.navigate('CareCirclePermissionsScreen', {
                           circleId: activeCircle.id,
                           memberId: member.id,
@@ -313,7 +317,7 @@ export const FamilyPeopleScreen: React.FC = () => {
                       <Text style={styles.memberRole}>{roleLabel}</Text>
                     </View>
 
-                    {canManagePermissions && !member.is_owner ? (
+                    {canManagePermissions && !member.is_owner && member.user_id !== user?.id ? (
                       <View style={styles.permissionActionWrap}>
                         <Ionicons name="shield-checkmark-outline" size={18} color="#0E7A67" />
                         <Feather name="chevron-right" size={18} color="#9CA3AF" style={{ marginLeft: 6 }} />

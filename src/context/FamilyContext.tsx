@@ -200,7 +200,35 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     void refresh();
   }, [user?.id]);
 
-  // ─── Real-time Socket Subscriptions ───────────────────────────────────────
+  // ─── Circle Membership / Permission Events ────────────────────────────────
+  // These events do not depend on an active patient and must keep authorization
+  // state fresh after invites, reviews, removals, leave, transfer, or permission changes.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleCircleChange = () => {
+      void refresh();
+    };
+
+    const circleEvents = [
+      'circle:join_request',
+      'circle:join_reviewed',
+      'circle:membership_changed',
+      'circle:permissions_changed',
+      'circle:member_removed',
+      'circle:member_left',
+      'circle:ownership_transferred',
+    ];
+
+    circleEvents.forEach((event) => socket.on(event, handleCircleChange));
+
+    return () => {
+      circleEvents.forEach((event) => socket.off(event, handleCircleChange));
+    };
+  }, [refresh]);
+
+  // ─── Real-time Patient Socket Subscriptions ───────────────────────────────
   useEffect(() => {
     const socket = getSocket();
     const patientId = activePatient?.id;

@@ -44,8 +44,9 @@ type Props = NativeStackScreenProps<FamilyStackParams, 'CareCircleManageScreen'>
 export const CareCircleManageScreen: React.FC<Props> = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const { circleId } = route.params;
-  const { isOwner, reloadFamilyData } = useFamilyContext();
+  const { isOwner, hasPermission, reloadFamilyData } = useFamilyContext();
   const { user } = useAuth();
+  const canManageMembers = isOwner || hasPermission('Manage Member Permissions');
 
   const [circle, setCircle] = useState<CareCircle | null>(null);
   const [members, setMembers] = useState<CircleMember[]>([]);
@@ -63,7 +64,7 @@ export const CareCircleManageScreen: React.FC<Props> = ({ route, navigation }) =
         getCareCircleDetails(circleId),
         listCircleMembers(circleId),
         listCirclePatients(circleId),
-        isOwner ? listJoinRequests(circleId) : Promise.resolve([]),
+        canManageMembers ? listJoinRequests(circleId) : Promise.resolve([]),
       ]);
       setCircle(circleRes);
       setMembers(membersRes);
@@ -75,7 +76,7 @@ export const CareCircleManageScreen: React.FC<Props> = ({ route, navigation }) =
       setLoading(false);
       setRefreshing(false);
     }
-  }, [circleId, isOwner]);
+  }, [circleId, canManageMembers]);
 
   useEffect(() => {
     void loadData();
@@ -193,25 +194,27 @@ export const CareCircleManageScreen: React.FC<Props> = ({ route, navigation }) =
           }
           showsVerticalScrollIndicator={false}
         >
-          {/* Quick Invite Card */}
-          <View style={styles.inviteCard}>
-            <View style={styles.inviteIconWrap}>
-              <Ionicons name="person-add-outline" size={22} color="#0E7A67" />
+          {/* Quick Invite Card (Owner or Manage Member Permissions) */}
+          {canManageMembers && (
+            <View style={styles.inviteCard}>
+              <View style={styles.inviteIconWrap}>
+                <Ionicons name="person-add-outline" size={22} color="#0E7A67" />
+              </View>
+              <View style={styles.inviteTextWrap}>
+                <Text style={styles.inviteCardTitle}>Invite to Care Circle</Text>
+                <Text style={styles.inviteCardSub}>Generate a 6-digit code for family members or caregivers.</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.inviteBtn}
+                onPress={() => navigation.navigate('CareCircleInviteScreen', { circleId })}
+              >
+                <Text style={styles.inviteBtnText}>Invite</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.inviteTextWrap}>
-              <Text style={styles.inviteCardTitle}>Invite to Care Circle</Text>
-              <Text style={styles.inviteCardSub}>Generate a 6-digit code for family members or caregivers.</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.inviteBtn}
-              onPress={() => navigation.navigate('CareCircleInviteScreen', { circleId })}
-            >
-              <Text style={styles.inviteBtnText}>Invite</Text>
-            </TouchableOpacity>
-          </View>
+          )}
 
-          {/* Pending Join Requests (Owner only) */}
-          {isOwner && joinRequests.length > 0 && (
+          {/* Pending Join Requests (Owner or Manage Member Permissions) */}
+          {canManageMembers && joinRequests.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Join Requests ({joinRequests.length})</Text>
               {joinRequests.map((req) => (
@@ -308,8 +311,8 @@ export const CareCircleManageScreen: React.FC<Props> = ({ route, navigation }) =
                     <Text style={styles.memberRole}>{m.role_in_circle}</Text>
                   </View>
 
-                  {/* Actions for Owner over other members */}
-                  {isOwner && !isCircleOwner && (
+                  {/* Actions for the Owner or an authorized member manager over other members */}
+                  {canManageMembers && !isCircleOwner && !isCurrentUser && (
                     <View style={styles.memberActionRow}>
                       <TouchableOpacity
                         style={styles.permBtn}

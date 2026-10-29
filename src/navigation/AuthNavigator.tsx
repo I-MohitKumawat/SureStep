@@ -11,7 +11,6 @@ import ProfileSetupScreen          from '../screens/auth/ProfileSetupScreen';
 import { PatientOnboardingScreen } from '../screens/auth/patient-onboarding/PatientOnboardingScreen';
 import { FamilyOnboardingScreen }  from '../screens/auth/family-onboarding/FamilyOnboardingScreen';
 import { CaregiverOnboardingScreen } from '../screens/auth/caregiver-onboarding/CaregiverOnboardingScreen';
-import { InviteAcceptScreen }      from '../screens/auth/InviteAcceptScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParams>();
 
@@ -27,7 +26,6 @@ export const AuthNavigator: React.FC<Props> = () => {
         <>
           <Stack.Screen name="WelcomeScreen"             component={WelcomeScreen} />
           <Stack.Screen name="PhoneAuthScreen"           component={PhoneAuthScreen} />
-          <Stack.Screen name="InviteAcceptScreen"        component={InviteAcceptScreen} />
           <Stack.Screen name="PatientOnboardingScreen"   component={PatientOnboardingScreen} />
           <Stack.Screen name="FamilyOnboardingScreen"    component={FamilyOnboardingScreen} />
           <Stack.Screen name="CaregiverOnboardingScreen" component={CaregiverOnboardingScreen} />
@@ -65,7 +63,6 @@ export const AuthNavigator: React.FC<Props> = () => {
           )}
           <Stack.Screen name="RoleSelectionScreen"     component={RoleSelectionScreen} />
           <Stack.Screen name="WelcomeScreen"           component={WelcomeScreen} />
-          <Stack.Screen name="InviteAcceptScreen"      component={InviteAcceptScreen} />
         </>
       ) : (
         <>
@@ -75,7 +72,6 @@ export const AuthNavigator: React.FC<Props> = () => {
           <Stack.Screen name="CaregiverOnboardingScreen" component={CaregiverOnboardingScreen} />
           <Stack.Screen name="ProfileSetupScreen"      component={ProfileSetupScreen} />
           <Stack.Screen name="WelcomeScreen"           component={WelcomeScreen} />
-          <Stack.Screen name="InviteAcceptScreen"      component={InviteAcceptScreen} />
         </>
       )}
     </Stack.Navigator>
