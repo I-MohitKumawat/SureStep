@@ -41,11 +41,15 @@ export type AuthStatus =
   | 'authenticated';    // Fully authenticated and onboarded
 
 export type AuthUser = {
-  id:         string;
-  phone:      string;
-  name:       string;
-  role:       UserRoleType | 'NEW_USER';
-  photo_url?: string;
+  id:                  string;
+  phone:               string;
+  name:                string;
+  role:                UserRoleType | 'NEW_USER';
+  photo_url?:          string;
+  preferred_language?: string;
+  city?:               string;
+  date_of_birth?:      string;
+  gender?:             string;
 };
 
 type AuthContextValue = {
@@ -122,11 +126,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Valid account with a name exists
       const resolvedUser: AuthUser = {
-        id:        dbUser.id || '',
-        phone:     dbUser.phone || fbUser.phoneNumber || '',
-        name:      dbUser.name || '',
-        role:      (resActiveRole && resActiveRole !== 'NEW_USER' ? resActiveRole : dbUser.role || 'PATIENT') as UserRoleType,
-        photo_url: dbUser.photo_url || undefined,
+        id:                  dbUser.id || '',
+        phone:               dbUser.phone || fbUser.phoneNumber || '',
+        name:                dbUser.name || '',
+        role:                (resActiveRole && resActiveRole !== 'NEW_USER' ? resActiveRole : dbUser.role || 'PATIENT') as UserRoleType,
+        photo_url:           dbUser.photo_url || undefined,
+        preferred_language:  dbUser.preferred_language || undefined,
+        city:                dbUser.city || undefined,
+        date_of_birth:       dbUser.date_of_birth || undefined,
+        gender:              dbUser.gender || undefined,
       };
       setUser(resolvedUser);
       setCareContext(resCareContext);
@@ -303,11 +311,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } as any);
 
       setUser({
-        id:        dbUser?.id || '',
-        phone:     dbUser?.phone || '',
-        name:      dbUser?.name || '',
-        role:      resActiveRole as UserRoleType,
-        photo_url: dbUser?.photo_url || undefined,
+        id:                  dbUser?.id || '',
+        phone:               dbUser?.phone || '',
+        name:                dbUser?.name || '',
+        role:                resActiveRole as UserRoleType,
+        photo_url:           dbUser?.photo_url || undefined,
+        preferred_language:  dbUser?.preferred_language || undefined,
+        city:                dbUser?.city || undefined,
+        date_of_birth:       dbUser?.date_of_birth || undefined,
+        gender:              dbUser?.gender || undefined,
       });
       setCareContext(resCareContext);
       setActiveRole(resActiveRole);

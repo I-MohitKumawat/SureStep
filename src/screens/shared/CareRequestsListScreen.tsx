@@ -168,7 +168,17 @@ export const CareRequestsListScreen: React.FC<Props> = ({ route, navigation }) =
                 isExpired && { color: '#475569' },
               ]}
             >
-              {item.status}
+              {isCaregiver
+                ? item.status
+                : isPending
+                ? 'Waiting for a response'
+                : isAccepted
+                ? 'Request accepted'
+                : isDeclined
+                ? 'Declined'
+                : isWithdrawn
+                ? 'Withdrawn'
+                : 'No longer active'}
             </Text>
           </View>
         </View>
@@ -215,30 +225,39 @@ export const CareRequestsListScreen: React.FC<Props> = ({ route, navigation }) =
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      {/* Top Header */}
+      {/* Top Header with Back, Title, and Persistent SOS */}
       <View style={styles.headerNav}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={12}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
+          <Text style={styles.backText}>Back</Text>
         </Pressable>
+
         <View style={{ flex: 1, marginHorizontal: 12 }}>
           <Text style={styles.headerTitle}>
-            {isCaregiver ? 'Care Inquiries' : 'Care Proposals'}
-          </Text>
-          <Text style={styles.headerSub}>
-            {isCaregiver ? 'Incoming patient requests' : 'Submitted care proposals'}
+            {isCaregiver ? 'Care Inquiries' : 'My Requests'}
           </Text>
         </View>
-        <View style={{ width: 38 }} />
+
+        <View style={styles.sosPill}>
+          <Ionicons name="call" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+          <Text style={styles.sosText}>SOS</Text>
+        </View>
       </View>
 
-      {/* Tabs */}
+      {/* Segmented Status Tabs (Active / Past) */}
       <View style={styles.tabsRow}>
         <Pressable
           style={[styles.tabBtn, activeTab === 'PENDING' && styles.tabBtnActive]}
           onPress={() => setActiveTab('PENDING')}
         >
           <Text style={[styles.tabText, activeTab === 'PENDING' && styles.tabTextActive]}>
-            Pending ({activeTab === 'PENDING' ? requests.length : '...'})
+            {isCaregiver ? 'Pending' : 'Active'} ({activeTab === 'PENDING' ? requests.length : '...'})
           </Text>
         </Pressable>
         <Pressable
@@ -246,7 +265,7 @@ export const CareRequestsListScreen: React.FC<Props> = ({ route, navigation }) =
           onPress={() => setActiveTab('ALL')}
         >
           <Text style={[styles.tabText, activeTab === 'ALL' && styles.tabTextActive]}>
-            All History
+            {isCaregiver ? 'All History' : 'Past'}
           </Text>
         </Pressable>
       </View>
@@ -320,12 +339,33 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    gap: 4,
+  },
+  backText: {
+    fontFamily: F.medium,
+    fontSize: 14,
+    color: C.textPrimary,
+  },
+  sosPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  sosText: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: '#DC2626',
   },
   headerTitle: {
     fontFamily: F.bold,

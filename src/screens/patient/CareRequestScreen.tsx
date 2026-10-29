@@ -20,6 +20,7 @@ import React, { useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -233,14 +234,15 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
     try {
       const createdRequest = await createCareRequest(payload);
       Alert.alert(
-        'Care Request Submitted',
-        `Your care request has been sent to ${caregiver.name}. The caregiver has up to 72 hours to respond.\n\nYou will be notified as soon as they reply.`,
+        'Request Sent',
+        `Your care interest has been sent to ${caregiver.name}. They will review your requirements and respond.`,
         [
           {
-            text: 'View Request',
+            text: 'View Requests',
             onPress: () => {
-              (navigation as any).navigate('CareRequestDetailScreen', {
-                requestId: createdRequest.id,
+              (navigation as any).navigate('CareRequestsListScreen', {
+                initialTab: 'ACTIVE',
+                targetPatientId: resolvedPatientId,
               });
             },
           },
@@ -275,16 +277,27 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      {/* Top Header */}
+      {/* Top Header with Back, Title, and Persistent SOS */}
       <View style={styles.headerNav}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={12}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
+          <Text style={styles.backText}>Back</Text>
         </Pressable>
+
         <View style={{ flex: 1, marginHorizontal: 12 }}>
-          <Text style={styles.headerTitle}>Care Proposal</Text>
-          <Text style={styles.headerSub}>With {caregiver.name}</Text>
+          <Text style={styles.headerTitle}>Request Care</Text>
         </View>
-        <View style={{ width: 38 }} />
+
+        <View style={styles.sosPill}>
+          <Ionicons name="call" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+          <Text style={styles.sosText}>SOS</Text>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -296,6 +309,25 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Selected Caregiver Compact Summary */}
+          <View style={styles.caregiverSummaryCard}>
+            {(caregiver.photoUrl || caregiver.profile_photo_url) ? (
+              <Image
+                source={{ uri: (caregiver.photoUrl || caregiver.profile_photo_url) ?? undefined }}
+                style={styles.cgAvatarImg}
+              />
+            ) : (
+              <View style={styles.cgAvatarFallback}>
+                <Ionicons name="person" size={24} color={C.primary} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cgNameText}>{caregiver.name}</Text>
+              <Text style={styles.cgRoleText}>
+                {caregiver.professionalRole || caregiver.professional_role || 'Professional Caregiver'} · {caregiver.serviceCity || caregiver.location || 'Bengaluru'}
+              </Text>
+            </View>
+          </View>
           {/* SECTION A: CARE RECIPIENT */}
           <View style={styles.card}>
             <View style={styles.sectionHeaderRow}>
@@ -609,12 +641,13 @@ export const CareRequestScreen: React.FC<Props> = ({ route, navigation }) => {
               {submitting ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <>
-                  <Ionicons name="send" size={17} color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={styles.submitBtnText}>Submit Care Request</Text>
-                </>
+                <Text style={styles.submitBtnText}>Send Request →</Text>
               )}
             </Pressable>
+
+            <Text style={styles.requestReassuranceText}>
+              Sending a request expresses your interest. The caregiver will review your details and respond.
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -636,22 +669,77 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  backText: {
+    fontFamily: F.medium,
+    fontSize: 15,
+    color: C.textPrimary,
+  },
+  headerTitle: {
+    fontFamily: F.bold,
+    fontSize: 18,
+    color: C.textPrimary,
+  },
+  sosPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE8E7',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  sosText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#DC2626',
+  },
+  caregiverSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  cgAvatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E5E0D8',
+  },
+  cgAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E6F4F1',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
+  cgNameText: {
     fontFamily: F.bold,
     fontSize: 16,
     color: C.textPrimary,
   },
-  headerSub: {
+  cgRoleText: {
+    fontFamily: F.regular,
+    fontSize: 13,
+    color: C.textSecondary,
+    marginTop: 2,
+  },
+  requestReassuranceText: {
     fontFamily: F.regular,
     fontSize: 12,
+    lineHeight: 17,
     color: C.textSecondary,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 10,
   },
   scrollContent: {
     padding: 16,

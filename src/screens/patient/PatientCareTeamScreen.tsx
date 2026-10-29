@@ -23,6 +23,7 @@ import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import { useAuth } from '../../hooks/useAuth';
 import { useCaregiver } from '../../hooks/useCaregiver';
+import { usePatientCareMode } from '../../hooks/usePatientCareMode';
 import { formatDate } from '../../utils/dateUtils';
 import {
   endCareRelationship,
@@ -116,9 +117,9 @@ export const PatientCareTeamScreen: React.FC = () => {
   const [submittingEnd, setSubmittingEnd] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
 
-  // Determine if patient is family-managed or self-created
-  const onboardingSource = careContext?.profiles?.patientOnboardingSource;
-  const isFamilyManaged = onboardingSource === 'FAMILY';
+  // Determine patient mode via centralized care-mode helper
+  const { isAssisted } = usePatientCareMode();
+  const isFamilyManaged = isAssisted;
 
   const loadHistory = useCallback(async () => {
     try {
@@ -321,22 +322,24 @@ export const PatientCareTeamScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Care Requests / Inquiries Banner */}
-        <Pressable
-          style={styles.inquiriesBanner}
-          onPress={() => navigation.navigate('CareRequestsListScreen')}
-        >
-          <View style={styles.inquiriesBannerLeft}>
-            <View style={styles.inquiriesIconWrap}>
-              <Ionicons name="document-text-outline" size={20} color={C.primary} />
+        {/* Care Requests / Inquiries Banner (Self-managed only) */}
+        {!isFamilyManaged && (
+          <Pressable
+            style={styles.inquiriesBanner}
+            onPress={() => navigation.navigate('CareRequestsListScreen')}
+          >
+            <View style={styles.inquiriesBannerLeft}>
+              <View style={styles.inquiriesIconWrap}>
+                <Ionicons name="document-text-outline" size={20} color={C.primary} />
+              </View>
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={styles.inquiriesTitle}>Care Inquiries & Proposals</Text>
+                <Text style={styles.inquiriesSubtitle}>Track the status of your care requests</Text>
+              </View>
             </View>
-            <View style={{ marginLeft: 12, flex: 1 }}>
-              <Text style={styles.inquiriesTitle}>Care Inquiries & Proposals</Text>
-              <Text style={styles.inquiriesSubtitle}>Track the status of your care requests</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
-        </Pressable>
+            <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+          </Pressable>
+        )}
 
         {/* Pending Resignation Alert Banner */}
         {pendingResignations.length > 0 && (

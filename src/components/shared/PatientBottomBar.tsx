@@ -1,39 +1,46 @@
-/**
- * SureStep — src/components/shared/PatientBottomBar.tsx
- *
- * Persistent, stable bottom tab bar for the Patient experience.
- * Left 2 tabs: Home, Family
- * Center slot: Floating AI Assistant FAB
- * Right 2 tabs: Activities, Care Team
- */
 import React from 'react';
-import { View, StyleSheet, Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { C } from '../../theme/colors';
-import { F } from '../../theme/fonts';
-import { AiFab } from './AiAssistantFab';
-import { IconHome, IconFamily, IconActivity, IconCareTeam } from '../../assets/icons/NavIcons';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { IconHome, IconFamily, IconCare } from '../../assets/icons/NavIcons';
+import { useTheme } from '../../theme/ThemeContext';
+
+const PlayCircleIcon = ({ size = 24, color = '#52605D', strokeWidth = 1.8 }: { size?: number; color?: string; strokeWidth?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth={strokeWidth} />
+    <Path d="M10 8l6 4-6 4V8z" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
 export const PatientBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
-  const leftTabs = [
-    { name: 'Home', screen: 'HomeTab', Icon: IconHome },
-    { name: 'Family', screen: 'FamilyTab', Icon: IconFamily },
-  ] as const;
+  const insets = useSafeAreaInsets();
+  const { mode } = useTheme();
 
-  const rightTabs = [
-    { name: 'Activities', screen: 'ActivitiesTab', Icon: IconActivity },
-    { name: 'Care Team', screen: 'CareTeamTab', Icon: IconCareTeam },
+  const tabs = [
+    { name: 'Home', screen: 'HomeTab', Icon: IconHome },
+    { name: 'My People', screen: 'FamilyTab', Icon: IconFamily },
+    { name: 'Activities', screen: 'ActivitiesTab', Icon: PlayCircleIcon },
+    { name: 'Care', screen: 'CareTab', Icon: IconCare },
   ] as const;
 
   const activeRouteName = state.routes[state.index]?.name;
 
   return (
-    <View style={styles.bottomBarBand}>
-      {/* Left tabs */}
-      <View style={styles.bottomBar}>
-        {leftTabs.map((tab) => {
+    <View
+      className="border-t border-[#E5E0D8] dark:border-[#2C3835] bg-white dark:bg-[#1C2422]"
+      style={{
+        paddingBottom: Math.max(insets.bottom, 10),
+        paddingTop: 8,
+      }}
+    >
+      <View className="flex-row items-center justify-around px-2">
+        {tabs.map((tab) => {
           const isActive = activeRouteName === tab.screen;
           const Icon = tab.Icon;
+          const activeColor = '#0E7A67';
+          const inactiveColor = mode === 'dark' ? '#9EABA7' : '#52605D';
+          const color = isActive ? activeColor : inactiveColor;
 
           return (
             <Pressable
@@ -43,58 +50,25 @@ export const PatientBottomBar: React.FC<BottomTabBarProps> = ({ state, navigatio
                   navigation.navigate(tab.screen);
                 }
               }}
-              style={styles.bottomTab}
               accessibilityRole="button"
               accessibilityLabel={tab.name}
               accessibilityState={{ selected: isActive }}
+              className="flex-1 items-center justify-center py-1"
+              style={({ pressed }) => [pressed && { opacity: 0.7 }]}
             >
-              <View style={styles.bottomTabIconWrap}>
-                <Icon size={24} color={isActive ? C.primary : C.textMuted} strokeWidth={isActive ? 2.2 : 1.8} />
-              </View>
-              <Text style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}>
-                {tab.name}
-              </Text>
-              {isActive && <View style={styles.activeIndicator} />}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Center FAB slot */}
-      <View style={styles.fabSlot}>
-        <AiFab />
-      </View>
-
-      {/* Right tabs */}
-      <View style={styles.bottomBar}>
-        {rightTabs.map((tab) => {
-          const isActive = activeRouteName === tab.screen;
-          const Icon = tab.Icon;
-
-          return (
-            <Pressable
-              key={tab.screen}
-              onPress={() => {
-                if (!isActive) {
-                  navigation.navigate(tab.screen);
-                }
-              }}
-              style={styles.bottomTab}
-              accessibilityRole="button"
-              accessibilityLabel={tab.name}
-              accessibilityState={{ selected: isActive }}
-            >
-              <View style={styles.bottomTabIconWrap}>
-                <Icon size={24} color={isActive ? C.primary : C.textMuted} strokeWidth={isActive ? 2.2 : 1.8} />
+              <View className="items-center justify-center mb-1">
+                <Icon size={24} color={color} strokeWidth={isActive ? 2.2 : 1.8} />
               </View>
               <Text
-                style={[styles.bottomLabel, isActive && styles.bottomLabelActive]}
+                className={`text-[11px] tracking-tight ${
+                  isActive
+                    ? 'font-extrabold text-[#0E7A67] dark:text-[#b1f3da]'
+                    : 'font-medium text-[#52605D] dark:text-[#9EABA7]'
+                }`}
                 numberOfLines={1}
-                adjustsFontSizeToFit
               >
                 {tab.name}
               </Text>
-              {isActive && <View style={styles.activeIndicator} />}
             </Pressable>
           );
         })}
@@ -102,71 +76,3 @@ export const PatientBottomBar: React.FC<BottomTabBarProps> = ({ state, navigatio
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  bottomBarBand: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 76,
-    backgroundColor: C.surface,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    overflow: 'visible',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: -3 },
-    shadowRadius: 10,
-    elevation: 10,
-    zIndex: 100,
-  },
-  bottomBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  bottomTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-    position: 'relative',
-  },
-  bottomTabIconWrap: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 3,
-  },
-  bottomLabel: {
-    fontFamily: F.medium,
-    fontSize: 10,
-    color: C.textMuted,
-    letterSpacing: 0.3,
-  },
-  bottomLabelActive: {
-    fontFamily: F.bold,
-    color: C.primary,
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: 18,
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: C.primary,
-  },
-  fabSlot: {
-    width: 72,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginTop: -40,
-  },
-});

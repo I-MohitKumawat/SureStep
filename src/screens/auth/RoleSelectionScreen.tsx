@@ -344,6 +344,8 @@ const s = StyleSheet.create({
   },
   continueBtnDisabled: {
     backgroundColor: '#E5E7EB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
   continueBtnPressed: {
     opacity: 0.9,
@@ -356,6 +358,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.3,
   },
   continueBtnTextDisabled: {
-    color: '#9CA3AF',
+    color: '#4B5563',
   },
 });

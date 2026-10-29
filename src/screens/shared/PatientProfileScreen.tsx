@@ -10,6 +10,9 @@ import {
   Alert,
   Image,
   Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -19,7 +22,7 @@ import apiClient from '../../services/apiClient';
 import { useAuth } from '../../hooks/useAuth';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import { getPatientProfile } from '../../services/userService';
+import { getPatientProfile, updatePatientProfile } from '../../services/userService';
 import { getLatestAssessment, getAssessmentHistory, type AssessmentData } from '../../services/assessmentService';
 import { getCarePlan, type CarePlanData } from '../../services/carePlanService';
 import { getCareCircleForPatient } from '../../services/familyService';
@@ -27,7 +30,7 @@ import { getCareCircleForPatient } from '../../services/familyService';
 export const PatientProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   // Resolve patientId from route params or current authenticated patient user
   const routePatientId = route.params?.patientId;
@@ -48,6 +51,19 @@ export const PatientProfileScreen: React.FC = () => {
   // Modal for historical assessment details
   const [selectedHistoryAssessment, setSelectedHistoryAssessment] = useState<AssessmentData | null>(null);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+
+  // Edit details modal state
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [editGender, setEditGender] = useState('');
+  const [editLanguage, setEditLanguage] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editLiving, setEditLiving] = useState('');
+  const [editEmergName, setEditEmergName] = useState('');
+  const [editEmergPhone, setEditEmergPhone] = useState('');
+  const [editEmergRel, setEditEmergRel] = useState('');
 
   const fetchData = useCallback(async (isSilent = false) => {
     if (!patientId) {
@@ -126,6 +142,55 @@ export const PatientProfileScreen: React.FC = () => {
     });
   };
 
+  const handleOpenEditModal = () => {
+    setEditName(patientProfile?.name || user?.name || '');
+    setEditDob(patientProfile?.date_of_birth ? String(patientProfile.date_of_birth).substring(0, 10) : '');
+    setEditGender(patientProfile?.gender || '');
+    setEditLanguage(patientProfile?.preferred_language || user?.preferred_language || 'English');
+    setEditCity(patientProfile?.city || '');
+    setEditLiving(patientProfile?.living_arrangement || '');
+    setEditEmergName(patientProfile?.emergency_contact_name || '');
+    setEditEmergPhone(patientProfile?.emergency_contact_phone || '');
+    setEditEmergRel(patientProfile?.emergency_contact_relation || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Required', 'Please enter your name.');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await updatePatientProfile({
+        name: editName.trim(),
+        date_of_birth: editDob.trim() || undefined,
+        gender: editGender.trim() || undefined,
+        preferred_language: editLanguage.trim() || undefined,
+        city: editCity.trim() || undefined,
+        living_arrangement: editLiving.trim() || undefined,
+        emergency_contact_name: editEmergName.trim() || undefined,
+        emergency_contact_phone: editEmergPhone.trim() || undefined,
+        emergency_contact_relation: editEmergRel.trim() || undefined,
+      });
+
+      if (refreshUser) {
+        await refreshUser();
+      }
+      await fetchData(true);
+      setEditModalVisible(false);
+      Alert.alert('Success', 'Your profile details have been updated.');
+    } catch (err: any) {
+      console.warn('[PatientProfileScreen] Update profile failed:', err);
+      Alert.alert(
+        'Save Error',
+        err?.response?.data?.error?.message || 'Could not update profile. Please try again.'
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   if (loading && !refreshing && !historyModalVisible) {
     return (
       <ScreenContainer style={styles.centerContainer}>
@@ -172,7 +237,18 @@ export const PatientProfileScreen: React.FC = () => {
           <Ionicons name="arrow-back" size={24} color={C.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Patient Profile</Text>
-        <View style={{ width: 32 }} />
+        {(userRole === 'PATIENT' || user?.id === patientId) ? (
+          <Pressable
+            onPress={handleOpenEditModal}
+            accessibilityRole="button"
+            accessibilityLabel="Edit Details"
+            style={styles.editHeaderBtn}
+          >
+            <Text style={styles.editHeaderBtnText}>Edit</Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 32 }} />
+        )}
       </View>
 
       <ScrollView
@@ -586,6 +662,132 @@ export const PatientProfileScreen: React.FC = () => {
           </ScrollView>
         </ScreenContainer>
       </Modal>
+
+      {/* Edit Patient Details Modal */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, backgroundColor: '#F8F9FA' }}
+        >
+          <View style={styles.editModalHeader}>
+            <Pressable onPress={() => setEditModalVisible(false)} style={styles.editCancelBtn}>
+              <Text style={styles.editCancelText}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.editModalTitle}>Personal Details</Text>
+            <Pressable
+              onPress={handleSaveProfile}
+              disabled={savingEdit}
+              style={[styles.editSaveBtn, savingEdit && { opacity: 0.6 }]}
+            >
+              {savingEdit ? (
+                <ActivityIndicator size="small" color="#0E7A67" />
+              ) : (
+                <Text style={styles.editSaveText}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.editScrollContent} showsVerticalScrollIndicator={false}>
+            <Text style={styles.editSectionTitle}>Basic Information</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Enter full name"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Date of Birth (YYYY-MM-DD)</Text>
+              <TextInput
+                value={editDob}
+                onChangeText={setEditDob}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Gender</Text>
+              <TextInput
+                value={editGender}
+                onChangeText={setEditGender}
+                placeholder="e.g. Male, Female, Other"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>City</Text>
+              <TextInput
+                value={editCity}
+                onChangeText={setEditCity}
+                placeholder="City"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Living Arrangement</Text>
+              <TextInput
+                value={editLiving}
+                onChangeText={setEditLiving}
+                placeholder="e.g. With Family, Alone, Assisted"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <Text style={[styles.editSectionTitle, { marginTop: 20 }]}>Emergency Contact</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Contact Name</Text>
+              <TextInput
+                value={editEmergName}
+                onChangeText={setEditEmergName}
+                placeholder="Emergency contact name"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Relationship</Text>
+              <TextInput
+                value={editEmergRel}
+                onChangeText={setEditEmergRel}
+                placeholder="e.g. Daughter, Son, Spouse"
+                placeholderTextColor="#9EABA7"
+                style={styles.textInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Contact Phone Number</Text>
+              <TextInput
+                value={editEmergPhone}
+                onChangeText={setEditEmergPhone}
+                placeholder="+91 98765 43210"
+                placeholderTextColor="#9EABA7"
+                keyboardType="phone-pad"
+                style={styles.textInput}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -969,5 +1171,77 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: C.textPrimary,
     marginVertical: 4,
+  },
+  editHeaderBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#E6F4F1',
+  },
+  editHeaderBtnText: {
+    fontFamily: F.bold,
+    fontSize: 14,
+    color: '#0E7A67',
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E0D8',
+  },
+  editCancelBtn: {
+    padding: 6,
+  },
+  editCancelText: {
+    fontFamily: F.medium,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  editModalTitle: {
+    fontFamily: F.bold,
+    fontSize: 18,
+    color: '#161E1C',
+  },
+  editSaveBtn: {
+    padding: 6,
+  },
+  editSaveText: {
+    fontFamily: F.bold,
+    fontSize: 16,
+    color: '#0E7A67',
+  },
+  editScrollContent: {
+    padding: 20,
+    paddingBottom: 50,
+  },
+  editSectionTitle: {
+    fontFamily: F.bold,
+    fontSize: 16,
+    color: '#161E1C',
+    marginBottom: 12,
+  },
+  inputGroup: {
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: '#52605D',
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E0D8',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontFamily: F.regular,
+    color: '#161E1C',
   },
 });

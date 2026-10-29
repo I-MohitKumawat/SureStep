@@ -27,24 +27,35 @@ export type AuthStackParams = {
 };
 
 import type { CaregiverListing } from '../screens/patient/CaregiverSearchView';
+import type { ConnectedPerson } from '../services/relationshipService';
+import type { MemoryItem } from '../services/memoryService';
 
 // ─── Patient Tabs ─────────────────────────────────────────────────────────────
 export type PatientTabParams = {
   HomeTab:       undefined;
   FamilyTab:     undefined;
   ActivitiesTab: undefined;
-  CareTeamTab:   undefined;
+  CareTab:       undefined;
 };
 
 // ─── Patient Stack ────────────────────────────────────────────────────────────
 export type PatientStackParams = {
   PatientTabs:             NavigatorScreenParams<PatientTabParams> | undefined;
   PatientHomeScreen:       { initialTab?: 'Home' | 'Family' | 'Activity' | 'Search' | 'CareTeam' } | undefined;
+  PatientCareScreen?:      undefined;
+  PatientPersonDetailScreen: { person: ConnectedPerson };
+  PatientMemoriesScreen:     { personId?: string; personName?: string } | undefined;
+  PatientMemoryViewerScreen: { memory: MemoryItem; memories?: MemoryItem[]; initialIndex?: number };
+  PatientRoutinesScreen:   { patientId?: string; patientName?: string; mode?: 'edit' | 'create'; routine?: any } | undefined;
+  CaregiverRoutineEditorScreen?: { patientId: string; patientName: string; mode: 'create' | 'edit'; routine?: any };
   CareDiscoveryScreen:     { targetPatientId?: string; targetPatientName?: string } | undefined;
   CaregiverProfileScreen:  { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
   CareRequestScreen:       { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
   CareRequestDetailScreen: { requestId: string; onUpdated?: () => void };
-  CareRequestsListScreen:  { initialTab?: 'PENDING' | 'ALL'; targetPatientId?: string; targetPatientName?: string } | undefined;
+  CareRequestsListScreen:  { initialTab?: 'PENDING' | 'ALL' | 'ACTIVE' | 'PAST'; targetPatientId?: string; targetPatientName?: string } | undefined;
+  PostCareNeedScreen:      { targetPatientId?: string; targetPatientName?: string } | undefined;
+  CareNeedResponsesScreen: { needId?: string; targetPatientId?: string; targetPatientName?: string } | undefined;
+  PatientCareTeamScreen:   undefined;
   PatientGamesScreen:      undefined;
   PatientStoriesScreen:    undefined;
   PatientActivitiesScreen: undefined;
@@ -59,6 +70,10 @@ export type PatientStackParams = {
   NotificationSettingsScreen:  undefined;
   NotificationTestScreen:      undefined;
   PatientProfileScreen:        { patientId?: string } | undefined;
+  PatientPersonalDetailsScreen: undefined;
+  PatientLanguageScreen:       undefined;
+  PatientConnectFamilyScreen:  undefined;
+  PatientLocationScreen:       undefined;
 };
 
 // ─── Caregiver Stack ──────────────────────────────────────────────────────────

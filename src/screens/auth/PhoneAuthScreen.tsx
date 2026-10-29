@@ -133,6 +133,8 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   const phoneValidClean = phoneNumber.replace(/\D/g, '').replace(/^0/, '');
   const phoneInvalid = showErrors && !/^\d{10}$/.test(phoneValidClean);
   const otpInvalid   = showErrors && !/^\d{6}$/.test(otp);
+  const isPhoneReady = /^\d{10}$/.test(phoneValidClean) && !loading;
+  const isOtpReady   = /^\d{6}$/.test(otp) && !loading;
 
   const handleBack = () => {
     if (codeSent) {
@@ -284,25 +286,34 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                             borderColor: theme.colors.error
                           }
                         ]}>
-                          <Text style={[styles.authErrorText, { color: theme.colors.error }]}>⚠️ {authError}</Text>
+                          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
+                            <Path
+                              d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              stroke={theme.colors.error}
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </Svg>
+                          <Text style={[styles.authErrorText, { color: theme.colors.error }]}>{authError}</Text>
                         </View>
                       ) : null}
 
                       <Pressable
                         style={({ pressed }) => [
                           styles.loginButton,
-                          { backgroundColor: theme.colors.accent },
-                          (pressed || loading) && styles.loginButtonPressed,
+                          !isPhoneReady && styles.loginButtonDisabled,
+                          pressed && isPhoneReady && styles.loginButtonPressed,
                         ]}
                         onPress={() => void handleSendCode()}
-                        disabled={loading}
+                        disabled={!isPhoneReady}
                       >
                         {loading ? (
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
                           <>
-                            <Text style={styles.loginText}>Send Code</Text>
-                            <Text style={styles.buttonArrow}>▸</Text>
+                            <Text style={[styles.loginText, !isPhoneReady && styles.loginTextDisabled]}>Send Code</Text>
+                            <Text style={[styles.buttonArrow, !isPhoneReady && styles.loginTextDisabled]}>▸</Text>
                           </>
                         )}
                       </Pressable>
@@ -350,28 +361,57 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                             borderColor: theme.colors.error
                           }
                         ]}>
-                          <Text style={[styles.authErrorText, { color: theme.colors.error }]}>⚠️ {authError}</Text>
+                          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
+                            <Path
+                              d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              stroke={theme.colors.error}
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </Svg>
+                          <Text style={[styles.authErrorText, { color: theme.colors.error }]}>{authError}</Text>
                         </View>
                       ) : null}
 
                       <Pressable
                         style={({ pressed }) => [
                           styles.loginButton,
-                          { backgroundColor: theme.colors.accent },
-                          (pressed || loading) && styles.loginButtonPressed,
+                          !isOtpReady && styles.loginButtonDisabled,
+                          pressed && isOtpReady && styles.loginButtonPressed,
                         ]}
                         onPress={() => void handleVerifyCode()}
-                        disabled={loading}
+                        disabled={!isOtpReady}
                       >
                         {loading ? (
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
                           <>
-                            <Text style={styles.loginText}>Verify & Continue</Text>
-                            <Text style={styles.buttonArrow}>▸</Text>
+                            <Text style={[styles.loginText, !isOtpReady && styles.loginTextDisabled]}>Verify & Continue</Text>
+                            <Text style={[styles.buttonArrow, !isOtpReady && styles.loginTextDisabled]}>▸</Text>
                           </>
                         )}
                       </Pressable>
+
+                      {/* RESEND / CHANGE NUMBER SECONDARY ACTIONS */}
+                      <View style={styles.otpActionsRow}>
+                        <Pressable
+                          onPress={() => void handleSendCode()}
+                          disabled={loading}
+                          style={({ pressed }) => [styles.secondaryActionButton, pressed && { opacity: 0.7 }]}
+                          hitSlop={8}
+                        >
+                          <Text style={styles.resendActionText}>Resend Code</Text>
+                        </Pressable>
+                        <Text style={[styles.actionDivider, { color: theme.colors.borderSubtle }]}>•</Text>
+                        <Pressable
+                          onPress={handleBack}
+                          style={({ pressed }) => [styles.secondaryActionButton, pressed && { opacity: 0.7 }]}
+                          hitSlop={8}
+                        >
+                          <Text style={[styles.changeNumberActionText, { color: theme.colors.textSecondary }]}>Change Number</Text>
+                        </Pressable>
+                      </View>
                     </>
                   )}
                 </View>
@@ -467,9 +507,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -593,27 +633,67 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   loginButton: {
-    marginTop: 16,
-    height: 48,
-    borderRadius: 8,
+    marginTop: 18,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: C.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
+    shadowColor: C.primary,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  loginButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   loginButtonPressed: {
-    opacity: 0.88,
+    opacity: 0.9,
     transform: [{ scale: 0.98 }],
   },
   loginText: {
     fontFamily: F.bold,
-    fontSize: 15,
+    fontSize: 16,
     color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  loginTextDisabled: {
+    color: '#9CA3AF',
   },
   buttonArrow: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#FFFFFF',
     lineHeight: 18,
+  },
+  otpActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    gap: 12,
+  },
+  secondaryActionButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  resendActionText: {
+    fontFamily: F.semiBold,
+    fontSize: 14,
+    color: C.primary,
+  },
+  actionDivider: {
+    fontSize: 14,
+  },
+  changeNumberActionText: {
+    fontFamily: F.medium,
+    fontSize: 14,
   },
   secondaryText: {
     fontFamily: F.medium,

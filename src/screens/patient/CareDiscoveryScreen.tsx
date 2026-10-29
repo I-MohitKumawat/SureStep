@@ -57,8 +57,8 @@ export const CareDiscoveryScreen: React.FC = () => {
   const { patient: familyPatient, isLoading: isFamilyLoading } = useFamilyContext();
 
   const isFamilyUser = user?.role === 'FAMILY';
-  const effectivePatientId = route.params?.targetPatientId || (isFamilyUser ? familyPatient?.id : undefined);
-  const effectivePatientName = route.params?.targetPatientName || (isFamilyUser ? familyPatient?.name : undefined);
+  const effectivePatientId = route.params?.targetPatientId || (isFamilyUser ? familyPatient?.id : (user?.role === 'PATIENT' ? user?.id : undefined));
+  const effectivePatientName = route.params?.targetPatientName || (isFamilyUser ? familyPatient?.name : (user?.role === 'PATIENT' ? (user?.name || 'yourself') : undefined));
 
   // Search & Filter State
   const [query, setQuery] = useState('');
@@ -229,59 +229,33 @@ export const CareDiscoveryScreen: React.FC = () => {
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      {/* Top Header Bar */}
+      {/* Top Header Bar with Back, Title, and Persistent SOS */}
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
           <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
+          <Text style={styles.backText}>Back</Text>
         </Pressable>
 
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Find Care</Text>
+          <Text style={styles.headerTitle}>Find a Caregiver</Text>
           {effectivePatientName ? (
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              For {effectivePatientName}
+              {user?.role === 'PATIENT' ? 'For yourself' : `For ${effectivePatientName}`}
             </Text>
           ) : null}
         </View>
 
-        <Pressable
-          onPress={() => setFilterModalVisible(true)}
-          style={[styles.filterBtn, activeFilterCount > 0 && styles.filterBtnActive]}
-          hitSlop={10}
-        >
-          <Feather
-            name="sliders"
-            size={18}
-            color={activeFilterCount > 0 ? '#FFFFFF' : C.textPrimary}
-          />
-          {activeFilterCount > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
-
-      {/* Target Patient Matching Context Banner (Family or Patient view) */}
-      {effectivePatientName && (
-        <View style={styles.matchingBanner}>
-          <View style={styles.bannerIconWrap}>
-            <Ionicons name="heart-circle" size={24} color={C.primary} />
-          </View>
-          <View style={styles.bannerTextWrap}>
-            <Text style={styles.bannerTitle}>
-              Finding care for <Text style={{ fontFamily: F.bold }}>{effectivePatientName}</Text>
-            </Text>
-            <Text style={styles.bannerSub}>
-              Showing available caregivers matching care requirements
-            </Text>
-          </View>
+        <View style={styles.sosPill}>
+          <Ionicons name="call" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+          <Text style={styles.sosText}>SOS</Text>
         </View>
-      )}
+      </View>
 
       {/* Search Input Bar */}
       <View style={styles.searchBarWrap}>
@@ -289,7 +263,7 @@ export const CareDiscoveryScreen: React.FC = () => {
           <Feather name="search" size={18} color={C.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search name, role, skills, city..."
+            placeholder="Search by name, skill or service"
             placeholderTextColor={C.textMuted}
             value={query}
             onChangeText={setQuery}
@@ -303,6 +277,63 @@ export const CareDiscoveryScreen: React.FC = () => {
           )}
         </View>
       </View>
+
+      {/* Filter Chips Bar (Location, Experience, Skills, Availability) */}
+      <View style={styles.filterControlsRow}>
+        <Pressable
+          style={[styles.filterChip, filters.city ? styles.filterChipActive : null]}
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Text style={[styles.filterChipText, filters.city ? styles.filterChipTextActive : null]}>
+            {filters.city || 'Location'}
+          </Text>
+          <Feather name="chevron-down" size={14} color={filters.city ? C.primary : C.textSecondary} />
+        </Pressable>
+
+        <Pressable
+          style={[styles.filterChip, (filters.dementiaExperience || (filters.minExperienceYears || 0) > 0) ? styles.filterChipActive : null]}
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Text style={[styles.filterChipText, (filters.dementiaExperience || (filters.minExperienceYears || 0) > 0) ? styles.filterChipTextActive : null]}>
+            Experience
+          </Text>
+          <Feather name="chevron-down" size={14} color={filters.dementiaExperience ? C.primary : C.textSecondary} />
+        </Pressable>
+
+        <Pressable
+          style={[styles.filterChip, filters.capabilities.length > 0 ? styles.filterChipActive : null]}
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Text style={[styles.filterChipText, filters.capabilities.length > 0 ? styles.filterChipTextActive : null]}>
+            Skills {filters.capabilities.length > 0 ? `(${filters.capabilities.length})` : ''}
+          </Text>
+          <Feather name="chevron-down" size={14} color={filters.capabilities.length > 0 ? C.primary : C.textSecondary} />
+        </Pressable>
+
+        <Pressable
+          style={[styles.filterChip, filters.availability.length > 0 ? styles.filterChipActive : null]}
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Text style={[styles.filterChipText, filters.availability.length > 0 ? styles.filterChipTextActive : null]}>
+            Availability
+          </Text>
+          <Feather name="chevron-down" size={14} color={filters.availability.length > 0 ? C.primary : C.textSecondary} />
+        </Pressable>
+      </View>
+
+      {/* Active Search / Filter Context Tag (Screen 3) */}
+      {(filters.city || filters.dementiaExperience || query.length > 0) && (
+        <View style={styles.activeContextRow}>
+          <View style={styles.activeContextPill}>
+            <Text style={styles.activeContextText}>
+              {filters.dementiaExperience ? 'Dementia care' : (query || 'Care')} · {filters.city || 'Bengaluru'}
+            </Text>
+            <Pressable onPress={handleResetAll} hitSlop={8}>
+              <Ionicons name="close" size={14} color={C.primary} style={{ marginLeft: 4 }} />
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* Quick Category Filter Pills (Astro Inspired) */}
       <View style={styles.pillsContainer}>
@@ -449,12 +480,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+  },
+  backText: {
+    fontFamily: F.medium,
+    fontSize: 15,
+    color: C.textPrimary,
   },
   headerTitleWrap: {
     alignItems: 'center',
@@ -469,6 +502,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.primary,
     marginTop: 1,
+  },
+  sosPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE8E7',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  sosText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#DC2626',
+  },
+  filterControlsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  filterChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    gap: 4,
+  },
+  filterChipActive: {
+    borderColor: C.primary,
+    backgroundColor: '#E6F4F1',
+  },
+  filterChipText: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: C.textSecondary,
+  },
+  filterChipTextActive: {
+    color: C.primary,
+    fontFamily: F.bold,
+  },
+  activeContextRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  activeContextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#E6F4F1',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  activeContextText: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: C.primary,
   },
   filterBtn: {
     width: 38,

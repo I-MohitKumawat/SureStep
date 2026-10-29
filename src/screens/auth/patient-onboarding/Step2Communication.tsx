@@ -83,11 +83,11 @@ export const Step2Communication: React.FC<Step2Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Communication & Language' : 'How do they communicate?'}
+      title={isSelf ? 'Language & Understanding' : 'Language & Understanding'}
       subtitle={
         isSelf
-          ? 'Choose your primary language and how you would like reminders presented.'
-          : 'Choose their preferred language and formats for best cognitive comfort.'
+          ? 'Choose the language you feel most comfortable speaking and reading every day.'
+          : 'Choose the language and formats that bring them the greatest cognitive ease.'
       }
       currentStep={2}
       iconName="chatbubble-ellipses"
@@ -98,7 +98,7 @@ export const Step2Communication: React.FC<Step2Props> = ({
       {/* Primary Language */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>Primary Language *</Text>
-        <Text style={s.sectionHint}>The main language used for app prompts and voice</Text>
+        <Text style={s.sectionHint}>The main language used for audio prompts and text</Text>
         <View style={s.cardGroup}>
           {PRIMARY_LANGUAGES.map((lang) => (
             <OptionCard
@@ -115,7 +115,7 @@ export const Step2Communication: React.FC<Step2Props> = ({
       {/* Additional Languages */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>Other Languages Understood</Text>
-        <Text style={s.sectionHint}>Optional languages they are comfortable with</Text>
+        <Text style={s.sectionHint}>Optional languages they can understand</Text>
         <MultiSelectChips
           options={ADDITIONAL_LANG_OPTIONS.filter((l) => l.id !== primaryLanguage)}
           selectedIds={additionalLanguages}
@@ -125,7 +125,7 @@ export const Step2Communication: React.FC<Step2Props> = ({
 
       {/* Communication Preferences */}
       <View style={[s.section, { marginTop: 18 }]}>
-        <Text style={s.sectionTitle}>Communication Preferences</Text>
+        <Text style={s.sectionTitle}>Comfort & Formatting</Text>
         <Text style={s.sectionHint}>Formats that make understanding easier</Text>
         <MultiSelectChips
           options={PREFERENCE_OPTIONS}
@@ -139,18 +139,18 @@ export const Step2Communication: React.FC<Step2Props> = ({
 
 const s = StyleSheet.create({
   section: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontFamily: F.bold,
+    fontFamily: F.semiBold,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 4,
   },
   sectionHint: {
     fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textSecondary,
+    fontSize: 13,
+    color: '#52605D',
     marginBottom: 10,
   },
   cardGroup: {

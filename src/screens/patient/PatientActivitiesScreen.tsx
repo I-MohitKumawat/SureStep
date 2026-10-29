@@ -6,7 +6,7 @@ import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
-import { IconActivity } from '../../assets/icons/NavIcons';
+import { IconActivity, IconSettings } from '../../assets/icons/NavIcons';
 import { ACTIVITY_CATALOGUE, wasPlayedToday, type Activity, type ActivityCategory } from '../../activities/activityData';
 import type { PatientStackParams } from '../../types/navigation.types';
 
@@ -288,9 +288,20 @@ export const PatientActivitiesView: React.FC<{ navigation: any }> = ({ navigatio
             <Text style={s.title}>Activities</Text>
             <Text style={s.sub}>Choose something to do today</Text>
           </View>
-          <Pressable onPress={() => navigation.navigate('ActivityReportsScreen')} style={s.reportBtn}>
-            <IconActivity size={20} color={C.primary} strokeWidth={2} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Pressable
+              onPress={() => navigation.navigate('PatientSettingsScreen')}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              hitSlop={8}
+              style={({ pressed }) => [s.reportBtn, pressed && { opacity: 0.6 }]}
+            >
+              <IconSettings size={20} color={C.textSecondary} strokeWidth={1.8} />
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate('ActivityReportsScreen')} style={s.reportBtn}>
+              <IconActivity size={20} color={C.primary} strokeWidth={2} />
+            </Pressable>
+          </View>
         </View>
 
         {ACTIVITY_CATALOGUE.map((cat: ActivityCategory) => (

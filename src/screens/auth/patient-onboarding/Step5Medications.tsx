@@ -208,8 +208,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
   },
   toggleBtnSelected: {
-    backgroundColor: '#F0FBF8',
-    borderColor: C.primary,
+    backgroundColor: '#E6F4F1',
+    borderColor: '#0E5A4A',
+    borderWidth: 2,
   },
   toggleBtnText: {
     fontFamily: F.medium,
@@ -218,7 +219,7 @@ const s = StyleSheet.create({
   },
   toggleBtnTextSelected: {
     fontFamily: F.bold,
-    color: C.primaryDark,
+    color: '#0E5A4A',
   },
   medsSection: {
     marginTop: 6,

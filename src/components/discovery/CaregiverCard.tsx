@@ -113,20 +113,15 @@ export const CaregiverCard: React.FC<Props> = ({
           )}
         </View>
 
-        {/* Rating or New badge */}
-        <View style={styles.ratingContainer}>
-          {isUnrated ? (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>New</Text>
-            </View>
-          ) : (
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={13} color="#D97706" style={{ marginRight: 3 }} />
-              <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
-              <Text style={styles.ratingCountText}>({ratingCount})</Text>
-            </View>
-          )}
-        </View>
+        {/* Clean View Profile Action */}
+        <Pressable
+          style={styles.profileBtnInline}
+          onPress={() => onPress(caregiver)}
+          hitSlop={8}
+        >
+          <Text style={styles.profileBtnInlineText}>View Profile</Text>
+          <Feather name="chevron-right" size={14} color={C.primary} />
+        </Pressable>
       </View>
 
       {/* Experience & Training Highlights */}
@@ -264,38 +259,17 @@ const styles = StyleSheet.create({
     color: C.textSecondary,
     flex: 1,
   },
-  ratingContainer: {
-    alignItems: 'flex-end',
-  },
-  ratingBadge: {
+  profileBtnInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
-  },
-  ratingText: {
-    fontFamily: F.bold,
-    fontSize: 12,
-    color: '#92400E',
-  },
-  ratingCountText: {
-    fontFamily: F.regular,
-    fontSize: 11,
-    color: '#B45309',
-    marginLeft: 2,
-  },
-  newBadge: {
-    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 2,
   },
-  newBadgeText: {
+  profileBtnInlineText: {
     fontFamily: F.semiBold,
-    fontSize: 11,
-    color: '#475569',
+    fontSize: 13,
+    color: C.primary,
   },
   expRow: {
     flexDirection: 'row',

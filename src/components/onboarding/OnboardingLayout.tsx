@@ -50,8 +50,8 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
   onSkip,
   skipLabel = 'Skip',
   iconName = 'sparkles',
-  iconColor = C.primary,
-  iconBg = '#EAF7F4',
+  iconColor = '#0E7A67',
+  iconBg = '#E6F4F1',
   children,
   footerExtra,
 }) => {
@@ -75,7 +75,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
                 style={({ pressed }) => [s.backBtn, pressed && s.pressedOpacity]}
                 hitSlop={12}
               >
-                <Ionicons name="chevron-back" size={20} color={C.textPrimary} />
+                <Ionicons name="chevron-back" size={20} color="#161E1C" />
                 <Text style={s.backBtnText}>Back</Text>
               </Pressable>
             ) : (
@@ -105,7 +105,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
           <View style={s.illustrationWrapper}>
             <View style={[s.illustrationBlob, { backgroundColor: iconBg }]}>
               <View style={s.illustrationIconBubble}>
-                <Ionicons name={iconName} size={26} color={iconColor} />
+                <Ionicons name={iconName} size={24} color={iconColor} />
               </View>
             </View>
           </View>
@@ -179,7 +179,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
 const s = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: C.surface,
+    backgroundColor: '#FAF8F5',
   },
   keyboardView: {
     flex: 1,
@@ -207,20 +207,20 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backBtnText: {
-    fontFamily: F.medium,
+    fontFamily: F.semiBold,
     fontSize: 14,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   stepBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    backgroundColor: '#E6F4F1',
   },
   stepBadgeText: {
-    fontFamily: F.semiBold,
+    fontFamily: F.bold,
     fontSize: 12,
-    color: C.textSecondary,
+    color: '#0A5D50',
   },
   skipBtn: {
     paddingVertical: 6,
@@ -229,37 +229,38 @@ const s = StyleSheet.create({
   skipBtnText: {
     fontFamily: F.medium,
     fontSize: 14,
-    color: C.textSecondary,
+    color: '#52605D',
   },
   illustrationWrapper: {
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: 6,
+    marginBottom: 10,
   },
   illustrationBlob: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#E6F4F1',
   },
   illustrationIconBubble: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowColor: '#0E7A67',
+    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 2,
   },
   heading: {
-    fontFamily: F.extraBold,
+    fontFamily: F.bold,
     fontSize: 24,
-    color: C.textPrimary,
+    color: '#161E1C',
     textAlign: 'center',
     lineHeight: 32,
     paddingHorizontal: 12,
@@ -268,9 +269,9 @@ const s = StyleSheet.create({
   subtitle: {
     fontFamily: F.regular,
     fontSize: 14,
-    color: C.textSecondary,
+    color: '#52605D',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
     paddingHorizontal: 16,
     marginBottom: 12,
   },
@@ -278,43 +279,43 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    gap: 5,
+    marginBottom: 18,
+    gap: 6,
   },
   progressDot: {
     width: 6,
-    height: 6,
+    height: 5,
     borderRadius: 3,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E5E0D8',
   },
   progressDotActive: {
-    width: 22,
-    height: 6,
+    width: 24,
+    height: 5,
     borderRadius: 3,
-    backgroundColor: C.primary,
+    backgroundColor: '#0E7A67',
   },
   progressDotPast: {
-    backgroundColor: C.primaryLight,
+    backgroundColor: '#A7D7CD',
   },
   contentWrapper: {
     marginTop: 4,
   },
   footer: {
     paddingHorizontal: 22,
-    paddingTop: 10,
-    paddingBottom: 16,
-    backgroundColor: C.surface,
+    paddingTop: 12,
+    paddingBottom: 18,
+    backgroundColor: '#FAF8F5',
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#E5E0D8',
   },
   continueBtn: {
     height: 52,
-    borderRadius: 26,
-    backgroundColor: C.primary,
+    borderRadius: 16,
+    backgroundColor: '#0E7A67',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: C.primary,
-    shadowOpacity: 0.25,
+    shadowColor: '#0E7A67',
+    shadowOpacity: 0.22,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
     elevation: 4,
@@ -325,7 +326,9 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   continueBtnDisabled: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E5E0D8',
+    borderWidth: 1,
+    borderColor: '#D6DDDD',
     shadowOpacity: 0,
     elevation: 0,
   },

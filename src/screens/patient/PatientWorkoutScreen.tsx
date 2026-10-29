@@ -276,7 +276,7 @@ export const PatientWorkoutScreen: React.FC<Props> = ({ navigation }) => {
     if (tab === 'Home')     navigation.navigate('PatientTabs', { screen: 'HomeTab' });
     if (tab === 'Family')   navigation.navigate('PatientTabs', { screen: 'FamilyTab' });
     if (tab === 'Activity') navigation.navigate('PatientTabs', { screen: 'ActivitiesTab' });
-    if (tab === 'Search')   navigation.navigate('PatientTabs', { screen: 'CareTeamTab' });
+    if (tab === 'Search')   navigation.navigate('PatientTabs', { screen: 'CareTab' });
   };
 
   const snapTo = useCallback((nextIdx: number) => {

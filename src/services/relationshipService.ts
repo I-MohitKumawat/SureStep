@@ -48,6 +48,7 @@ export const mapCaregiverRow = (row: any): CaregiverListing => {
     id,
     caregiverId: id,
     name,
+    phone: row.phone || null,
     specialty: professionalRole,
     professional_role: professionalRole,
     professionalRole,
@@ -109,9 +110,39 @@ export interface FamilyMemberItem {
   id: string;
   name: string;
   photo_url: string | null;
+  phone?: string | null;
   relationship_type: string;
   status: string;
   confirmed_at: string;
+}
+
+export interface ConnectedPerson {
+  id: string;
+  name: string;
+  photoUrl?: string | null;
+  phone?: string | null;
+  relationship: string;
+  isCaregiver: boolean;
+  rawMember?: any;
+}
+
+export function formatRelationship(type: string): string {
+  if (!type) return 'Family';
+  const upper = type.toUpperCase();
+  if (upper === 'CAREGIVER') return 'Caregiver';
+  if (upper === 'DAUGHTER') return 'Daughter';
+  if (upper === 'SON') return 'Son';
+  if (upper === 'SISTER') return 'Sister';
+  if (upper === 'BROTHER') return 'Brother';
+  if (upper === 'MOTHER') return 'Mother';
+  if (upper === 'FATHER') return 'Father';
+  if (upper === 'GRANDSON') return 'Grandson';
+  if (upper === 'GRANDDAUGHTER') return 'Granddaughter';
+  if (upper === 'SPOUSE' || upper === 'WIFE' || upper === 'HUSBAND') return 'Spouse';
+  if (upper === 'GUARDIAN') return 'Guardian';
+  if (upper === 'FAMILY_CLOSE' || upper === 'CLOSE FAMILY') return 'Family';
+  if (upper === 'FAMILY_EXTENDED' || upper === 'CIRCLE MEMBER' || upper === 'OWNER') return 'Family';
+  return type.replace('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
@@ -137,6 +168,58 @@ export const fetchMyCaregivers = async (): Promise<CaregiverListing[]> => {
     return rows.map((row: any) => mapCaregiverRow(row));
   } catch (error) {
     console.warn('[relationshipService] fetchMyCaregivers failed:', error);
+    return [];
+  }
+};
+
+/**
+ * Unified helper for My People screen: aggregates confirmed family members
+ * and actively assigned caregivers into a deduplicated list of ConnectedPerson.
+ */
+export const fetchConnectedPeople = async (): Promise<ConnectedPerson[]> => {
+  try {
+    const [family, caregivers] = await Promise.all([
+      fetchMyFamily(),
+      fetchMyCaregivers(),
+    ]);
+
+    const people: ConnectedPerson[] = [];
+    const seenIds = new Set<string>();
+
+    for (const f of family) {
+      if (!seenIds.has(f.id)) {
+        seenIds.add(f.id);
+        people.push({
+          id: f.id,
+          name: f.name,
+          photoUrl: f.photo_url,
+          phone: f.phone || null,
+          relationship: formatRelationship(f.relationship_type),
+          isCaregiver: false,
+          rawMember: f,
+        });
+      }
+    }
+
+    for (const c of caregivers) {
+      const s = (c.status || '').toUpperCase();
+      if ((s === 'ACTIVE' || s === 'CONFIRMED' || s === 'NOTICE_PERIOD') && !seenIds.has(c.id)) {
+        seenIds.add(c.id);
+        people.push({
+          id: c.id,
+          name: c.name,
+          photoUrl: c.photoUrl || c.profile_photo_url,
+          phone: c.phone || null,
+          relationship: 'Caregiver',
+          isCaregiver: true,
+          rawMember: c,
+        });
+      }
+    }
+
+    return people;
+  } catch (error) {
+    console.warn('[relationshipService] fetchConnectedPeople failed:', error);
     return [];
   }
 };

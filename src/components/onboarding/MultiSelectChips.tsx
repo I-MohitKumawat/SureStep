@@ -80,22 +80,22 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 24,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
   },
   chipSelected: {
-    backgroundColor: C.primary,
-    borderColor: C.primary,
+    backgroundColor: '#0E7A67',
+    borderColor: '#0E7A67',
   },
   chipPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
   chipText: {
     fontFamily: F.medium,
     fontSize: 14,
-    color: '#374151',
+    color: '#161E1C',
   },
   chipTextSelected: {
     color: '#FFFFFF',

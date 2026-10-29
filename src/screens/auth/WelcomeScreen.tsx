@@ -81,7 +81,7 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.bottomSection}>
 
           {/* SLANTED SURFACE */}
-          <View style={styles.slantBg} />
+          <View style={styles.slantBg} pointerEvents="none" />
 
           {isOnboarding ? (
             // Mid-onboarding: user is Firebase-authenticated but hasn't finished DB setup
@@ -251,62 +251,52 @@ const styles = StyleSheet.create({
 
   bottomSection: {
     position: 'relative',
-
     paddingHorizontal: 28,
-    paddingBottom: 42,
-    paddingTop: 120,
-
+    paddingBottom: 36,
+    paddingTop: 44,
     alignItems: 'center',
   },
 
   slantBg: {
     position: 'absolute',
-
-    top: 40,
+    top: 0,
     left: -30,
     right: -30,
     bottom: -80,
-
     backgroundColor: C.primaryLight,
-
     transform: [{ rotate: '-6deg' }],
-
     borderTopLeftRadius: 60,
     borderTopRightRadius: 60,
   },
 
   ctaButton: {
     width: '100%',
-    height: 62,
-
-    borderRadius: 31,
-
+    height: 58,
+    borderRadius: 29,
     backgroundColor: C.primary,
-
     alignItems: 'center',
     justifyContent: 'center',
-
-    shadowColor: C.primary,
-    shadowOpacity: 0.22,
+    shadowColor: C.primaryDark,
+    shadowOpacity: 0.28,
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 6,
     },
-    shadowRadius: 18,
-    elevation: 8,
-
-    marginBottom: 18,
+    shadowRadius: 12,
+    elevation: 6,
+    zIndex: 10,
+    marginBottom: 16,
   },
 
   ctaPressed: {
-    transform: [{ scale: 0.94 }],
-    opacity: 0.90,
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
 
   ctaText: {
     fontFamily: F.bold,
-    fontSize: 20,
-    letterSpacing: 2,
+    fontSize: 18,
+    letterSpacing: 1.2,
     color: '#FFFFFF',
   },
 
@@ -328,7 +318,7 @@ const styles = StyleSheet.create({
     color: C.primary,
   },
 
-    textWithLink: {
+  textWithLink: {
     color: C.primary,
     fontFamily: F.bold,
     textDecorationLine: 'underline',
@@ -338,14 +328,16 @@ const styles = StyleSheet.create({
   secondaryText: {
     fontFamily: F.medium,
     fontSize: 14,
-    color: C.textSecondary,
+    color: '#084C41',
     textAlign: "center",
+    lineHeight: 20,
   },
 
   signOutLink: {
-    marginTop: 10,
-    paddingVertical: 8,
+    marginTop: 8,
+    paddingVertical: 10,
     paddingHorizontal: 16,
+    zIndex: 10,
   },
   signOutLinkText: {
     fontFamily: F.bold,
@@ -353,6 +345,4 @@ const styles = StyleSheet.create({
     color: C.primary,
     textDecorationLine: 'underline',
   },
-
-
 });

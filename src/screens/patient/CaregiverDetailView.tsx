@@ -82,20 +82,24 @@ export const CaregiverDetailView: React.FC<Props> = ({
 
   return (
     <View style={styles.root}>
-      {/* Top Header */}
+      {/* Top Header with Back, Title, and Persistent SOS */}
       <View style={styles.headerNav}>
-        <Pressable onPress={onBack} style={styles.backBtn} hitSlop={14}>
+        <Pressable onPress={onBack} style={styles.backBtn} hitSlop={14} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
+          <Text style={styles.backText}>Back</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Professional Profile</Text>
-        <View style={styles.headerPlaceholder} />
+        <Text style={styles.headerTitle}>Caregiver</Text>
+        <View style={styles.sosPill}>
+          <Ionicons name="call" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+          <Text style={styles.sosText}>SOS</Text>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Card (Astro Inspired) */}
+        {/* Hero Card */}
         <View style={styles.heroCard}>
           <View style={styles.heroAvatarWrap}>
             {photoUrl ? (
@@ -109,24 +113,12 @@ export const CaregiverDetailView: React.FC<Props> = ({
 
           <Text style={styles.heroName}>{caregiver.name}</Text>
           <Text style={styles.heroRole}>{roleTitle}</Text>
-
-          {/* Rating Badge */}
-          <View style={styles.heroRatingWrap}>
-            {isUnrated ? (
-              <View style={styles.heroNewBadge}>
-                <Ionicons name="sparkles" size={13} color="#059669" style={{ marginRight: 4 }} />
-                <Text style={styles.heroNewBadgeText}>New to SureStep · No reviews yet</Text>
-              </View>
-            ) : (
-              <View style={styles.heroRatingBadge}>
-                <Ionicons name="star" size={14} color="#D97706" style={{ marginRight: 4 }} />
-                <Text style={styles.heroRatingScore}>{rating.toFixed(1)}</Text>
-                <Text style={styles.heroRatingReviews}>
-                  ({ratingCount} {ratingCount === 1 ? 'review' : 'reviews'})
-                </Text>
-              </View>
-            )}
-          </View>
+          {city ? (
+            <View style={styles.heroLocationRow}>
+              <Ionicons name="location-outline" size={14} color={C.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.heroLocationText}>{city}</Text>
+            </View>
+          ) : null}
 
           {/* Experience Highlights */}
           <View style={styles.heroStatsRow}>
@@ -398,20 +390,42 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+  },
+  backText: {
+    fontFamily: F.medium,
+    fontSize: 15,
+    color: C.textPrimary,
   },
   headerTitle: {
     fontFamily: F.bold,
-    fontSize: 17,
+    fontSize: 18,
     color: C.textPrimary,
   },
-  headerPlaceholder: {
-    width: 38,
+  sosPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE8E7',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  sosText: {
+    fontFamily: F.bold,
+    fontSize: 13,
+    color: '#DC2626',
+  },
+  heroLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  heroLocationText: {
+    fontFamily: F.medium,
+    fontSize: 13,
+    color: C.primary,
   },
   scroll: {
     paddingHorizontal: 16,

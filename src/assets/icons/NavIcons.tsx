@@ -82,6 +82,16 @@ export const IconCareTeam = ({ size = D, color = '#6B7280', strokeWidth = 1.8 }:
   </Svg>
 );
 
+/** Care – heart outline */
+export const IconCare = ({ size = D, color = '#6B7280', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
 // ─── Caregiver Nav ────────────────────────────────────────────────────────────
 
 /** Dashboard / Grid – 4-square grid */
@@ -261,3 +271,73 @@ export const IconBreathing = ({ size = D, color = '#0EA5E9', strokeWidth = 1.8 }
     <Line x1="19" y1="12" x2="22" y2="12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round"/>
   </Svg>
 );
+
+// ─── Settings & Account Semantic Outline Icons ───────────────────────────────
+
+/** Personal Details – user silhouette outline */
+export const IconUser = ({ size = 24, color = '#161E1C', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="7" r="4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    <Path
+      d="M5.5 20.5a6.5 6.5 0 0 1 13 0"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+/** Language – globe outline */
+export const IconGlobe = ({ size = 24, color = '#161E1C', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    <Path
+      d="M3.6 9h16.8M3.6 15h16.8"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Path
+      d="M12 3a13.5 13.5 0 0 1 3.5 9 13.5 13.5 0 0 1-3.5 9 13.5 13.5 0 0 1-3.5-9 13.5 13.5 0 0 1 3.5-9z"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+/** Location – map pin outline with inner circle */
+export const IconLocationPin = ({ size = 24, color = '#161E1C', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M12 21s7-6.2 7-11.8A7 7 0 0 0 5 9.2C5 14.8 12 21 12 21z"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Circle cx="12" cy="9.5" r="2.5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+/** Sign Out – exit bracket with arrow pointing right */
+export const IconSignOut = ({ size = 24, color = '#161E1C', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Polyline
+      points="16,17 21,12 16,7"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Line
+      x1="21" y1="12" x2="9" y2="12"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+/** Delete / Trash – bin with lid outline */
+export const IconTrash = ({ size = 24, color = '#DC2626', strokeWidth = 1.8 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Line x1="10" y1="11" x2="10" y2="17" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    <Line x1="14" y1="11" x2="14" y2="17" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+

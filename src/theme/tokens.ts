@@ -83,23 +83,23 @@ export const zIndex = {
 
 // ─── Theme Colors (light/dark) ───────────────────────────────────────────────
 const lightColors = {
-  background:    '#F2F5F5',
+  background:    '#FAF8F5',
   surface:       '#FFFFFF',
-  textPrimary:   '#111827',
-  textSecondary: '#6B7280',
-  borderSubtle:  '#E6EAEC',
+  textPrimary:   '#161E1C',
+  textSecondary: '#52605D',
+  borderSubtle:  '#E5E0D8',
   accent:        '#0E7A67',
   error:         '#DC2626',
 } as const;
 
 const darkColors = {
-  background:    '#0D1117',
-  surface:       '#161B22',
-  textPrimary:   '#E6EDF3',
-  textSecondary: '#8B949E',
-  borderSubtle:  '#30363D',
-  accent:        '#3FB950',
-  error:         '#F85149',
+  background:    '#121816',
+  surface:       '#1C2422',
+  textPrimary:   '#F5F7F6',
+  textSecondary: '#9EABA7',
+  borderSubtle:  '#2C3835',
+  accent:        '#0E7A67',
+  error:         '#DC2626',
 } as const;
 
 export type ThemeColors = typeof lightColors | typeof darkColors;

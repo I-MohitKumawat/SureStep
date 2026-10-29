@@ -99,11 +99,11 @@ export const Step1AboutPatient: React.FC<Step1Props> = ({
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Tell us your name & details' : 'Tell us about the person receiving care'}
+      title={isSelf ? 'Let’s get to know you' : 'Tell us about your loved one'}
       subtitle={
         isSelf
-          ? 'Let’s personalize your SureStep companion experience.'
-          : 'We will configure reminders and care tailored to them.'
+          ? 'We’ll personalize your daily companion experience with care and dignity.'
+          : 'We will configure friendly reminders and assistance tailored to their daily rhythm.'
       }
       currentStep={1}
       iconName="person"
@@ -216,15 +216,15 @@ const s = StyleSheet.create({
     height: 90,
     borderRadius: 45,
     borderWidth: 2,
-    borderColor: C.primary,
+    borderColor: '#0E7A67',
   },
   photoPlaceholder: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -232,7 +232,7 @@ const s = StyleSheet.create({
   photoText: {
     fontFamily: F.medium,
     fontSize: 11,
-    color: C.primary,
+    color: '#0E7A67',
     marginTop: 2,
   },
   photoBadge: {
@@ -242,7 +242,7 @@ const s = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: C.primary,
+    backgroundColor: '#0E7A67',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -260,29 +260,29 @@ const s = StyleSheet.create({
   fieldLabel: {
     fontFamily: F.semiBold,
     fontSize: 14,
-    color: C.textPrimary,
+    color: '#161E1C',
     marginBottom: 6,
   },
   ageBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
-    backgroundColor: '#E0F5F0',
+    backgroundColor: '#E6F4F1',
   },
   ageBadgeText: {
     fontFamily: F.semiBold,
     fontSize: 11,
-    color: C.primaryDark,
+    color: '#0A5D50',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    height: 52,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     borderRadius: 14,
     paddingHorizontal: 14,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
   inputIcon: {
     marginRight: 10,
@@ -291,23 +291,23 @@ const s = StyleSheet.create({
     flex: 1,
     fontFamily: F.regular,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   datePickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    height: 52,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
     borderRadius: 14,
     paddingHorizontal: 14,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
   dateText: {
     flex: 1,
     fontFamily: F.medium,
     fontSize: 15,
-    color: C.textPrimary,
+    color: '#161E1C',
   },
   placeholderText: {
     color: '#9CA3AF',
@@ -322,21 +322,22 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E0D8',
   },
   genderPillSelected: {
-    backgroundColor: '#F0FBF8',
-    borderColor: C.primary,
+    backgroundColor: '#0E7A67',
+    borderColor: '#0E7A67',
+    borderWidth: 1.5,
   },
   genderPillText: {
     fontFamily: F.medium,
     fontSize: 13,
-    color: '#374151',
+    color: '#161E1C',
   },
   genderPillTextSelected: {
-    color: C.primaryDark,
+    color: '#FFFFFF',
     fontFamily: F.bold,
   },
 });

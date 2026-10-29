@@ -61,7 +61,7 @@ export type CaregiverListing = {
   is_discoverable?: boolean;
   isDiscoverable?: boolean;
   status?: string;
-  phone?: string;
+  phone?: string | null;
   about_me?: string;
   emergency_response?: boolean;
   can_assist_nearby?: boolean;

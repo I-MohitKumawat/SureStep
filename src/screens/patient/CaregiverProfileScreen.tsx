@@ -37,8 +37,8 @@ export const CaregiverProfileScreen: React.FC<Props> = ({ route, navigation }) =
   const routeTargetPatientId = route.params?.targetPatientId;
   const routeTargetPatientName = route.params?.targetPatientName;
 
-  const targetPatientId = routeTargetPatientId || (isFamilyUser ? familyPatient?.id : undefined);
-  const targetPatientName = routeTargetPatientName || (isFamilyUser ? familyPatient?.name : undefined);
+  const targetPatientId = routeTargetPatientId || (isFamilyUser ? familyPatient?.id : (user?.role === 'PATIENT' ? user?.id : undefined));
+  const targetPatientName = routeTargetPatientName || (isFamilyUser ? familyPatient?.name : (user?.role === 'PATIENT' ? (user?.name || 'yourself') : undefined));
 
   const { caregivers } = useCaregiver();
 

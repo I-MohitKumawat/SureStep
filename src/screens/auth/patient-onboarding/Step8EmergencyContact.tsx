@@ -175,8 +175,9 @@ const s = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   relPillSelected: {
-    backgroundColor: '#F0FBF8',
-    borderColor: C.primary,
+    backgroundColor: '#E6F4F1',
+    borderColor: '#0E5A4A',
+    borderWidth: 2,
   },
   relPillText: {
     fontFamily: F.medium,
@@ -184,7 +185,7 @@ const s = StyleSheet.create({
     color: '#374151',
   },
   relPillTextSelected: {
-    color: C.primaryDark,
+    color: '#0E5A4A',
     fontFamily: F.bold,
   },
   noticeCard: {
