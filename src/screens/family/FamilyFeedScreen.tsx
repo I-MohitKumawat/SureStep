@@ -159,13 +159,13 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
   const p = patient!;
   // Read safety/telemetry from patientState (PatientTrackingContext) falling back to local family patient state
   const safetyState = patientState?.safety_state ?? p.safety_state;
-  const sosActive = patientState?.sos_active ?? p.sos_active;
+  const sosActive = patientState?.sos_active ?? (p as any).sos_active;
   const currentZoneName = patientState?.current_zone_name ?? p.current_zone_name;
   const batteryPct = patientState?.battery_pct ?? p.battery_pct;
-  const networkStatus = patientState?.network_status ?? p.network_status;
-  const computedAt = patientState?.computed_at ?? p.computed_at;
+  const networkStatus = patientState?.network_status ?? (p as any).network_status;
+  const computedAt = patientState?.computed_at ?? (p as any).computed_at;
 
-  const cfg = safetyConfig(safetyState, sosActive);
+  const cfg = safetyConfig(safetyState ?? null, Boolean(sosActive));
   const patientTasks = tasks.filter((t: any) => t.patientId === p.id);
   const doneCount = patientTasks.filter((t: any) => t.status === 'done').length;
   const pct = patientTasks.length > 0 ? Math.round((doneCount / patientTasks.length) * 100) : 0;
@@ -271,7 +271,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
                 ))}
                 {coords && (
                   <Marker coordinate={coords}>
-                    <MemberMarkerContent name={p.name} photoUrl={p.photo_url} role="PATIENT" />
+                    <MemberMarkerContent name={p.name} photoUrl={p.photo_url ?? null} role="PATIENT" />
                   </Marker>
                 )}
                 {careCircle.map((member, index) => {

@@ -84,3 +84,30 @@ export async function fetchMemoryById(
     return null;
   }
 }
+
+/**
+ * Create a new memory for a patient.
+ */
+export async function createPatientMemory(
+  patientId: string,
+  dto: {
+    title: string;
+    media_type: 'PHOTO' | 'VIDEO' | 'TEXT';
+    caption?: string;
+    media_key?: string;
+    associated_person_id?: string;
+  }
+): Promise<MemoryItem> {
+  const res = await apiClient.post(`/patients/${patientId}/memories`, dto);
+  return res.data?.data?.memory || res.data?.memory;
+}
+
+/**
+ * Delete a memory for a patient.
+ */
+export async function deletePatientMemory(
+  patientId: string,
+  memoryId: string
+): Promise<void> {
+  await apiClient.delete(`/patients/${patientId}/memories/${memoryId}`);
+}

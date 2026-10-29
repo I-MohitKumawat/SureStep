@@ -29,6 +29,7 @@ import { CaregiverWellbeingScreen }       from '../screens/caregiver/CaregiverWe
 import { CaregiverProfileEditScreen }     from '../screens/caregiver/CaregiverProfileEditScreen';
 import { CaregiverSettingsScreen }        from '../screens/caregiver/CaregiverSettingsScreen';
 import { CaregiverCareCircleScreen }      from '../screens/caregiver/CaregiverCareCircleScreen';
+import { JoinCareCircleScreen }           from '../screens/family/JoinCareCircleScreen';
 import { CareRequestDetailScreen }        from '../screens/shared/CareRequestDetailScreen';
 import { CareRequestsListScreen }         from '../screens/shared/CareRequestsListScreen';
 import { NotificationHistoryScreen }      from '../screens/shared/NotificationHistoryScreen';
@@ -61,6 +62,7 @@ const CaregiverStack: React.FC = () => (
     <Stack.Screen name="CaregiverProfileEditScreen"     component={CaregiverProfileEditScreen} />
     <Stack.Screen name="CaregiverSettingsScreen"        component={CaregiverSettingsScreen} />
     <Stack.Screen name="CaregiverCareCircleScreen"      component={CaregiverCareCircleScreen} />
+    <Stack.Screen name="JoinCareCircleScreen"           component={JoinCareCircleScreen} />
     <Stack.Screen name="NotificationHistoryScreen"      component={NotificationHistoryScreen} />
     <Stack.Screen name="NotificationSettingsScreen"     component={NotificationSettingsScreen} />
     <Stack.Screen name="NotificationTestScreen"         component={NotificationTestScreen} />

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Switch, Pressable, ScrollView, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import apiClient from '../../services/apiClient';
 
 export const CaregiverSettingsScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<any>({
     alert_categories: ['GEOFENCE', 'SOS', 'OFFLINE', 'ROUTINE', 'ASSESSMENT'],
@@ -87,6 +90,26 @@ export const CaregiverSettingsScreen: React.FC = () => {
         <Text style={s.body}>
           Configure alerts, quiet hours, and escalation rules for your assigned care recipients.
         </Text>
+
+        {/* 👥 Care Circle Connection */}
+        <View style={s.section}>
+          <Text style={s.label}>Care Circle Network</Text>
+          <Pressable
+            onPress={() => navigation.navigate('JoinCareCircleScreen')}
+            style={[s.settingsGroup, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="people-outline" size={20} color={C.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.settingTitle}>Join Care Circle</Text>
+                <Text style={s.settingDesc}>Connect to a family with a 6-digit invitation code</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+          </Pressable>
+        </View>
 
         {/* 🔔 Alert categories */}
         <View style={s.section}>

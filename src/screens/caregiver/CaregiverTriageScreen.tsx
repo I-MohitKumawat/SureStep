@@ -1279,6 +1279,24 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
 
           <View style={settingsStyles.divider} />
 
+          {/* Care Circles */}
+          <Text style={settingsStyles.sectionHeading}>Care Circles</Text>
+          <Pressable
+            onPress={() => navigation.navigate('JoinCareCircleScreen' as any)}
+            style={settingsStyles.fieldRow}
+          >
+            <View style={settingsStyles.fieldEmojiWrap}>
+              <Ionicons name="people-outline" size={18} color={C.primary} />
+            </View>
+            <View style={settingsStyles.fieldTextWrap}>
+              <Text style={settingsStyles.fieldLabel}>Care Circle Invitation</Text>
+              <Text style={settingsStyles.fieldValue}>Join with 6-Digit Code</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+          </Pressable>
+
+          <View style={settingsStyles.divider} />
+
           {/* Preferences */}
           <Text style={settingsStyles.sectionHeading}>Preferences</Text>
           {([

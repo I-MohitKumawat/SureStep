@@ -5,15 +5,14 @@ import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 
-export type FamilyTab = 'Home' | 'Map' | 'Alerts' | 'Messages' | 'Settings';
+export type FamilyTab = 'Home' | 'People' | 'Alerts' | 'Care';
 
 export const FamilyBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const tabs = [
-    { name: 'Home', icon: 'home-outline', iconActive: 'home', screen: 'FamilyFeedScreen' },
-    { name: 'Map', icon: 'map-outline', iconActive: 'map', screen: 'FamilyMapScreen' },
-    { name: 'Alerts', icon: 'notifications-outline', iconActive: 'notifications', screen: 'FamilyAlertsScreen' },
-    { name: 'Messages', icon: 'chatbubble-outline', iconActive: 'chatbubble', screen: 'FamilyMessagesScreen' },
-    { name: 'Settings', icon: 'settings-outline', iconActive: 'settings', screen: 'FamilySettingsScreen' },
+    { name: 'Home', icon: 'home-outline' as const, iconActive: 'home' as const, screen: 'FamilyHomeTab' },
+    { name: 'People', icon: 'people-outline' as const, iconActive: 'people' as const, screen: 'FamilyPeopleTab' },
+    { name: 'Alerts', icon: 'notifications-outline' as const, iconActive: 'notifications' as const, screen: 'FamilyAlertsTab' },
+    { name: 'Care', icon: 'heart-outline' as const, iconActive: 'heart' as const, screen: 'FamilyCareTab' },
   ] as const;
 
   const activeRouteName = state.routes[state.index]?.name;
@@ -37,10 +36,10 @@ export const FamilyBottomBar: React.FC<BottomTabBarProps> = ({ state, navigation
               <Ionicons
                 name={iconName}
                 size={22}
-                color={isActive ? C.primary : C.textMuted}
+                color={isActive ? '#0E7A67' : '#8A9592'}
               />
               <Text style={[styles.label, isActive && styles.labelActive]}>
-                {tab.name === 'Home' ? 'Dashboard' : (tab.name === 'Alerts' ? 'Notifications' : tab.name)}
+                {tab.name}
               </Text>
               {isActive && <View style={styles.activeIndicator} />}
             </Pressable>
@@ -59,13 +58,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E5E0D8',
     paddingBottom: 24, // for safe area
     paddingTop: 10,
     shadowColor: '#000000',
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.04,
     shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 8,
     zIndex: 100,
   },
@@ -84,19 +83,19 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: F.medium,
     fontSize: 11,
-    color: C.textMuted,
+    color: '#8A9592',
     marginTop: 4,
   },
   labelActive: {
-    color: C.primary,
-    fontFamily: F.bold,
+    color: '#0E7A67',
+    fontFamily: F.semiBold,
   },
   activeIndicator: {
     position: 'absolute',
     top: -10,
     width: 24,
     height: 3,
-    backgroundColor: C.primary,
+    backgroundColor: '#0E7A67',
     borderBottomLeftRadius: 3,
     borderBottomRightRadius: 3,
   },

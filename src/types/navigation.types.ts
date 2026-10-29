@@ -110,6 +110,7 @@ export type CaregiverStackParams = {
   CaregiverProfileEditScreen:     undefined;
   CaregiverSettingsScreen:        undefined;
   CaregiverCareCircleScreen:      { patientId: string; patientName: string };
+  JoinCareCircleScreen?:          undefined;
   NotificationHistoryScreen:      undefined;
   NotificationSettingsScreen:     undefined;
   NotificationTestScreen:         undefined;
@@ -117,32 +118,74 @@ export type CaregiverStackParams = {
 };
 
 // ─── Family Stack ─────────────────────────────────────────────────────────────
-export type FamilyStackParams = {
-  FamilyLinkPatientScreen: undefined;
-  FamilyTabs:              undefined;
-  FamilyFeedScreen:        undefined;
-  CareDiscoveryScreen:     { targetPatientId: string; targetPatientName?: string };
-  CaregiverProfileScreen:  { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
-  CareRequestScreen:       { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
-  CareRequestDetailScreen: { requestId: string; onUpdated?: () => void };
-  CareRequestsListScreen:  { initialTab?: 'PENDING' | 'ALL'; targetPatientId?: string; targetPatientName?: string } | undefined;
-  FamilyMapScreen:         { patientId?: string } | undefined;
-  FamilyAlertsScreen:      undefined;
-  FamilyStoriesScreen:     { patientId: string };
-  FamilyMessagesScreen:    { patientId?: string } | undefined;
-  FamilySettingsScreen:    undefined;
-  NotificationHistoryScreen:  undefined;
-  NotificationSettingsScreen: undefined;
-  NotificationTestScreen:     undefined;
-  PatientProfileScreen:       { patientId: string };
+export type FamilyTabParams = {
+  FamilyHomeTab:   undefined;
+  FamilyPeopleTab: undefined;
+  FamilyAlertsTab: undefined;
+  FamilyCareTab:   undefined;
 };
 
-export type FamilyTabParams = {
-  FamilyFeedScreen:        undefined;
-  FamilyMapScreen:         { patientId?: string } | undefined;
-  FamilyAlertsScreen:      undefined;
-  FamilyMessagesScreen:    { patientId?: string } | undefined;
-  FamilySettingsScreen:    undefined;
+export type FamilyStackParams = {
+  FamilyTabs:                  NavigatorScreenParams<FamilyTabParams> | undefined;
+  FamilyHomeScreen:            undefined;
+  FamilyPeopleScreen:          undefined;
+  FamilyAlertsScreen:          undefined;
+  FamilyCareScreen:            undefined;
+  FamilySettingsScreen:        undefined;
+
+  // Patient Sub-Flow
+  PatientOverviewScreen:       { patientId: string; patientName?: string; initialTab?: 'Overview' | 'Routines' | 'Safety' | 'People' | 'Memories' };
+  PatientRoutinesScreen:       { patientId: string; patientName?: string };
+  PatientRoutineEditorScreen:  { patientId: string; patientName?: string; mode: 'create' | 'edit'; routine?: any };
+  PatientSafetyScreen:         { patientId: string; patientName?: string };
+  PatientSafeZonesScreen:      { circleId: string; patientId: string; patientName?: string };
+  PatientSafeZoneEditorScreen: {
+    circleId:     string;
+    patientId:    string;
+    patientName?: string;
+    existingZone?: {
+      id:       string;
+      label:    string;
+      center:   { latitude: number; longitude: number };
+      radiusM:  number;
+      boundaryType?: 'soft' | 'hard';
+    } | null;
+  };
+  PatientMemoriesScreen:       { patientId: string; patientName?: string };
+  PatientMemoryViewerScreen:   { memory: any; memories?: any[]; initialIndex?: number };
+
+  // Circle Management Sub-Flow
+  CreateCareCircleScreen:      undefined;
+  JoinCareCircleScreen:        undefined;
+  CareCircleManageScreen:      { circleId: string };
+  CareCircleInviteScreen:      { circleId: string };
+  CareCirclePermissionsScreen: { circleId: string; memberId: string; memberName: string };
+
+  // Incident & Alert Sub-Flow
+  AlertDetailScreen:           { alertId: string; circleId?: string; patientId?: string };
+
+  // Caregiver Sub-Flow
+  CareDiscoveryScreen:         { targetPatientId?: string; targetPatientName?: string } | undefined;
+  CaregiverSearchScreen?:      { targetPatientId?: string; targetPatientName?: string } | undefined;
+  CaregiverProfileScreen:      { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
+  CareRequestScreen:           { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
+  CareRequestDetailScreen:     { requestId: string; onUpdated?: () => void };
+  CareRequestsListScreen:      { initialTab?: 'PENDING' | 'ALL' | 'ACTIVE' | 'PAST'; targetPatientId?: string; targetPatientName?: string } | undefined;
+  PostCareNeedScreen:          { targetPatientId?: string; targetPatientName?: string } | undefined;
+  CareNeedResponsesScreen:     { needId?: string; targetPatientId?: string; targetPatientName?: string } | undefined;
+
+  // Shared Notifications & Profile
+  NotificationHistoryScreen:   undefined;
+  NotificationSettingsScreen:  undefined;
+  NotificationTestScreen:      undefined;
+  PatientProfileScreen:        { patientId: string };
+
+  // Legacy compat aliases
+  FamilyLinkPatientScreen?:    undefined;
+  FamilyFeedScreen?:           undefined;
+  FamilyMapScreen?:            { patientId?: string };
+  FamilyStoriesScreen?:        { patientId: string };
+  FamilyMessagesScreen?:       { patientId?: string };
 };
 
 // ─── Doctor Stack ─────────────────────────────────────────────────────────────

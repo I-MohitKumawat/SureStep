@@ -445,8 +445,9 @@ export const FamilyMapScreen: React.FC<Props> = ({ navigation, route }) => {
                     const liveLoc = memberLocations[member.id];
                     const hasLiveLocation = liveLoc && liveLoc.lat != null && liveLoc.lng != null;
                     
-                    const lat = hasLiveLocation ? Number(liveLoc.lat) : (member.check_in_lat != null ? Number(member.check_in_lat) : null);
-                    const lng = hasLiveLocation ? Number(liveLoc.lng) : (member.check_in_lng != null ? Number(member.check_in_lng) : null);
+                    const m = member as any;
+                    const lat = hasLiveLocation ? Number(liveLoc.lat) : (m.check_in_lat != null ? Number(m.check_in_lat) : null);
+                    const lng = hasLiveLocation ? Number(liveLoc.lng) : (m.check_in_lng != null ? Number(m.check_in_lng) : null);
                     
                     const isEstimated = lat == null || lng == null;
                     if (isEstimated && !coords) {
@@ -455,18 +456,18 @@ export const FamilyMapScreen: React.FC<Props> = ({ navigation, route }) => {
                     const finalLat = !isEstimated ? lat! : coords!.latitude + 0.0015 * (index + 1) * Math.sin(index * 2.0);
                     const finalLng = !isEstimated ? lng! : coords!.longitude + 0.0015 * (index + 1) * Math.cos(index * 2.0);
                     
-                    const roleLabel = member.relationship_type === 'CAREGIVER' 
+                    const roleLabel = (m.relationship_type === 'CAREGIVER' || member.role_in_circle === 'CAREGIVER')
                       ? 'Primary Caregiver' 
-                      : `Family Member (${member.relation_label ?? 'Relative'})`;
+                      : `Family Member (${m.relation_label ?? 'Relative'})`;
                       
                     const lastUpdateText = hasLiveLocation && liveLoc.recorded_at
                       ? `Last Update: ${new Date(liveLoc.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                      : (member.last_location_update
-                          ? `Last Check-in: ${new Date(member.last_location_update).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : (m.last_location_update
+                          ? `Last Check-in: ${new Date(m.last_location_update).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                           : 'Offline');
                       
-                    const statusText = hasLiveLocation ? 'Live Location' : (member.check_in_lat != null ? 'Checked-in Location' : 'Estimated Location');
-                    const markerRole = member.relationship_type === 'CAREGIVER' ? 'CAREGIVER' : 'FAMILY';
+                    const statusText = hasLiveLocation ? 'Live Location' : (m.check_in_lat != null ? 'Checked-in Location' : 'Estimated Location');
+                    const markerRole = (m.relationship_type === 'CAREGIVER' || member.role_in_circle === 'CAREGIVER') ? 'CAREGIVER' : 'FAMILY';
 
                     return (
                       <Marker
@@ -475,7 +476,7 @@ export const FamilyMapScreen: React.FC<Props> = ({ navigation, route }) => {
                         anchor={{ x: 0.5, y: 0.5 }}
                         tracksViewChanges={tracksView}
                       >
-                        <MemberMarkerContent name={member.name} photoUrl={member.photo_url} role={markerRole} />
+                        <MemberMarkerContent name={member.name} photoUrl={member.photo_url ?? null} role={markerRole} />
                         <Callout tooltip={false}>
                           <View style={styles.calloutContainer}>
                             <Text style={styles.calloutName}>{member.name}</Text>
