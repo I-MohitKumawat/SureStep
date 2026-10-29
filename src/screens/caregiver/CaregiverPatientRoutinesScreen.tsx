@@ -13,6 +13,7 @@ import {
   deactivateRoutineTemplate
 } from '../../services/taskService';
 import { useTasks } from '../../context/TaskContext';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientRoutinesScreen'>;
 type ScreenTab = 'daily_flow' | 'care_plan';
@@ -68,6 +69,9 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
 
   const { tasks: contextTasks, loadTasksForPatient, updateTaskStatus } = useTasks();
   const tasks = useMemo(() => contextTasks.filter(t => t.patientId === patientId), [contextTasks, patientId]);
+  const { user } = useAuth();
+  // Professional Caregivers are strictly denied routine-definition CRUD in V1.
+  const canManageDefinitions = user?.role === 'PATIENT';
 
   const [activeTab, setActiveTab] = useState<ScreenTab>('daily_flow');
   const [templates, setTemplates] = useState<any[]>([]);
@@ -387,19 +391,21 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
             <>
               <View style={styles.templatesHeader}>
                 <Text style={styles.templatesCount}>{templates.length} recurring routines configured</Text>
-                <Pressable
-                  style={styles.createBtn}
-                  onPress={() =>
-                    navigation.navigate('CaregiverRoutineEditorScreen', {
-                      patientId,
-                      patientName,
-                      mode: 'create'
-                    })
-                  }
-                >
-                  <Text style={styles.createBtnPlus}>＋</Text>
-                  <Text style={styles.createBtnText}>New Template</Text>
-                </Pressable>
+                {canManageDefinitions && (
+                  <Pressable
+                    style={styles.createBtn}
+                    onPress={() =>
+                      navigation.navigate('CaregiverRoutineEditorScreen', {
+                        patientId,
+                        patientName,
+                        mode: 'create'
+                      })
+                    }
+                  >
+                    <Text style={styles.createBtnPlus}>＋</Text>
+                    <Text style={styles.createBtnText}>New Template</Text>
+                  </Pressable>
+                )}
               </View>
 
               {templates.length === 0 ? (
@@ -407,7 +413,9 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                   <Text style={styles.emptyEmoji}>📅</Text>
                   <Text style={styles.emptyTitle}>Empty Care Plan</Text>
                   <Text style={styles.emptyDesc}>
-                    Setup recurring routine templates (e.g. daily medicine, weekly physical therapy) to automatically generate task flows for the patient.
+                    {canManageDefinitions
+                      ? 'Setup recurring routine templates (e.g. daily medicine, weekly physical therapy) to automatically generate task flows for the patient.'
+                      : 'No care plan has been configured yet. Routine definitions are managed by the patient or an authorized family member.'}
                   </Text>
                 </View>
               ) : (
@@ -427,29 +435,31 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                           </View>
                           <Text style={styles.categoryPill}>{template.category || 'custom'}</Text>
                         </View>
-                        <View style={styles.cardHeaderActions}>
-                          <Pressable
-                            style={styles.headerActionCircle}
-                            onPress={() =>
-                              navigation.navigate('CaregiverRoutineEditorScreen', {
-                                patientId,
-                                patientName,
-                                mode: 'edit',
-                                routine: template
-                              })
-                            }
-                            hitSlop={8}
-                          >
-                            <EditIcon />
-                          </Pressable>
-                          <Pressable
-                            style={[styles.headerActionCircle, styles.deleteHeaderBtn]}
-                            onPress={() => handleDeactivateTemplate(template.id, template.title)}
-                            hitSlop={8}
-                          >
-                            <DeleteIcon />
-                          </Pressable>
-                        </View>
+                        {canManageDefinitions && (
+                          <View style={styles.cardHeaderActions}>
+                            <Pressable
+                              style={styles.headerActionCircle}
+                              onPress={() =>
+                                navigation.navigate('CaregiverRoutineEditorScreen', {
+                                  patientId,
+                                  patientName,
+                                  mode: 'edit',
+                                  routine: template
+                                })
+                              }
+                              hitSlop={8}
+                            >
+                              <EditIcon />
+                            </Pressable>
+                            <Pressable
+                              style={[styles.headerActionCircle, styles.deleteHeaderBtn]}
+                              onPress={() => handleDeactivateTemplate(template.id, template.title)}
+                              hitSlop={8}
+                            >
+                              <DeleteIcon />
+                            </Pressable>
+                          </View>
+                        )}
                       </View>
 
                       {/* Main Clickable Title */}

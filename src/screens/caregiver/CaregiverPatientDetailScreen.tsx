@@ -272,27 +272,6 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
     }
   }, [isFocused, (route.params as any)?.refresh, loadRoutines, navigation]);
 
-  const handleDeleteTemplate = async (templateId: string) => {
-    try {
-      await deactivateRoutineTemplate(templateId);
-      Alert.alert('Success', 'Routine template deleted successfully.');
-      setTemplatesList(prev => prev.filter(t => t.id !== templateId));
-    } catch (err) {
-      console.warn('Failed to delete template:', err);
-      Alert.alert('Error', 'Failed to delete routine template.');
-    }
-  };
-
-  const { updateTaskStatus: updateContextTaskStatus } = useTasks();
-  const handleUpdateTaskStatus = async (taskId: string, status: string) => {
-    try {
-      // Route through TaskContext so optimistic update propagates to patient screen too
-      await updateContextTaskStatus(taskId, status as any);
-    } catch (err) {
-      console.warn('Failed to update task status:', err);
-      Alert.alert('Error', 'Failed to update routine task status.');
-    }
-  };
 
   // ── Reminder toast ───────────────────────────────────────────────────────
   const [reminderSentKeys, setReminderSentKeys] = useState<Set<string>>(new Set());
@@ -513,10 +492,6 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             templates={templatesList}
             loading={routinesLoading || tasksLoading}
             onRefresh={loadRoutines}
-            onOpenAdd={() => navigation.navigate('CaregiverRoutineEditorScreen', { patientId, patientName, mode: 'create' })}
-            onOpenEdit={(routine) => navigation.navigate('CaregiverRoutineEditorScreen', { patientId, patientName, mode: 'edit', routine })}
-            onDeleteTemplate={handleDeleteTemplate}
-            onUpdateTaskStatus={handleUpdateTaskStatus}
           />
         ) : (
           <DashboardHomeTab

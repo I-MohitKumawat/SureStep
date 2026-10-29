@@ -18,7 +18,6 @@ import { CaregiverPatientLocationEditScreen } from '../screens/caregiver/Caregiv
 import { CaregiverPatientRoutinesScreen } from '../screens/caregiver/CaregiverPatientRoutinesScreen';
 import { CaregiverPatientAlertsScreen }   from '../screens/caregiver/CaregiverPatientAlertsScreen';
 import { CaregiverPatientShiftsScreen }   from '../screens/caregiver/CaregiverPatientShiftsScreen';
-import { CaregiverRoutineEditorScreen }   from '../screens/caregiver/CaregiverRoutineEditorScreen';
 import { CaregiverGeofenceEditorScreen }  from '../screens/caregiver/CaregiverGeofenceEditorScreen';
 import { CaregiverShiftHandoverScreen }   from '../screens/caregiver/CaregiverShiftHandoverScreen';
 import { CaregiverAssessmentViewScreen }  from '../screens/caregiver/CaregiverAssessmentViewScreen';
@@ -52,7 +51,6 @@ const CaregiverStack: React.FC = () => (
     <Stack.Screen name="CaregiverPatientRoutinesScreen" component={CaregiverPatientRoutinesScreen} />
     <Stack.Screen name="CaregiverPatientAlertsScreen"   component={CaregiverPatientAlertsScreen} />
     <Stack.Screen name="CaregiverPatientShiftsScreen"   component={CaregiverPatientShiftsScreen} />
-    <Stack.Screen name="CaregiverRoutineEditorScreen"   component={CaregiverRoutineEditorScreen} />
     <Stack.Screen name="CaregiverGeofenceEditorScreen"  component={CaregiverGeofenceEditorScreen} />
     <Stack.Screen name="CaregiverShiftHandoverScreen"   component={CaregiverShiftHandoverScreen} options={{ animation: 'slide_from_bottom' }} />
     <Stack.Screen name="CaregiverAlertFeedScreen"       component={CaregiverAlertFeedScreen} />
