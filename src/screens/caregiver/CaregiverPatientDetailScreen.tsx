@@ -46,7 +46,7 @@ import { getPatientProfile } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
 import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { useAlerts } from '../../context/AlertContext';
-import { getRoutineTemplates } from '../../services/taskService';
+import { fetchRoutineDefinitions } from '../../services/routineService';
 import { getCarePlan } from '../../services/carePlanService';
 import {
   fetchPatientRelationship,
@@ -226,10 +226,10 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   // Load templates only — templates change rarely (user-triggered), no need to poll
   const loadTemplates = useCallback(async () => {
     try {
-      const templatesRes = await getRoutineTemplates(patientId);
-      setTemplatesList(templatesRes.data?.data?.templates ?? []);
+      const definitions = await fetchRoutineDefinitions(patientId);
+      setTemplatesList(definitions);
     } catch (err) {
-      console.warn('Failed to load templates:', err);
+      console.warn('Failed to load routines:', err);
     }
   }, [patientId]);
 
@@ -400,7 +400,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
         derivedStatus = 'active';
       } else {
         const isPast = t.scheduledTimestamp ? new Date(t.scheduledTimestamp).getTime() <= nowMs : false;
-        if (t.status === 'missed' || t.status === 'overdue' || isPast) {
+        if (t.status === 'overdue' || isPast) {
           derivedStatus = 'missed';
         } else {
           derivedStatus = 'upcoming';
@@ -449,9 +449,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const routineCallouts = useMemo(() => {
     const out: Array<{ id: string; emoji: string; title: string; message: string; severity: 'high' | 'medium' }> = [];
     for (const t of patientTasks) {
-      if (t.status === 'missed')  out.push({ id: `missed-${t.id}`,  emoji: t.icon ?? '', title: 'Missed routine',     message: t.title, severity: 'high' });
       if (t.status === 'overdue') out.push({ id: `overdue-${t.id}`, emoji: t.icon ?? '', title: 'Overdue — act now',   message: t.title, severity: 'high' });
-      if (t.status === 'unsure')  out.push({ id: `unsure-${t.id}`,  emoji: t.icon ?? '', title: 'Needs follow-up',    message: t.title, severity: 'medium' });
     }
     return out.filter(c => !dismissedCallouts.has(c.id));
   }, [patientTasks, dismissedCallouts]);
@@ -523,10 +521,6 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             onSendReminder={sendReminder}
             onNavigateManage={() => setActiveTab('Manage')}
             onNavigateGeofenceMap={() => navigation.navigate('CaregiverPatientMapScreen', { patientId, patientName })}
-            onNavigateGeofenceEditor={() => navigation.navigate('CaregiverGeofenceEditorScreen', {
-              patientId, patientName,
-              existingZone: zones[0] ? { id: zones[0].id, label: zones[0].label, center: zones[0].center, radiusM: zones[0].radiusM } : null,
-            })}
             relationshipStatus={relStatus}
             carePlan={carePlan}
             onNavigateAssessment={() => navigation.navigate('CaregiverAssessmentScreen', { patientId, patientName })}
@@ -579,8 +573,8 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
               {patientTasks.length === 0 && <Text style={{ color: C.textMuted, textAlign: 'center', marginTop: 24 }}>No routines added yet.</Text>}
               {[
-                { filter: (t: typeof patientTasks[0]) => t.status === 'missed',  bg: '#FEF2F2', border: '#FECACA', label: 'Missed',    dot: '#DC2626', textColor: '#991B1B' },
-                { filter: (t: typeof patientTasks[0]) => t.status === 'pending' || t.status === 'unsure', bg: '#FFFBEB', border: '#FDE68A', label: 'Pending',   dot: '#F59E0B', textColor: '#92400E' },
+                { filter: (t: typeof patientTasks[0]) => t.status === 'overdue', bg: '#FEF2F2', border: '#FECACA', label: 'Overdue',   dot: '#DC2626', textColor: '#991B1B' },
+                { filter: (t: typeof patientTasks[0]) => t.status === 'pending', bg: '#FFFBEB', border: '#FDE68A', label: 'Pending',   dot: '#F59E0B', textColor: '#92400E' },
                 { filter: (t: typeof patientTasks[0]) => t.status === 'done',    bg: '#F0FDF4', border: '#BBF7D0', label: 'Completed', dot: '#10B981', textColor: '#065F46' },
               ].map(section => {
                 const filtered = patientTasks.filter(section.filter);

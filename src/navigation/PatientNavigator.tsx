@@ -14,8 +14,6 @@ import { CognitionProvider }    from '../context/CognitionContext';
 import { FamiliarityProvider }  from '../context/FamiliarityContext';
 import { CaregiverProvider }    from '../context/CaregiverContext';
 
-import { ReminderProvider }      from '../context/ReminderContext';
-import { ReminderOverlay }       from '../components/shared/ReminderOverlay';
 
 import { PatientHomeScreen }       from '../screens/patient/PatientHomeScreen';
 import { PatientFamilyScreen }     from '../screens/patient/PatientFamilyScreen';
@@ -130,10 +128,7 @@ export const PatientNavigator: React.FC = () => (
       <VoiceProvider>
         <TaskProvider>
           <CaregiverProvider>
-            <ReminderProvider>
-              <PatientStack />
-              <ReminderOverlay />
-            </ReminderProvider>
+            <PatientStack />
           </CaregiverProvider>
         </TaskProvider>
       </VoiceProvider>

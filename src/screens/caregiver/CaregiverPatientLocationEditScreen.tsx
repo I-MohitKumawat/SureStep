@@ -21,7 +21,6 @@ import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import {
   fetchPatientGeofences,
-  saveGeofenceZone,
   fetchLatestPatientLocation,
   type GeofenceZone,
   type Coords,
@@ -124,54 +123,10 @@ export const CaregiverPatientLocationEditScreen: React.FC<Props> = ({ navigation
 
   // ─── Event Handlers ────────────────────────────────────────────────────────
 
-  const handleToggleArrival = async (zone: GeofenceZone) => {
-    const updatedZone: GeofenceZone = {
-      ...zone,
-      notifyOnArrival: !zone.notifyOnArrival,
-    };
-    await saveGeofenceZone(updatedZone);
-    setZones(prev => prev.map(z => (z.id === zone.id ? updatedZone : z)));
-  };
-
-  const handleToggleDeparture = async (zone: GeofenceZone) => {
-    const updatedZone: GeofenceZone = {
-      ...zone,
-      notifyOnDeparture: !zone.notifyOnDeparture,
-    };
-    await saveGeofenceZone(updatedZone);
-    setZones(prev => prev.map(z => (z.id === zone.id ? updatedZone : z)));
-  };
-
-  const handleSetBoundaryType = async (zone: GeofenceZone, type: 'soft' | 'hard') => {
-    if (zone.boundaryType === type) return;
-    const updatedZone: GeofenceZone = {
-      ...zone,
-      boundaryType: type,
-    };
-    await saveGeofenceZone(updatedZone);
-    setZones(prev => prev.map(z => (z.id === zone.id ? updatedZone : z)));
-  };
-
-  const handleEditZone = (zone: GeofenceZone) => {
-    navigation.navigate('CaregiverGeofenceEditorScreen', {
-      patientId,
-      patientName: patientName || 'Patient',
-      existingZone: {
-        id: zone.id,
-        label: zone.label,
-        center: zone.center,
-        radiusM: zone.radiusM,
-        boundaryType: zone.boundaryType,
-      },
-    });
-  };
-
-  const handleCreateNewZone = () => {
-    navigation.navigate('CaregiverGeofenceEditorScreen', {
-      patientId,
-      patientName: patientName || 'Patient',
-      existingZone: null,
-    });
+  // Safe Zone CRUD is Circle Owner-only. Caregivers can view monitored zones
+  // but cannot create, edit, toggle, or delete them.
+  const handleEditZone = (_zone: GeofenceZone) => {
+    // Read-only: no navigation to an editor.
   };
 
   // Determine map region centered on patient location or center of first zone
@@ -203,7 +158,7 @@ export const CaregiverPatientLocationEditScreen: React.FC<Props> = ({ navigation
         {/* Title Section */}
         <View style={styles.titleSection}>
           <Text style={styles.mainTitle}>Safe Places</Text>
-          <Text style={styles.subTitle}>Geofence management</Text>
+          <Text style={styles.subTitle}>Monitored by the Circle Owner</Text>
         </View>
 
         {/* Map Preview Card */}
@@ -302,8 +257,8 @@ export const CaregiverPatientLocationEditScreen: React.FC<Props> = ({ navigation
 
             return (
               <View key={z.id} style={styles.placeCard}>
-                {/* Card Top Row */}
-                <Pressable onPress={() => handleEditZone(z)} style={styles.cardHeaderPressable}>
+                {/* Card Top Row — read-only; Safe Zone CRUD is Owner-only */}
+                <View style={styles.cardHeaderPressable}>
                   <View style={[styles.iconContainer, { backgroundColor: theme.bg }]}>
                     {theme.iconType === 'feather' && (
                       <Feather name={theme.icon as any} size={20} color={theme.primary} />
@@ -320,22 +275,18 @@ export const CaregiverPatientLocationEditScreen: React.FC<Props> = ({ navigation
                     <Text style={styles.placeName}>{z.label}</Text>
                     <Text style={styles.placeRadius}>{z.radiusM}m radius</Text>
                   </View>
-
-                  <Feather name="chevron-right" size={20} color="#9CA3AF" />
-                </Pressable>
+                </View>
               </View>
             );
           })
         )}
 
-        {/* Large Create Geofence Button at Bottom */}
-        <Pressable
-          onPress={handleCreateNewZone}
-          style={({ pressed }) => [styles.createGeofenceBtn, pressed && { opacity: 0.85 }]}
-        >
-          <Feather name="plus" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.createGeofenceBtnText}>Create New Geofence</Text>
-        </Pressable>
+        <View style={styles.ownerNote}>
+          <Ionicons name="information-circle-outline" size={16} color="#6B7280" />
+          <Text style={styles.ownerNoteText}>
+            Only the Care Circle Owner can add or change Safe Zones.
+          </Text>
+        </View>
       </ScrollView>
     </ScreenContainer>
   );

@@ -1,8 +1,9 @@
 /**
  * SureStep — src/services/notificationService.ts
  *
- * Frontend API wrapper for all notification, reminder, and settings endpoints.
- * Single import point for all notification-related API calls.
+ * Notification history, read state, preferences, and diagnostic notifications.
+ * Routine reminders are not a V1 entity; routine progress is represented by
+ * canonical routine occurrences.
  */
 import apiClient from './apiClient';
 
@@ -24,23 +25,6 @@ export interface NotificationLog {
   action_link: string | null;
   created_at: string;
   is_test?: boolean;
-}
-
-export interface ReminderLog {
-  id: string;
-  patient_id: string;
-  reference_id: string | null;
-  reference_type: 'ROUTINE' | 'MEDICATION' | 'APPOINTMENT' | 'CUSTOM';
-  title: string;
-  body: string | null;
-  scheduled_at: string;
-  state: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'SNOOZED' | 'MISSED' | 'SKIPPED';
-  snooze_count: number;
-  snoozed_until: string | null;
-  escalation_level: number;
-  history: Array<Record<string, any>>;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface NotificationSettings {
@@ -84,29 +68,6 @@ export async function markAllNotificationsRead(): Promise<void> {
   await apiClient.post('/alerts/read-all');
 }
 
-// ─── Reminders ────────────────────────────────────────────────────────────────
-
-export async function fetchActiveReminders(patientId?: string): Promise<ReminderLog[]> {
-  const params = patientId ? { patientId } : {};
-  const res = await apiClient.get('/alerts/reminders/active', { params });
-  return res.data?.data?.reminders ?? res.data?.reminders ?? [];
-}
-
-export type ReminderAction = 'COMPLETE' | 'SNOOZE' | 'SKIP';
-
-export async function performReminderAction(
-  reminderId: string,
-  action: ReminderAction,
-  snoozeMinutes?: number,
-): Promise<ReminderLog> {
-  const body: Record<string, any> = { action };
-  if (action === 'SNOOZE' && snoozeMinutes) {
-    body.snooze_minutes = snoozeMinutes;
-  }
-  const res = await apiClient.post(`/alerts/reminders/${reminderId}/action`, body);
-  return res.data?.data?.reminder ?? res.data?.reminder;
-}
-
 // ─── Notification Settings ────────────────────────────────────────────────────
 
 export async function fetchNotificationSettings(): Promise<NotificationSettings> {
@@ -126,14 +87,4 @@ export async function updateNotificationSettings(
 export async function triggerTestNotification(): Promise<NotificationLog> {
   const res = await apiClient.post('/alerts/test/notification');
   return res.data?.data?.notification ?? res.data?.notification;
-}
-
-export async function triggerTestReminder(): Promise<ReminderLog> {
-  const res = await apiClient.post('/alerts/test/reminder');
-  return res.data?.data?.reminder ?? res.data?.reminder;
-}
-
-export async function triggerTestEscalation(): Promise<ReminderLog> {
-  const res = await apiClient.post('/alerts/test/escalation');
-  return res.data?.data?.reminder ?? res.data?.reminder;
 }

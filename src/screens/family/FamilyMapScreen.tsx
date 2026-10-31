@@ -270,7 +270,7 @@ export const FamilyMapScreen: React.FC<Props> = ({ navigation, route }) => {
   const checkActiveAlerts = useCallback(async () => {
     try {
       const alertsHistory = await fetchBreachHistory(patientId, 10);
-      const openExits = alertsHistory.filter((a: any) => !a.acknowledgedAt);
+      const openExits = alertsHistory.filter((a: any) => a.status !== 'RESOLVED');
       if (openExits.length > 0 && openExits[0]) {
         const sorted = [...openExits].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         const oldest = sorted[0];

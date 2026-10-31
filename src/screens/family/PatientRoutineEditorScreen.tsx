@@ -31,8 +31,10 @@ import {
   createRoutineDefinition,
   updateRoutineDefinition,
   deleteRoutineDefinition,
-  RoutineInstructionStep,
-  RoutineDefinition,
+  normalizeRoutineCategory,
+  type RoutineCategory,
+  type RoutineDefinition,
+  type RoutineSchedulePattern,
 } from '../../services/routineService';
 
 type Props = NativeStackScreenProps<FamilyStackParams, 'PatientRoutineEditorScreen'>;
@@ -44,13 +46,12 @@ interface StepItem {
   description: string;
 }
 
-const CATEGORIES = [
-  { key: 'MEDICATION', label: 'Medication', icon: 'medical-outline' as const },
-  { key: 'MEAL', label: 'Meal', icon: 'restaurant-outline' as const },
-  { key: 'ACTIVITY', label: 'Activity', icon: 'walk-outline' as const },
-  { key: 'PERSONAL_CARE', label: 'Personal care', icon: 'sparkles-outline' as const },
-  { key: 'HYGIENE', label: 'Hygiene', icon: 'water-outline' as const },
-  { key: 'CUSTOM', label: 'Other', icon: 'ellipsis-horizontal-circle-outline' as const },
+const CATEGORIES: Array<{ key: RoutineCategory; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: 'MEDICATION', label: 'Medication', icon: 'medical-outline' },
+  { key: 'MEAL', label: 'Meal', icon: 'restaurant-outline' },
+  { key: 'EXERCISE', label: 'Activity', icon: 'walk-outline' },
+  { key: 'HYGIENE', label: 'Personal care', icon: 'sparkles-outline' },
+  { key: 'APPOINTMENT', label: 'Appointment', icon: 'calendar-outline' },
 ];
 
 const RECURRENCE_OPTIONS = [
@@ -60,6 +61,27 @@ const RECURRENCE_OPTIONS = [
   { key: 'CUSTOM', label: 'Custom' },
 ];
 
+function recurrenceKeyFromPattern(pattern?: RoutineSchedulePattern): string {
+  if (!pattern || pattern.frequency !== 'WEEKLY') return 'DAILY';
+  const days = pattern.daysOfWeek ?? [];
+  if (days.length === 5 && !days.includes(0) && !days.includes(6)) return 'WEEKDAYS';
+  if (days.length === 2 && days.includes(0) && days.includes(6)) return 'WEEKENDS';
+  return 'CUSTOM';
+}
+
+function schedulePatternFromRecurrence(recurrence: string, time: string): RoutineSchedulePattern {
+  switch (recurrence) {
+    case 'WEEKDAYS':
+      return { frequency: 'WEEKLY', time, daysOfWeek: [1, 2, 3, 4, 5] };
+    case 'WEEKENDS':
+      return { frequency: 'WEEKLY', time, daysOfWeek: [0, 6] };
+    case 'CUSTOM':
+      return { frequency: 'WEEKLY', time, daysOfWeek: [1, 2, 3, 4, 5] };
+    default:
+      return { frequency: 'DAILY', time };
+  }
+}
+
 export const PatientRoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const { patientId, patientName = 'Patient', mode, routine } = route.params;
@@ -68,20 +90,42 @@ export const PatientRoutineEditorScreen: React.FC<Props> = ({ route, navigation 
 
   // Form state
   const [title, setTitle] = useState(existingRoutine?.title ?? '');
-  const [category, setCategory] = useState<string>(existingRoutine?.category ?? 'MEDICATION');
-  const [scheduledTime, setScheduledTime] = useState(existingRoutine?.scheduled_time ?? '08:00');
-  const [recurrence, setRecurrence] = useState(existingRoutine?.recurrence_pattern ?? 'DAILY');
-  const [notes, setNotes] = useState(existingRoutine?.notes ?? '');
+  const [category, setCategory] = useState<RoutineCategory>(
+    existingRoutine?.category ?? 'MEDICATION'
+  );
+  const [scheduledTime, setScheduledTime] = useState(
+    existingRoutine?.schedule_pattern?.time ??
+      existingRoutine?.schedule_pattern?.times?.[0] ??
+      '08:00'
+  );
+  const [recurrence, setRecurrence] = useState(recurrenceKeyFromPattern(existingRoutine?.schedule_pattern));
+  const [notes, setNotes] = useState('');
 
-  // Step instructions
+  // Step instructions (projected from the canonical description field)
   const [steps, setSteps] = useState<StepItem[]>(() => {
-    if (existingRoutine?.instruction_steps && existingRoutine.instruction_steps.length > 0) {
-      return existingRoutine.instruction_steps.map((s, idx) => ({
-        id: `step-${idx}-${Date.now()}`,
-        step_order: s.step_order || idx + 1,
-        title: s.title || '',
-        description: s.description || '',
-      }));
+    const raw = existingRoutine?.description;
+    if (raw) {
+      let lines: string[] = [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          lines = parsed
+            .map((item: any) => (typeof item === 'string' ? item : item?.title ?? item?.text ?? ''))
+            .filter(Boolean);
+        }
+      } catch {
+        lines = raw.split('\n');
+      }
+      if (lines.length === 0) lines = raw.split('\n');
+      const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
+      if (nonEmpty.length > 0) {
+        return nonEmpty.map((line, idx) => ({
+          id: `step-${idx}-${Date.now()}`,
+          step_order: idx + 1,
+          title: line,
+          description: '',
+        }));
+      }
     }
     return [
       { id: 'step-1', step_order: 1, title: '', description: '' },
@@ -142,40 +186,38 @@ export const PatientRoutineEditorScreen: React.FC<Props> = ({ route, navigation 
       return;
     }
 
-    // Filter valid steps
-    const validSteps: RoutineInstructionStep[] = steps
-      .map((s, idx) => ({
-        step_order: idx + 1,
-        title: s.title.trim(),
-        description: s.description.trim() || undefined,
-      }))
-      .filter((s) => s.title.length > 0);
+    // Build the canonical description from the ordered steps.
+    const stepLines = steps
+      .map((s, idx) => {
+        const title = s.title.trim();
+        if (!title) return '';
+        return `${idx + 1}. ${title}${s.description.trim() ? ` — ${s.description.trim()}` : ''}`;
+      })
+      .filter(Boolean);
 
-    if (validSteps.length === 0) {
+    if (stepLines.length === 0) {
       Alert.alert('Required', 'Please provide at least one instruction step with a title.');
       return;
     }
+
+    const description = [stepLines.join('\n'), notes.trim()].filter(Boolean).join('\n\n');
 
     try {
       setSaving(true);
       if (mode === 'edit' && existingRoutine?.id) {
         await updateRoutineDefinition(patientId, existingRoutine.id, {
           title: trimmedTitle,
-          category,
-          scheduled_time: scheduledTime,
-          recurrence_pattern: recurrence,
-          instruction_steps: validSteps,
-          notes: notes.trim() || undefined,
+          category: normalizeRoutineCategory(category),
+          description,
+          schedulePattern: schedulePatternFromRecurrence(recurrence, scheduledTime.trim()),
         });
         Alert.alert('Routine Updated', `${trimmedTitle} has been updated.`);
       } else {
         await createRoutineDefinition(patientId, {
           title: trimmedTitle,
-          category,
-          scheduled_time: scheduledTime,
-          recurrence_pattern: recurrence,
-          instruction_steps: validSteps,
-          notes: notes.trim() || undefined,
+          category: normalizeRoutineCategory(category),
+          description,
+          schedulePattern: schedulePatternFromRecurrence(recurrence, scheduledTime.trim()),
         });
         Alert.alert('Routine Created', `${trimmedTitle} is now active.`);
       }

@@ -9,9 +9,13 @@ import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import type { CaregiverStackParams } from '../../types/navigation.types';
 import {
-  getRoutineTemplates,
-  deactivateRoutineTemplate
-} from '../../services/taskService';
+  fetchRoutineDefinitions,
+  deleteRoutineDefinition,
+  routineTime,
+  routineFrequency,
+  routineDays,
+  type RoutineDefinition,
+} from '../../services/routineService';
 import { useTasks } from '../../context/TaskContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -74,7 +78,7 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
   const canManageDefinitions = user?.role === 'PATIENT';
 
   const [activeTab, setActiveTab] = useState<ScreenTab>('daily_flow');
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<RoutineDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [expandedTemplateIds, setExpandedTemplateIds] = useState<Set<string>>(new Set());
@@ -84,11 +88,11 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
     if (!patientId) return;
     setLoading(true);
     try {
-      const [_, templatesRes] = await Promise.all([
+      const [_, definitions] = await Promise.all([
         loadTasksForPatient(patientId, true),
-        getRoutineTemplates(patientId)
+        fetchRoutineDefinitions(patientId)
       ]);
-      setTemplates(templatesRes.data?.data?.templates ?? []);
+      setTemplates(definitions);
     } catch (err) {
       console.error('[CaregiverPatientRoutines] Failed to fetch routines:', err);
       Alert.alert('Connection Error', 'Could not load patient routines. Please try again.');
@@ -123,21 +127,21 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
     });
   };
 
-  // Update status of today's task instance
-  const handleUpdateStatus = async (taskId: string, targetStatus: string) => {
+  // Sign off a canonical routine occurrence (care participation only).
+  const handleSignOff = async (occurrenceId: string) => {
     try {
-      await updateTaskStatus(taskId, targetStatus.toLowerCase() as any);
+      await updateTaskStatus(occurrenceId, 'done');
     } catch (err) {
-      console.error('[CaregiverPatientRoutines] Status update failed:', err);
-      Alert.alert('Error', 'Failed to update task status. Please retry.');
+      console.error('[CaregiverPatientRoutines] Sign-off failed:', err);
+      Alert.alert('Error', 'Failed to sign off this routine. Please retry.');
     }
   };
 
-  // Soft delete / deactivate routine template
+  // Deactivate a canonical routine definition.
   const handleDeactivateTemplate = (templateId: string, templateTitle: string) => {
     Alert.alert(
       'Deactivate Routine',
-      `Are you sure you want to deactivate the template "${templateTitle}"? This will stop future task generations.`,
+      `Are you sure you want to deactivate "${templateTitle}"? This stops future occurrences.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -146,11 +150,11 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
           onPress: async () => {
             try {
               setTemplates(prev => prev.filter(t => t.id !== templateId));
-              await deactivateRoutineTemplate(templateId);
-              Alert.alert('Success', 'Routine template deactivated.');
+              await deleteRoutineDefinition(patientId!, templateId);
+              Alert.alert('Success', 'Routine definition deactivated.');
             } catch (err) {
-              console.error('[CaregiverPatientRoutines] Failed to deactivate template:', err);
-              Alert.alert('Error', 'Failed to deactivate template.');
+              console.error('[CaregiverPatientRoutines] Failed to deactivate routine:', err);
+              Alert.alert('Error', 'Failed to deactivate routine.');
               void loadData();
             }
           }
@@ -159,43 +163,29 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
     );
   };
 
-  // Format nice recurrence labels
-  const formatRecurrence = (pattern: any) => {
-    if (!pattern) return 'Daily';
-    const type = pattern.type || 'DAILY';
-    if (type === 'DAILY') return 'Every day';
-    if (type === 'WEEKLY') {
-      const days = pattern.days || [];
+  // Format recurrence labels from the canonical schedule pattern.
+  const formatRecurrence = (definition: RoutineDefinition) => {
+    if (routineFrequency(definition) === 'WEEKLY') {
+      const days = routineDays(definition);
       if (days.length === 7) return 'Every day';
       if (days.length === 5 && !days.includes(0) && !days.includes(6)) return 'Weekdays';
       if (days.length === 2 && days.includes(0) && days.includes(6)) return 'Weekends';
-      
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      return `Weekly on ${days.map((d: number) => dayNames[d]).join(', ')}`;
+      return days.length > 0
+        ? `Weekly on ${days.map((d: number) => dayNames[d]).join(', ')}`
+        : 'Weekly';
     }
-    return 'Custom recurrence';
+    return 'Every day';
   };
 
-  // Helper to determine priority styling
-  const getPriorityStyle = (priority: string) => {
-    const clean = (priority || 'medium').toLowerCase();
-    switch (clean) {
-      case 'critical': return { bg: '#FEE2E2', border: '#FCA5A5', text: '#991B1B' };
-      case 'high':     return { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E' };
-      case 'medium':   return { bg: '#DBEAFE', border: '#BFDBFE', text: '#1E40AF' };
-      default:         return { bg: '#F3F4F6', border: '#E5E7EB', text: '#374151' };
-    }
-  };
-
-  // Helper for status badge styling
+  // Helper for status badge styling. Canonical states only.
   const getStatusBadge = (status: string) => {
     const clean = (status || 'pending').toLowerCase();
     switch (clean) {
       case 'done':      return { bg: '#D1FAE5', text: '#065F46', label: 'COMPLETED' };
-      case 'missed':    return { bg: '#FEE2E2', text: '#991B1B', label: 'MISSED' };
       case 'overdue':   return { bg: '#FEF3C7', text: '#92400E', label: 'OVERDUE' };
-      case 'unsure':    return { bg: '#F3E8FF', text: '#6B21A8', label: 'PATIENT UNSURE ⚠️' };
-      default:          return { bg: '#E5E7EB', text: '#374151', label: 'PENDING' };
+      case 'cancelled': return { bg: '#F3F4F6', text: '#6B7280', label: 'CANCELLED' };
+      default:          return { bg: '#E5E7EB', text: '#374151', label: 'SCHEDULED' };
     }
   };
 
@@ -278,20 +268,18 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                     .slice()
                     .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
                     .map((task) => {
-                      const pri = getPriorityStyle(task.priority);
                       const stat = getStatusBadge(task.status);
                       const isExpanded = expandedTaskIds.has(task.id);
-                      const isUnsure = task.status?.toLowerCase() === 'unsure';
 
                       return (
-                        <View key={task.id} style={[styles.card, isUnsure && styles.unsureBorder]}>
-                          {/* Top Row: Time, Priority Badge, Status Badge */}
+                        <View key={task.id} style={styles.card}>
+                          {/* Top Row: Time, Category Badge, Status Badge */}
                           <View style={styles.cardHeader}>
                             <View style={styles.headerLeft}>
                               <Text style={styles.timeLabel}>⏰ {task.time}</Text>
-                              <View style={[styles.badge, { backgroundColor: pri.bg, borderColor: pri.border }]}>
-                                <Text style={[styles.badgeText, { color: pri.text }]}>
-                                  {task.priority?.toUpperCase() || 'MEDIUM'}
+                              <View style={[styles.badge, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}>
+                                <Text style={[styles.badgeText, { color: '#1E40AF' }]}>
+                                  {task.category?.toUpperCase() || 'ROUTINE'}
                                 </Text>
                               </View>
                             </View>
@@ -301,15 +289,6 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                               </Text>
                             </View>
                           </View>
-
-                          {/* Patient Unsure Warning Banner */}
-                          {isUnsure && (
-                            <View style={styles.unsureBanner}>
-                              <Text style={styles.unsureBannerText}>
-                                ⚠️ Patient marked this unsure: they might need verbal guidance or have questions.
-                              </Text>
-                            </View>
-                          )}
 
                           {/* Title & Description */}
                           <Pressable onPress={() => toggleTaskExpanded(task.id)} style={styles.titleSection}>
@@ -337,46 +316,17 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                                 </View>
                               ) : null}
 
-                              {task.caregiverNote ? (
-                                <View style={[styles.sectionBlock, styles.caregiverNoteBlock]}>
-                                  <Text style={[styles.sectionLabel, { color: '#0F766E' }]}>Caregiver Clinical Note</Text>
-                                  <Text style={styles.noteBody}>{task.caregiverNote}</Text>
-                                </View>
-                              ) : null}
-
-                              {task.voiceNoteUrl && (
-                                <View style={styles.audioPlayerPlaceholder}>
-                                  <VolumeIcon />
-                                  <Text style={styles.audioText}>Patient Left Voice Note (Play Audio)</Text>
-                                </View>
-                              )}
                             </View>
                           )}
 
-                          {/* Action Hub Footer */}
+                          {/* Action Hub Footer — sign-off is the only V1 mutation */}
                           <View style={styles.cardActions}>
-                            {task.status?.toLowerCase() !== 'done' ? (
+                            {task.status !== 'done' && task.status !== 'cancelled' && (
                               <Pressable
                                 style={styles.actionBtnSuccess}
-                                onPress={() => handleUpdateStatus(task.id, 'done')}
+                                onPress={() => handleSignOff(task.id)}
                               >
-                                <Text style={styles.actionBtnSuccessText}>Complete</Text>
-                              </Pressable>
-                            ) : (
-                              <Pressable
-                                style={styles.actionBtnOutline}
-                                onPress={() => handleUpdateStatus(task.id, 'pending')}
-                              >
-                                <Text style={styles.actionBtnOutlineText}>Undo</Text>
-                              </Pressable>
-                            )}
-
-                            {task.status?.toLowerCase() !== 'missed' && task.status?.toLowerCase() !== 'done' && (
-                              <Pressable
-                                style={styles.actionBtnDanger}
-                                onPress={() => handleUpdateStatus(task.id, 'missed')}
-                              >
-                                <Text style={styles.actionBtnDangerText}>Mark Missed</Text>
+                                <Text style={styles.actionBtnSuccessText}>Sign Off Complete</Text>
                               </Pressable>
                             )}
                           </View>
@@ -420,20 +370,21 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                 </View>
               ) : (
                 templates.map((template) => {
-                  const pri = getPriorityStyle(template.priority);
                   const isExpanded = expandedTemplateIds.has(template.id);
-                  const times = template.execution_times || [];
+                  const time = routineTime(template);
 
                   return (
                     <View key={template.id} style={styles.card}>
                       <View style={styles.cardHeader}>
                         <View style={styles.headerLeft}>
-                          <View style={[styles.badge, { backgroundColor: pri.bg, borderColor: pri.border }]}>
-                            <Text style={[styles.badgeText, { color: pri.text }]}>
-                              {template.priority?.toUpperCase() || 'MEDIUM'}
+                          <View style={[styles.badge, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}>
+                            <Text style={[styles.badgeText, { color: '#1E40AF' }]}>
+                              {template.category}
                             </Text>
                           </View>
-                          <Text style={styles.categoryPill}>{template.category || 'custom'}</Text>
+                          <Text style={styles.categoryPill}>
+                            {template.is_active ? 'ACTIVE' : 'INACTIVE'}
+                          </Text>
                         </View>
                         {canManageDefinitions && (
                           <View style={styles.cardHeaderActions}>
@@ -465,12 +416,12 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                       {/* Main Clickable Title */}
                       <Pressable onPress={() => toggleTemplateExpanded(template.id)} style={styles.titleSection}>
                         <View style={styles.categoryCircle}>
-                          <Text style={styles.categoryEmoji}>{template.icon_name || '📅'}</Text>
+                          <Text style={styles.categoryEmoji}>📅</Text>
                         </View>
                         <View style={styles.titleTextWrap}>
                           <Text style={styles.cardTitle}>{template.title}</Text>
                           <Text style={styles.scheduleText}>
-                            🔁 {formatRecurrence(template.recurrence_pattern)}
+                            🔁 {formatRecurrence(template)}
                           </Text>
                         </View>
                         <View style={styles.chevron}>
@@ -478,60 +429,25 @@ export const CaregiverPatientRoutinesScreen: React.FC<Props> = ({ navigation, ro
                         </View>
                       </Pressable>
 
-                      {/* Execution Times Quick Info */}
+                      {/* Scheduled Time Quick Info */}
                       <View style={styles.timesStrip}>
-                        <Text style={styles.timesLabelText}>⏰ Scheduled Times:</Text>
+                        <Text style={styles.timesLabelText}>⏰ Scheduled Time:</Text>
                         <View style={styles.timesListRow}>
-                          {times.length > 0 ? (
-                            times.map((et: any) => (
-                              <View key={et.id} style={styles.timeTag}>
-                                <Text style={styles.timeTagText}>{et.scheduled_time.slice(0, 5)}</Text>
-                              </View>
-                            ))
-                          ) : (
-                            <Text style={styles.noTimesText}>No execution times setup</Text>
-                          )}
+                          <View style={styles.timeTag}>
+                            <Text style={styles.timeTagText}>{time}</Text>
+                          </View>
                         </View>
                       </View>
 
                       {/* Expanded Section */}
                       {isExpanded && (
                         <View style={styles.expandedContent}>
-                          {template.instructions_md ? (
+                          {template.description ? (
                             <View style={styles.sectionBlock}>
-                              <Text style={styles.sectionLabel}>Patient Instructions (Markdown)</Text>
-                              <Text style={styles.markdownBody}>{template.instructions_md}</Text>
+                              <Text style={styles.sectionLabel}>Instructions</Text>
+                              <Text style={styles.markdownBody}>{template.description}</Text>
                             </View>
                           ) : null}
-
-                          {template.caregiver_notes ? (
-                            <View style={[styles.sectionBlock, styles.caregiverNoteBlock]}>
-                              <Text style={[styles.sectionLabel, { color: '#0F766E' }]}>Caregiver Clinical Note</Text>
-                              <Text style={styles.noteBody}>{template.caregiver_notes}</Text>
-                            </View>
-                          ) : null}
-
-                          {/* Attachments */}
-                          <View style={styles.sectionBlock}>
-                            <Text style={styles.sectionLabel}>Medical Attachments</Text>
-                            {template.attachments && template.attachments.length > 0 ? (
-                              template.attachments.map((att: any) => (
-                                <Pressable
-                                  key={att.id}
-                                  style={styles.attachmentLink}
-                                  onPress={() => Alert.alert('View File', `Opening attachment: ${att.display_name || 'Medical File'}`)}
-                                >
-                                  <PaperclipIcon />
-                                  <Text style={styles.attachmentName} numberOfLines={1}>
-                                    {att.display_name || 'Routine Document'}
-                                  </Text>
-                                  <Text style={styles.attachmentType}>{att.file_type?.toUpperCase()}</Text>
-                                </Pressable>
-                              ))
-                            ) : (
-                              <Text style={styles.noAttachments}>No documents attached to this routine.</Text>
-                            )}
-                          </View>
                         </View>
                       )}
                     </View>

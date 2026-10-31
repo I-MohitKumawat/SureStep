@@ -95,10 +95,9 @@ export const DashboardManageTab: React.FC<Props> = ({
 
   const getRecurrenceText = (pattern: any) => {
     if (!pattern) return 'Daily';
-    if (pattern.type === 'DAILY') return 'Daily';
-    if (pattern.type === 'WEEKLY' && pattern.days) {
+    if (pattern.frequency === 'WEEKLY' && pattern.daysOfWeek) {
       const daysMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      return `Weekly on ${pattern.days.map((d: number) => daysMap[d]).join(', ')}`;
+      return `Weekly on ${pattern.daysOfWeek.map((d: number) => daysMap[d]).join(', ')}`;
     }
     return 'Daily';
   };
@@ -212,9 +211,8 @@ export const DashboardManageTab: React.FC<Props> = ({
             sortedTasks.map(task => {
               const isExpanded = expandedTaskIds.has(task.id);
               const isDone = task.status === 'done';
-              const isUnsure = task.status === 'unsure';
-              const isMissed = task.status === 'missed';
               const isOverdue = task.status === 'overdue';
+              const isCancelled = task.status === 'cancelled';
 
               return (
                 <View key={task.id} style={[styles.card, isDone && styles.cardDone]}>
@@ -231,8 +229,7 @@ export const DashboardManageTab: React.FC<Props> = ({
                       <View style={styles.timeRow}>
                         <Text style={styles.timeText}>{task.time || (task.scheduled_time ? task.scheduled_time.slice(0, 5) : '')}</Text>
                         {isDone && <View style={[styles.badge, styles.badgeDone]}><Text style={styles.badgeTextDone}>DONE</Text></View>}
-                        {isUnsure && <View style={[styles.badge, styles.badgeUnsure]}><Text style={styles.badgeTextUnsure}>UNSURE</Text></View>}
-                        {isMissed && <View style={[styles.badge, styles.badgeMissed]}><Text style={styles.badgeTextMissed}>MISSED</Text></View>}
+                        {isCancelled && <View style={[styles.badge, styles.badgeMissed]}><Text style={styles.badgeTextMissed}>CANCELLED</Text></View>}
                         {isOverdue && <View style={[styles.badge, styles.badgeOverdue]}><Text style={styles.badgeTextOverdue}>OVERDUE</Text></View>}
                       </View>
                       <Text style={[styles.taskTitle, isDone && styles.textCrossed]}>{task.title}</Text>
@@ -278,7 +275,7 @@ export const DashboardManageTab: React.FC<Props> = ({
                     onPress={() => toggleTemplateExpand(template.id)}
                   >
                     <View style={[styles.emojiCircle, { backgroundColor: '#F1F5F9' }]}>
-                      <Text style={styles.emojiText}>{template.icon_name ?? '📋'}</Text>
+                      <Text style={styles.emojiText}>📋</Text>
                     </View>
 
                     <View style={styles.cardTitleBlock}>
@@ -287,13 +284,16 @@ export const DashboardManageTab: React.FC<Props> = ({
                         <View style={styles.metaTag}>
                           <ClockIcon />
                           <Text style={styles.metaTagText}>
-                            {template.execution_times?.map((et: any) => et.scheduled_time.slice(0, 5)).join(', ') || 'No times'}
+                            {(template.schedule_pattern?.times?.length
+                              ? template.schedule_pattern.times
+                              : [template.schedule_pattern?.time].filter(Boolean)
+                            ).join(', ') || 'No times'}
                           </Text>
                         </View>
                         <View style={styles.metaTag}>
                           <CalendarIcon />
                           <Text style={styles.metaTagText}>
-                            {getRecurrenceText(template.recurrence_pattern)}
+                            {getRecurrenceText(template.schedule_pattern)}
                           </Text>
                         </View>
                       </View>
@@ -308,7 +308,7 @@ export const DashboardManageTab: React.FC<Props> = ({
                   {isExpanded && (
                     <View style={styles.instructionsContainer}>
                       <Text style={styles.instructionsHeader}>CARE PLAN INSTRUCTIONS</Text>
-                      {renderSteps(template.instructions_md)}
+                      {renderSteps(template.description)}
                     </View>
                   )}
                 </View>

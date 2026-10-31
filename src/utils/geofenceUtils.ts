@@ -1,18 +1,20 @@
 /**
  * SureStep — src/utils/geofenceUtils.ts
  *
- * Geofence utility functions connecting to the real Express backend API.
- * Uses AsyncStorage as a write-through cache for offline resilience.
+ * Read-only Safe Zone projection, breach evaluation, location ping, and
+ * patient telemetry helpers.
  *
- * Architecture:
- *   fetchPatientGeofences  → GET /location/geofences/patient/:id
- *   saveGeofenceZone       → POST/PATCH /location/geofences/...
- *   deleteGeofenceZone     → DELETE /location/geofences/:id
- *   writeLocationPing      → POST /location/ping
- *   fetchLatestPatientLocation → GET /location/patient/:id/current
+ * Canonical Safe Zones are Circle-owned and served by
+ * /api/v1/care-circles/:circleId/safe-zones through careCircleService.
+ * There is no separate geofence CRUD API in V1.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as geofenceSvc from '../services/geofenceService';
+import {
+  listSafeZonesForPatient,
+  resolveCircleIdForPatient,
+  type SafeZoneItem,
+} from '../services/careCircleService';
+import { listCircleSafetyAlerts } from '../services/safetyService';
 import locationSvc from '../services/locationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,10 +29,6 @@ export type GeofenceZone = {
   radiusM: number;
   isActive: boolean;
   boundaryType: 'soft' | 'hard';
-  createdBy?: string;
-  notifyOnArrival?: boolean;
-  notifyOnDeparture?: boolean;
-  colour?: string;
 };
 
 export type BreachStatus =
@@ -47,30 +45,23 @@ export type BreachAlert = {
   distanceM: number | null;
   acknowledgedAt: string | null;
   createdAt: string;
+  status: 'TRIGGERED' | 'ACTIVE' | 'VIEWED' | 'RESOLVED' | string;
   zoneLabel?: string;
 };
 
-// Distance at which we show the "approaching boundary" warning (fraction of radius)
-const APPROACH_FRACTION = 0.80;   // 80% of radius reached → amber warning
+const APPROACH_FRACTION = 0.80;
 
-const CACHE_KEY_PREFIX = '@surestep:zones_cache:';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+// ─── Canonical Safe Zone → display projection ────────────────────────────────
 
-// ─── API Zone → GeofenceZone mapper ──────────────────────────────────────────
-
-function apiZoneToLocal(z: geofenceSvc.ApiZone): GeofenceZone {
+function safeZoneToLocal(zone: SafeZoneItem, patientId: string): GeofenceZone {
   return {
-    id: z.id,
-    patientId: z.patient_id,
-    label: z.label,
-    center: { latitude: z.center_lat, longitude: z.center_lng },
-    radiusM: z.radius_m,
-    isActive: z.is_active,
-    boundaryType: z.boundary_type === 'HARD' ? 'hard' : 'soft',
-    createdBy: z.created_by,
-    notifyOnArrival: z.notify_on_arrival,
-    notifyOnDeparture: z.notify_on_departure,
-    colour: z.colour,
+    id: zone.id,
+    patientId,
+    label: zone.name,
+    center: { latitude: Number(zone.center_lat), longitude: Number(zone.center_lng) },
+    radiusM: Number(zone.radius_meters),
+    isActive: zone.is_active !== false,
+    boundaryType: zone.boundary_type === 'hard' ? 'hard' : 'soft',
   };
 }
 
@@ -132,73 +123,16 @@ export function checkBreach(coords: Coords, zones: GeofenceZone[]): BreachStatus
   };
 }
 
-// ─── API-backed CRUD with AsyncStorage cache ──────────────────────────────────
+// ─── Canonical Safe Zone reads ────────────────────────────────────────────────
 
-/** Fetch zones from backend API; fall back to cache on network failure. */
+/** Fetch canonical Safe Zones that monitor this Patient. */
 export async function fetchPatientGeofences(patientId: string): Promise<GeofenceZone[]> {
-  const cacheKey = CACHE_KEY_PREFIX + patientId;
-
   try {
-    const apiZones = await geofenceSvc.fetchZones(patientId);
-    const zones = apiZones.map(apiZoneToLocal);
-
-    // Write-through cache
-    await AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), zones }));
-    return zones;
+    const zones = await listSafeZonesForPatient(patientId);
+    return zones.map((zone) => safeZoneToLocal(zone, patientId));
   } catch (err) {
-    console.warn('[geofenceUtils] API fetch failed, falling back to cache:', err);
-
-    const cached = await AsyncStorage.getItem(cacheKey);
-    if (cached) {
-      const { zones } = JSON.parse(cached) as { ts: number; zones: GeofenceZone[] };
-      return zones;
-    }
+    console.warn('[geofenceUtils] canonical Safe Zone fetch failed:', err);
     return [];
-  }
-}
-
-/** Save a zone via API; updates cache on success. */
-export async function saveGeofenceZone(
-  zone: Omit<GeofenceZone, 'id'> & { id?: string },
-): Promise<GeofenceZone> {
-  const payload: geofenceSvc.CreateZonePayload = {
-    label: zone.label,
-    center_lat: zone.center.latitude,
-    center_lng: zone.center.longitude,
-    radius_m: zone.radiusM,
-    boundary_type: zone.boundaryType === 'hard' ? 'HARD' : 'SOFT',
-    notify_on_arrival: zone.notifyOnArrival ?? true,
-    notify_on_departure: zone.notifyOnDeparture ?? true,
-    colour: zone.colour,
-  };
-
-  let saved: geofenceSvc.ApiZone;
-  if (zone.id) {
-    saved = await geofenceSvc.updateZone(zone.id, payload);
-  } else {
-    saved = await geofenceSvc.createZone(zone.patientId, payload);
-  }
-
-  const result = apiZoneToLocal(saved);
-
-  // Invalidate cache so next fetch is fresh
-  await AsyncStorage.removeItem(CACHE_KEY_PREFIX + zone.patientId);
-
-  return result;
-}
-
-/** Delete a zone via API. Returns true on success. */
-export async function deleteGeofenceZone(id: string): Promise<boolean> {
-  try {
-    await geofenceSvc.deleteZone(id);
-    // Invalidate all zone caches (we don't know which patient)
-    const keys = await AsyncStorage.getAllKeys();
-    const cacheKeys = keys.filter((k) => k.startsWith(CACHE_KEY_PREFIX));
-    if (cacheKeys.length > 0) await AsyncStorage.multiRemove(cacheKeys);
-    return true;
-  } catch (err) {
-    console.error('[geofenceUtils] deleteGeofenceZone failed:', err);
-    return false;
   }
 }
 
@@ -225,20 +159,18 @@ export async function writeLocationPing(params: {
     heading: params.heading,
     battery_pct: params.batteryPct,
     network_status: params.networkStatus,
-    source: params.source === 'background' ? 'PHONE' : 'PHONE',
+    source: 'PHONE',
     recorded_at: new Date().toISOString(),
   };
 
   try {
     await locationSvc.postPing(ping);
 
-    // Flush offline queue on success
     const queued = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
     if (queued) {
       const pings = JSON.parse(queued);
       if (pings.length > 0) {
         try {
-          // Lazy import to avoid circular dep
           const { default: apiClient } = await import('./apiClientImport');
           await apiClient.post('/location/pings/sync', pings);
           await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY);
@@ -246,10 +178,8 @@ export async function writeLocationPing(params: {
       }
     }
   } catch (_) {
-    // Network unavailable — queue for later batch sync
     const queued = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
     const existing: any[] = queued ? JSON.parse(queued) : [];
-    // Cap queue at 100 pings to prevent unbounded growth
     const updated = [...existing, ping].slice(-100);
     await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(updated));
   }
@@ -276,7 +206,6 @@ export async function fetchLatestPatientLocation(
   }
 }
 
-
 /** Fetch the last N location pings for trail display. */
 export async function fetchLocationTrail(
   patientId: string,
@@ -294,62 +223,45 @@ export async function fetchLocationTrail(
   }
 }
 
-/** Log a breach alert (called from background task). */
-export async function logBreachAlert(params: {
+/** Log a breach alert (called from background task). Handled server-side. */
+export async function logBreachAlert(_params: {
   patientId: string;
   geofenceId: string | null;
   breachType: 'exit' | 'enter';
   coords: Coords;
   distanceM: number;
 }): Promise<string | null> {
-  // The backend awareness engine creates alerts automatically on ping processing.
-  // This is a no-op from the client side — backend handles deduplication.
-  console.log('[geofenceUtils] logBreachAlert: handled server-side via ping evaluation');
   return null;
 }
 
-/** Acknowledge an alert. */
-export async function acknowledgeAlert(alertId: string, _byPhone: string): Promise<void> {
-  try {
-    await geofenceSvc.acknowledgeAlert(alertId);
-  } catch (err) {
-    console.error('[geofenceUtils] acknowledgeAlert failed:', err);
-  }
-}
-
-/** Fetch breach alert history. */
+/**
+ * Fetch canonical safety alert history for a Patient's Circle.
+ * Responding does not resolve an alert; status remains ACTIVE/VIEWED until the
+ * Circle Owner explicitly resolves it.
+ */
 export async function fetchBreachHistory(
   patientId: string,
   limit = 10,
 ): Promise<BreachAlert[]> {
   try {
-    const { alerts } = await geofenceSvc.fetchAlerts(patientId, { limit });
-    return alerts.map((a) => ({
-      id: a.id,
-      breachType: a.alert_type === 'ZONE_EXIT' ? 'exit' : 'enter',
-      latitude: a.lat,
-      longitude: a.lng,
-      distanceM: a.distance_from_zone_m ?? null,
-      acknowledgedAt: a.acknowledged_at ?? null,
-      createdAt: a.created_at,
-    }));
+    const circleId = await resolveCircleIdForPatient(patientId);
+    if (!circleId) return [];
+    const alerts = await listCircleSafetyAlerts(circleId);
+    return alerts
+      .filter((a) => a.patient_id === patientId)
+      .slice(0, limit)
+      .map((a) => ({
+        id: a.id,
+        breachType: 'exit' as const,
+        latitude: a.lat ?? null,
+        longitude: a.lng ?? null,
+        distanceM: a.distance_from_zone_m ?? null,
+        acknowledgedAt: a.status === 'TRIGGERED' ? null : a.created_at,
+        createdAt: a.created_at,
+        status: a.status,
+        zoneLabel: a.zone_name ?? undefined,
+      }));
   } catch {
     return [];
   }
 }
-
-/** Subscribe to live patient location via WebSocket (handled by GeofenceContext). */
-export function subscribeToPatientLocation(
-  _patientId: string,
-  _onUpdate: (coords: Coords & { recordedAt: number }) => void,
-): () => void {
-  // WebSocket subscription is managed by GeofenceContext — this is a no-op stub
-  // to maintain backwards compatibility with callers.
-  return () => { };
-}
-
-// Legacy export kept for existing callers
-export const DEFAULT_GEOFENCE = {
-  center: { latitude: 12.9716, longitude: 77.5946 },
-  radiusM: 300,
-};

@@ -36,7 +36,7 @@ import {
   TaskInstructionsModal,
   type TaskInstructionData,
 } from '../../components/patient/TaskInstructionsModal';
-import * as taskService from '../../services/taskService';
+import { signOffOccurrence } from '../../services/routineService';
 
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientHomeScreen'>;
 
@@ -109,39 +109,12 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
           rawOccurrences = occRes.data.data.occurrences;
         }
 
-        // 2. Cross-reference with routine templates to attach photos and instruction steps if available
-        let templateMap: Record<string, any> = {};
-        try {
-          const tplRes = await taskService.getRoutineTemplates(patientId);
-          const templates = tplRes?.data?.data?.templates || tplRes?.data?.templates || [];
-          for (const tpl of templates) {
-            templateMap[tpl.id] = tpl;
-          }
-        } catch {
-          // Non-blocking fallback
-        }
-
-        // Merge instruction steps / media into occurrences
-        const enrichedOccurrences: RoutineOccurrence[] = rawOccurrences.map((occ) => {
-          const tpl = templateMap[occ.routine_id];
-          let photo = occ.photo_url || null;
-          let instructions = occ.instructions_md || occ.description || null;
-
-          if (tpl) {
-            if (!photo && tpl.attachments && tpl.attachments.length > 0) {
-              photo = tpl.attachments[0].file_url || null;
-            }
-            if (!instructions && tpl.instructions_md) {
-              instructions = tpl.instructions_md;
-            }
-          }
-
-          return {
-            ...occ,
-            photo_url: photo,
-            instructions_md: instructions,
-          };
-        });
+        // 2. Canonical occurrences join the definition description directly.
+        const enrichedOccurrences: RoutineOccurrence[] = rawOccurrences.map((occ) => ({
+          ...occ,
+          photo_url: occ.photo_url || null,
+          instructions_md: occ.instructions_md || occ.description || null,
+        }));
 
         setOccurrences(enrichedOccurrences);
 
@@ -228,9 +201,7 @@ export const PatientHomeScreen: React.FC<Props> = ({ navigation, route }) => {
       setSubmittingId(occurrenceId);
       try {
         // Authoritative occurrence sign-off request
-        await apiClient.post(`/routines/occurrences/${occurrenceId}/sign-off`, {
-          notes: 'Completed by patient',
-        });
+        await signOffOccurrence(occurrenceId, 'Completed by patient');
 
         // Update local state optimistically then refetch
         setOccurrences((prev) =>

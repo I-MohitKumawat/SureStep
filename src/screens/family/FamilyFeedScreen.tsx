@@ -174,8 +174,8 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
 
   const filteredTasks = patientTasks.filter((t: any) => {
     if (activeFilter === 'done') return t.status === 'done';
-    if (activeFilter === 'missed') return t.status === 'missed' || t.status === 'overdue';
-    if (activeFilter === 'pending') return t.status !== 'done' && t.status !== 'missed' && t.status !== 'overdue';
+    if (activeFilter === 'missed') return t.status === 'overdue';
+    if (activeFilter === 'pending') return t.status !== 'done' && t.status !== 'overdue' && t.status !== 'cancelled';
     return true;
   });
 
@@ -371,8 +371,8 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
               {([
                 { key: 'all', label: 'All', count: patientTasks.length, activeBg: '#E2E8F0', activeText: '#1A1C1E', color: C.textMuted },
                 { key: 'done', label: 'Completed', count: patientTasks.filter(t => t.status === 'done').length, activeBg: '#DCFCE7', activeText: '#166534', color: '#22C55E' },
-                { key: 'pending', label: 'Pending', count: patientTasks.filter(t => t.status !== 'done' && t.status !== 'missed' && t.status !== 'overdue').length, activeBg: '#FFFBEB', activeText: '#92400E', color: '#F59E0B' },
-                { key: 'missed', label: 'Missed', count: patientTasks.filter(t => t.status === 'missed' || t.status === 'overdue').length, activeBg: '#FEE2E2', activeText: '#991B1B', color: '#EF4444' },
+                { key: 'pending', label: 'Pending', count: patientTasks.filter(t => t.status !== 'done' && t.status !== 'overdue' && t.status !== 'cancelled').length, activeBg: '#FFFBEB', activeText: '#92400E', color: '#F59E0B' },
+                { key: 'missed', label: 'Overdue', count: patientTasks.filter(t => t.status === 'overdue').length, activeBg: '#FEE2E2', activeText: '#991B1B', color: '#EF4444' },
               ] as const).map(f => {
                 const isActive = activeFilter === f.key;
                 return (
@@ -399,7 +399,7 @@ export const FamilyFeedScreen: React.FC<Props> = ({ navigation }) => {
                 key: t.id,
                 title: t.title,
                 category: t.category ?? 'custom',
-                status: t.status === 'done' ? 'completed' : (t.status === 'missed' || t.status === 'overdue' ? 'missed' : 'upcoming'),
+                status: t.status === 'done' ? 'completed' : (t.status === 'overdue' ? 'missed' : 'upcoming'),
                 meta: t.time,
               };
               return (

@@ -33,6 +33,9 @@ import {
   fetchRoutineDefinitions,
   updateRoutineDefinition,
   deleteRoutineDefinition,
+  routineTime,
+  routineFrequency,
+  routineDays,
   type RoutineDefinition,
 } from '../../services/routineService';
 import type { FamilyStackParams } from '../../types/navigation.types';
@@ -83,13 +86,13 @@ export const PatientRoutinesScreen: React.FC = () => {
   };
 
   const handleToggleStatus = async (routine: RoutineDefinition) => {
-    const nextStatus = routine.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    const nextActive = !routine.is_active;
     try {
       // Optimistic update
       setRoutines((prev) =>
-        prev.map((r) => (r.id === routine.id ? { ...r, status: nextStatus } : r))
+        prev.map((r) => (r.id === routine.id ? { ...r, is_active: nextActive } : r))
       );
-      await updateRoutineDefinition(patientId, routine.id, { status: nextStatus });
+      await updateRoutineDefinition(patientId, routine.id, { isActive: nextActive });
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.error?.message || 'Failed to update routine status.');
       void loadRoutines();
@@ -127,21 +130,24 @@ export const PatientRoutinesScreen: React.FC = () => {
     if (c === 'MEAL') {
       return { icon: 'food-fork-drink', bg: '#FEF3C7', color: '#D97706', label: 'Meal' };
     }
-    if (c === 'ACTIVITY') {
+    if (c === 'EXERCISE' || c === 'ACTIVITY') {
       return { icon: 'walk', bg: '#D1FAE5', color: '#059669', label: 'Activity' };
     }
     if (c === 'HYGIENE' || c === 'PERSONAL_CARE') {
       return { icon: 'shower', bg: '#DBEAFE', color: '#2563EB', label: 'Personal care' };
     }
+    if (c === 'APPOINTMENT') {
+      return { icon: 'calendar-clock', bg: '#E0E7FF', color: '#4338CA', label: 'Appointment' };
+    }
     return { icon: 'brain', bg: '#EDE9FE', color: '#7C3AED', label: 'Routine' };
   };
 
-  const activeCount = routines.filter((r) => r.status === 'ACTIVE').length;
-  const pausedCount = routines.filter((r) => r.status === 'PAUSED').length;
+  const activeCount = routines.filter((r) => r.is_active).length;
+  const pausedCount = routines.filter((r) => !r.is_active).length;
 
   const filteredRoutines = routines.filter((r) => {
-    if (filter === 'ACTIVE') return r.status === 'ACTIVE';
-    if (filter === 'PAUSED') return r.status === 'PAUSED';
+    if (filter === 'ACTIVE') return r.is_active;
+    if (filter === 'PAUSED') return !r.is_active;
     return true;
   });
 
@@ -236,7 +242,18 @@ export const PatientRoutinesScreen: React.FC = () => {
         ) : (
           filteredRoutines.map((routine) => {
             const theme = getCategoryTheme(routine.category);
-            const isActive = routine.status === 'ACTIVE';
+            const isActive = routine.is_active;
+            const days = routineDays(routine);
+            const recurrenceLabel =
+              routineFrequency(routine) === 'DAILY'
+                ? 'Every day'
+                : days.length === 5 && !days.includes(0) && !days.includes(6)
+                  ? 'Weekdays'
+                  : days.length === 2 && days.includes(0) && days.includes(6)
+                    ? 'Weekends'
+                    : days.length > 0
+                      ? `Weekly on ${days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}`
+                      : 'Weekly';
 
             return (
               <View key={routine.id} style={styles.routineCard}>
@@ -259,13 +276,13 @@ export const PatientRoutinesScreen: React.FC = () => {
 
                     <View style={styles.routineTimeRow}>
                       <Ionicons name="time-outline" size={14} color="#52605D" style={{ marginRight: 4 }} />
-                      <Text style={styles.routineTimeText}>{routine.scheduled_time || '8:00 AM'}</Text>
+                      <Text style={styles.routineTimeText}>{routineTime(routine)}</Text>
                     </View>
 
                     <View style={styles.routineRepeatRow}>
                       <Ionicons name="calendar-outline" size={14} color="#52605D" style={{ marginRight: 4 }} />
                       <Text style={styles.routineRepeatText}>
-                        {routine.recurrence_pattern || 'Every day'}
+                        {recurrenceLabel}
                       </Text>
                     </View>
                   </View>
@@ -331,13 +348,13 @@ export const PatientRoutinesScreen: React.FC = () => {
               }}
             >
               <Feather
-                name={activeMenuRoutine?.status === 'ACTIVE' ? 'pause-circle' : 'play-circle'}
+                name={activeMenuRoutine?.is_active ? 'pause-circle' : 'play-circle'}
                 size={16}
                 color="#161E1C"
                 style={{ marginRight: 12 }}
               />
               <Text style={styles.menuItemText}>
-                {activeMenuRoutine?.status === 'ACTIVE' ? 'Pause routine' : 'Resume routine'}
+                {activeMenuRoutine?.is_active ? 'Pause routine' : 'Resume routine'}
               </Text>
             </Pressable>
 

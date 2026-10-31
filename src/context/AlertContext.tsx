@@ -1,17 +1,21 @@
 /**
  * SureStep — src/context/AlertContext.tsx
- * Unread alert count and feed for caregiver and family.
- * Single source of truth for all safety and telemetry-related alerts.
+ * Canonical safety-alert store for caregivers and family.
+ *
+ * Alert lifecycle: TRIGGERED -> ACTIVE/VIEWED -> RESOLVED.
+ * Responding records a responder action and never resolves an incident.
+ * Resolution is Circle Owner-only and is enforced by the API.
  */
 import React, { createContext, useContext, useMemo, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { getSocket } from '../services/socketClient';
 import {
-  fetchAlerts as fetchAlertsApi,
-  acknowledgeAlert as acknowledgeAlertApi,
-  respondAlert as respondAlertApi,
-  resolveActiveIncident,
-  type ApiAlert,
-} from '../services/geofenceService';
+  listPatientSafetyAlerts,
+  listCircleSafetyAlerts,
+  respondToAlert as respondToAlertApi,
+  resolveAlert as resolveAlertApi,
+  type SafetyAlert,
+} from '../services/safetyService';
+import { resolveCircleIdForPatient } from '../services/careCircleService';
 
 export type AlertSeverity = 'URGENT' | 'WARNING' | 'INFO';
 export type AlertProgressStatus = 'new' | 'acknowledged' | 'responding' | 'resolved';
@@ -19,12 +23,13 @@ export type AlertProgressStatus = 'new' | 'acknowledged' | 'responding' | 'resol
 export interface PatientAlert {
   id: string;
   patientId: string;
+  circleId: string;
   title: string;
   description: string;
   timestamp: string;
   severity: AlertSeverity;
   status: AlertProgressStatus;
-  geofenceId?: string;
+  zoneName?: string | null;
   escalationLevel?: number;
   responderName?: string | null;
   responderRole?: string | null;
@@ -34,8 +39,10 @@ type AlertContextValue = {
   alerts: PatientAlert[];
   getAlertsForPatient: (patientId: string) => PatientAlert[];
   getUnackedCountForPatient: (patientId: string) => number;
+  /** Records "I'm Responding"; it does not resolve the alert. */
   acknowledgeAlert: (alertId: string) => Promise<void>;
   respondToAlert: (alertId: string) => Promise<void>;
+  /** Circle Owner only. Rejected by the API for non-Owners. */
   resolveAlert: (alertId: string) => Promise<void>;
   addAlert: (alert: Omit<PatientAlert, 'id' | 'timestamp' | 'status'>) => void;
   unreadCount: number;
@@ -55,46 +62,41 @@ const formatTimestamp = (dateStr: string) => {
   }
 };
 
-const mapApiAlertToPatientAlert = (alert: ApiAlert): PatientAlert => {
+const mapApiAlertToPatientAlert = (alert: SafetyAlert): PatientAlert => {
   const patientName = alert.patient_name || 'Patient';
-  
-  let title = 'Safety Alert';
-  if (alert.alert_type === 'SOS_TRIGGERED') title = 'Emergency – SOS Triggered';
-  else if (alert.alert_type === 'GEOFENCE_BREACH' || alert.alert_type === 'ZONE_EXIT') title = 'Geofence Breach – Left Safe Zone';
-  else if (alert.alert_type === 'ZONE_ENTER') title = 'Returned to Safe Zone';
-  else if (alert.alert_type === 'BATTERY_LOW') title = 'Battery Low';
 
-  let description = `An alert of type ${alert.alert_type} was generated.`;
-  if (alert.alert_type === 'SOS_TRIGGERED') {
-    description = `${patientName} triggered an SOS emergency signal. Help is required immediately.`;
-  } else if (alert.alert_type === 'GEOFENCE_BREACH' || alert.alert_type === 'ZONE_EXIT') {
-    const dist = alert.distance_from_zone_m ? `${Math.round(alert.distance_from_zone_m)}m` : '';
-    description = `${patientName} has exited the safe boundary ${dist ? `and is ${dist} away` : ''}.`;
-  } else if (alert.alert_type === 'ZONE_ENTER') {
-    description = `${patientName} has returned to the safe zone.`;
-  } else if (alert.alert_type === 'BATTERY_LOW') {
-    description = `${patientName}'s device battery is critically low.`;
-  }
+  const title = alert.alert_type === 'SOS_MANUAL'
+    ? 'Emergency – SOS Triggered'
+    : 'Left Safe Zone';
+
+  const description = alert.alert_type === 'SOS_MANUAL'
+    ? `${patientName} triggered an SOS emergency signal. Help is required immediately.`
+    : `${patientName} moved outside the designated ${alert.zone_name || 'safe zone'}.`;
 
   let severity: AlertSeverity = 'INFO';
-  if (alert.severity === 'CRITICAL' || (alert.severity as string) === 'URGENT') severity = 'URGENT';
+  if (alert.severity === 'CRITICAL') severity = 'URGENT';
   else if (alert.severity === 'WARNING') severity = 'WARNING';
 
   let status: AlertProgressStatus = 'new';
-  if (alert.status === 'ACKNOWLEDGED') status = 'acknowledged';
-  else if (alert.status === 'RESPONDING') status = 'responding';
-  else if (alert.status === 'RESOLVED') status = 'resolved';
+  if (alert.status === 'RESOLVED') status = 'resolved';
+  else if (alert.status === 'ACTIVE' || alert.status === 'VIEWED') {
+    status = alert.responders && alert.responders.length > 0 ? 'responding' : 'acknowledged';
+  }
+
+  const latestResponder = alert.responders?.[alert.responders.length - 1];
 
   return {
     id: alert.id,
     patientId: alert.patient_id,
+    circleId: alert.circle_id ?? '',
     title,
     description,
     timestamp: formatTimestamp(alert.created_at),
     severity,
     status,
-    responderName: alert.responder_name || alert.acknowledged_by_name || null,
-    responderRole: alert.responder_role || alert.acknowledged_by_role || null,
+    zoneName: alert.zone_name ?? null,
+    responderName: latestResponder?.responder_name ?? null,
+    responderRole: latestResponder?.responder_role ?? null,
   };
 };
 
@@ -106,53 +108,38 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
   }, [alerts]);
 
   const getUnackedCountForPatient = useCallback((patientId: string) => {
-    return alerts.filter(a => a.patientId === patientId && a.status === 'new').length;
+    return alerts.filter(a => a.patientId === patientId && a.status !== 'resolved').length;
   }, [alerts]);
 
   const fetchPatientAlerts = useCallback(async (patientId: string) => {
     try {
-      const data = await fetchAlertsApi(patientId);
-      if (data && data.alerts) {
-        const mapped = data.alerts.map(mapApiAlertToPatientAlert);
-        setAlerts((prev) => {
-          const otherPatientsAlerts = prev.filter((a) => a.patientId !== patientId);
-          return [...mapped, ...otherPatientsAlerts];
-        });
-      }
+      const rows = await listPatientSafetyAlerts(patientId);
+      const mapped = rows.map(mapApiAlertToPatientAlert);
+      setAlerts((prev) => {
+        const otherPatientsAlerts = prev.filter((a) => a.patientId !== patientId);
+        return [...mapped, ...otherPatientsAlerts];
+      });
     } catch (err) {
       console.warn('[AlertContext] Failed to fetch alerts:', err);
     }
   }, []);
 
-  const acknowledgeAlert = useCallback(async (id: string) => {
-    try {
-      const updated = await acknowledgeAlertApi(id);
-      const mapped = mapApiAlertToPatientAlert(updated);
-      setAlerts((prev) => prev.map(a => a.id === id ? mapped : a));
-    } catch (err) {
-      console.warn('[AlertContext] Acknowledge error:', err);
-    }
-  }, []);
+  const respondToAlert = useCallback(async (alertId: string) => {
+    const alert = alerts.find(a => a.id === alertId);
+    if (!alert) throw new Error('Alert not found');
+    const circleId = alert.circleId || await resolveCircleIdForPatient(alert.patientId);
+    if (!circleId) throw new Error('No active Care Circle for this alert');
+    await respondToAlertApi(circleId, alertId);
+    await fetchPatientAlerts(alert.patientId);
+  }, [alerts, fetchPatientAlerts]);
 
-  const respondToAlert = useCallback(async (id: string) => {
-    try {
-      const updated = await respondAlertApi(id);
-      const mapped = mapApiAlertToPatientAlert(updated);
-      setAlerts((prev) => prev.map(a => a.id === id ? mapped : a));
-    } catch (err) {
-      console.warn('[AlertContext] Respond error:', err);
-    }
-  }, []);
-
-  const resolveAlert = useCallback(async (id: string) => {
-    const alert = alerts.find(a => a.id === id);
-    if (!alert) return;
-    try {
-      await resolveActiveIncident(alert.patientId);
-      await fetchPatientAlerts(alert.patientId);
-    } catch (err) {
-      console.warn('[AlertContext] Resolve error:', err);
-    }
+  const resolveAlert = useCallback(async (alertId: string) => {
+    const alert = alerts.find(a => a.id === alertId);
+    if (!alert) throw new Error('Alert not found');
+    const circleId = alert.circleId || await resolveCircleIdForPatient(alert.patientId);
+    if (!circleId) throw new Error('No active Care Circle for this alert');
+    await resolveAlertApi(circleId, alertId);
+    await fetchPatientAlerts(alert.patientId);
   }, [alerts, fetchPatientAlerts]);
 
   const addAlert = useCallback((newAlert: Omit<PatientAlert, 'id' | 'timestamp' | 'status'>) => {
@@ -165,59 +152,70 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
     setAlerts(prev => [alert, ...prev]);
   }, []);
 
-  // Compute total unread/new count across all patients for the root badge
   const unreadCount = useMemo(() => {
     return alerts.filter(a => a.status === 'new').length;
   }, [alerts]);
 
-  // WebSocket subscriptions for real-time alert updates
+  // WebSocket subscriptions for real-time alert updates.
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
-    const handleAlertNewOrUpdated = (data: any) => {
-      const apiAlert = data?.alert;
-      if (!apiAlert) return;
-      console.log('[AlertContext] WebSocket alert update received:', apiAlert);
+    const upsertAlert = (apiAlert: any) => {
+      if (!apiAlert?.id || !apiAlert?.patient_id) return;
+      const mapped = mapApiAlertToPatientAlert({
+        ...apiAlert,
+        alert_type: apiAlert.alert_type ?? 'ZONE_BREACH',
+        severity: apiAlert.severity ?? (apiAlert.alert_type === 'SOS_MANUAL' ? 'CRITICAL' : 'WARNING'),
+        status: apiAlert.status ?? 'TRIGGERED',
+        created_at: apiAlert.created_at ?? apiAlert.triggered_at ?? new Date().toISOString(),
+        responders: apiAlert.responders ?? [],
+      });
       setAlerts((prev) => {
-        const mapped = mapApiAlertToPatientAlert(apiAlert);
         const exists = prev.some((a) => a.id === mapped.id);
-        if (exists) {
-          return prev.map((a) => (a.id === mapped.id ? mapped : a));
-        } else {
-          return [mapped, ...prev];
-        }
+        return exists ? prev.map((a) => (a.id === mapped.id ? mapped : a)) : [mapped, ...prev];
       });
     };
 
-    const handleAlertAcknowledged = (data: any) => {
-      console.log('[AlertContext] WebSocket alert acknowledged received:', data);
-      const alertId = data?.alert_id || data?.alert?.id;
+    const handleAlertNewOrUpdated = (data: any) => {
+      const apiAlert = data?.alert;
+      if (apiAlert) upsertAlert(apiAlert);
+    };
+
+    const handleAlertResponse = (data: any) => {
+      const alertId = data?.alertId || data?.alert_id;
       if (!alertId) return;
       setAlerts((prev) =>
-        prev.map((a) => {
-          if (a.id === alertId) {
-            return {
-              ...a,
-              status: 'acknowledged',
-              responderName: data?.acknowledged_by_name || data?.responder_name || a.responderName,
-              responderRole: data?.acknowledged_by_role || data?.responder_role || a.responderRole,
-            };
-          }
-          return a;
-        })
+        prev.map((a) =>
+          a.id === alertId
+            ? {
+                ...a,
+                status: 'responding',
+                responderName: data?.responderName || data?.responder_name || a.responderName,
+                responderRole: data?.responderRole || data?.responder_role || a.responderRole,
+              }
+            : a
+        )
       );
+    };
+
+    const handleAlertResolved = (data: any) => {
+      const alertId = data?.alertId || data?.alert_id;
+      if (!alertId) return;
+      setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, status: 'resolved' } : a)));
     };
 
     socket.on('alert:new', handleAlertNewOrUpdated);
     socket.on('alert:updated', handleAlertNewOrUpdated);
-    socket.on('alert:acknowledged', handleAlertAcknowledged);
+    socket.on('alert:response', handleAlertResponse);
+    socket.on('alert:resolved', handleAlertResolved);
     socket.on('sos:triggered', handleAlertNewOrUpdated);
 
     return () => {
       socket.off('alert:new', handleAlertNewOrUpdated);
       socket.off('alert:updated', handleAlertNewOrUpdated);
-      socket.off('alert:acknowledged', handleAlertAcknowledged);
+      socket.off('alert:response', handleAlertResponse);
+      socket.off('alert:resolved', handleAlertResolved);
       socket.off('sos:triggered', handleAlertNewOrUpdated);
     };
   }, []);
@@ -226,19 +224,18 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
     alerts,
     getAlertsForPatient,
     getUnackedCountForPatient,
-    acknowledgeAlert,
+    acknowledgeAlert: respondToAlert,
     respondToAlert,
     resolveAlert,
     addAlert,
     unreadCount,
     feed: alerts,
-    acknowledge: acknowledgeAlert,
+    acknowledge: respondToAlert,
     fetchPatientAlerts,
   }), [
     alerts,
     getAlertsForPatient,
     getUnackedCountForPatient,
-    acknowledgeAlert,
     respondToAlert,
     resolveAlert,
     addAlert,

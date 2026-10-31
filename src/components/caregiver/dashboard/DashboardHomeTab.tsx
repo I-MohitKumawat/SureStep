@@ -46,7 +46,6 @@ type Props = {
   onSendReminder: (key: string) => void;
   onNavigateManage: () => void;
   onNavigateGeofenceMap: () => void;
-  onNavigateGeofenceEditor: () => void;
   patientAge?: number | null;
   patientPhoto?: string | null;
   patientState?: ApiPatientState | null;
@@ -77,7 +76,7 @@ export const DashboardHomeTab: React.FC<Props> = ({
   patientTasks, activeRoutineIndex, routineItems, routineCallouts, dismissedCallouts,
   reminderSentKeys, capsuleScrollY, showRoutineSummary,
   onShowPatientProfile, onShowRoutineSummary, onDismissCallout, onSendReminder,
-  onNavigateManage, onNavigateGeofenceMap, onNavigateGeofenceEditor,
+  onNavigateManage, onNavigateGeofenceMap,
   patientAge, patientPhoto,
   patientState, onRefreshLocation,
   relationshipStatus, carePlan, onNavigateAssessment, onNavigateAssessmentView, onCompleteMeeting, onNavigateCareCircle,

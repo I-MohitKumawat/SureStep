@@ -33,7 +33,7 @@ import messaging, {
 import { useAuth } from './AuthContext';
 import type { NotificationBannerType } from '../components/shared/NotificationBanner';
 import { getSocket } from '../services/socketClient';
-import { bootstrapLocalNotifications, registerNotificationCategories } from '../services/localAlarmService';
+import { bootstrapLocalNotifications } from '../services/localAlarmService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -144,7 +144,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     void (async () => {
       try {
         await bootstrapLocalNotifications();
-        await registerNotificationCategories();
       } catch (err) {
         console.warn('[NotificationContext] Local notification bootstrap failed:', err);
       }

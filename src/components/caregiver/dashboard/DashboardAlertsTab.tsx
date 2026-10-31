@@ -23,9 +23,7 @@ export const DashboardAlertsTab: React.FC<Props> = ({ patientId, patientName }) 
   const {
     getAlertsForPatient,
     getUnackedCountForPatient,
-    acknowledgeAlert,
     respondToAlert,
-    resolveAlert,
   } = useAlerts();
 
   const [activeTab, setActiveTab] = useState<FilterTab>('active');
@@ -134,9 +132,7 @@ export const DashboardAlertsTab: React.FC<Props> = ({ patientId, patientName }) 
               severity={item.severity}
               status={item.status}
               patientName={patientName}
-              onAcknowledge={acknowledgeAlert}
               onRespond={respondToAlert}
-              onResolve={resolveAlert}
             />
           ))
         )}

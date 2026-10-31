@@ -1,151 +1,138 @@
 /**
  * SureStep — src/context/TaskContext.tsx
- * Tasks (routines) for a patient. Mounted inside PatientNavigator and CaregiverNavigator.
- * Migrated from: app/context/taskContext.ts
- * Changes:
- *   - Converted to .tsx
- *   - Added offline queue support via src/utils/offlineQueue.ts
- *   - Wired to Express API via taskService (Supabase stubs replaced)
- *   - Restructured CRUD to call real API endpoints
- *   - Added TaskCategory, TaskPriority, 'overdue' status, instructionsMd, iconName, clientActionId
- *   - updateTaskStatus now generates a UUID client_action_id for idempotent offline sync
+ *
+ * Patient routine agenda backed exclusively by canonical routine occurrences.
+ *
+ * There is no standalone task instance model in V1. A "task" in this context
+ * is a display projection of one `routine_occurrence`; the only mutation is
+ * occurrence sign-off, which records a `routine_completions` row.
  */
 import React, {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, useRef, type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
 } from 'react';
-import * as taskService from '../services/taskService';
-import { enqueue, flush, hasPendingTaskUpdate } from '../utils/offlineQueue';
+import {
+  fetchOccurrences,
+  signOffOccurrence,
+  type RoutineCategory,
+  type RoutineOccurrence,
+} from '../services/routineService';
 import type { TaskCategory, TaskPriority } from '../types/enums';
 import { useAuth } from './AuthContext';
 import { getSocket } from '../services/socketClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type TaskStatus = 'pending' | 'done' | 'missed' | 'overdue' | 'unsure' | 'skipped';
+/**
+ * Display status projection. Canonical persisted states are
+ * SCHEDULED / ONGOING / COMPLETED / OVERDUE / CANCELLED; the UI historically
+ * consumed pending/done/overdue so those names are retained as a view model.
+ */
+export type TaskStatus = 'pending' | 'done' | 'overdue' | 'cancelled';
 
 export type { TaskCategory, TaskPriority };
 
 export type Task = {
-  id:               string;
-  patientId:        string;
-  title:            string;
-  instructionsMd?:  string;       // Markdown instructions shown to patient (replaces plain description)
-  description?:     string;       // Legacy plain text — kept for backward compat
-  category:         TaskCategory; // Structured category — drives icon and filtering
-  priority:         TaskPriority; // Escalation level — drives alert thresholds
-  iconName?:        string;       // Feather/vector icon name (replaces emoji field)
-  icon?:            string;       // Legacy emoji field — kept for backward compat
-  time:             string;       // HH:MM — derived from scheduled_timestamp for display
-  scheduledTimestamp?: string;    // Full ISO datetime from backend
-  status:           TaskStatus;
-  clientActionId?:  string;       // UUID for offline idempotency
-  completedAt?:     string;
-  completedBy?:     string;       // user_id of who marked done
-  createdAt:        string;
-  updatedAt:        string;
-  localUpdateTs?:   number;
-  caregiverNote?:   string;
-  voiceNoteUrl?:    string;
+  id: string;
+  patientId: string;
+  routineId: string;
+  title: string;
+  instructionsMd?: string;
+  description?: string;
+  category: TaskCategory;
+  /** Display-only default: canonical routine definitions have no priority. */
+  priority: TaskPriority;
+  iconName?: string;
+  icon?: string;
+  time: string;
+  scheduledTimestamp?: string;
+  scheduledDate: string;
+  status: TaskStatus;
+  canonicalStatus: RoutineOccurrence['status'];
+  completedAt?: string;
+  completedBy?: string;
+  completionSource?: RoutineOccurrence['completion_source'];
+  signedOffAt?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TaskDraft = {
-  patientId:         string;
-  title:             string;
-  instructionsMd?:   string;
-  description?:      string;
-  category?:         TaskCategory;
-  priority?:         TaskPriority;
-  iconName?:         string;
-  time:              string;
-  recurrencePattern?: Record<string, unknown>; // JSONB pattern from RoutineRecurrencePattern
-  startDate?:        string;
-  endDate?:          string;
-  completionWindow?: string;
+  patientId: string;
+  title: string;
+  description?: string;
+  category: RoutineCategory;
+  schedulePattern: { frequency?: string; time?: string; daysOfWeek?: number[]; times?: string[] };
 };
 
 type TaskContextValue = {
-  tasks:              Task[];
-  loading:            boolean;
-  loadTasksForPatient:(patientId: string, forceRefresh?: boolean) => Promise<void>;
-  createTask:         (draft: TaskDraft) => Promise<Task>;
-  updateTask:         (taskId: string, patch: Partial<TaskDraft>) => Promise<void>;
-  updateTaskStatus:   (taskId: string, status: TaskStatus) => Promise<void>;
-  deleteTask:         (taskId: string) => Promise<void>;
+  tasks: Task[];
+  loading: boolean;
+  loadTasksForPatient: (patientId: string, forceRefresh?: boolean, date?: string) => Promise<void>;
+  /** Sign off an occurrence. Only the 'done' view status is a valid mutation. */
+  updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
   getTasksForPatient: (patientId: string) => Task[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Generate a UUID v4 for client-side idempotency keys without external deps. */
-function generateUUIDv4(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+const CATEGORY_MAP: Record<RoutineCategory, TaskCategory> = {
+  MEDICATION: 'medication',
+  MEAL: 'meal',
+  EXERCISE: 'exercise',
+  HYGIENE: 'hygiene',
+  APPOINTMENT: 'appointment',
+};
+
+const CANONICAL_STATUS_MAP: Record<RoutineOccurrence['status'], TaskStatus> = {
+  SCHEDULED: 'pending',
+  ONGOING: 'pending',
+  COMPLETED: 'done',
+  OVERDUE: 'overdue',
+  CANCELLED: 'cancelled',
+};
+
+function displayTime(time?: string): string {
+  if (!time) return '';
+  const [hRaw, mRaw] = time.split(':');
+  const h = parseInt(hRaw, 10);
+  const m = parseInt(mRaw, 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-/** Extract HH:MM 12h display time from a full ISO timestamp or plain HH:MM:SS string. */
-function extractDisplayTime(scheduledTimestamp?: string, scheduledTime?: string): string {
-  let dateObj: Date | null = null;
-  if (scheduledTimestamp) {
-    try {
-      const d = new Date(scheduledTimestamp);
-      if (!isNaN(d.getTime())) {
-        dateObj = d;
-      }
-    } catch { /* fall through */ }
-  }
-  if (!dateObj && scheduledTime) {
-    try {
-      const parts = scheduledTime.split(':');
-      if (parts.length >= 2) {
-        const hours = parseInt(parts[0], 10);
-        const minutes = parseInt(parts[1], 10);
-        if (!isNaN(hours) && !isNaN(minutes)) {
-          const d = new Date();
-          d.setHours(hours);
-          d.setMinutes(minutes);
-          d.setSeconds(0);
-          dateObj = d;
-        }
-      }
-    } catch { /* fall through */ }
-  }
-
-  if (dateObj) {
-    return dateObj.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  }
-
-  return scheduledTime ?? '';
-}
-
-/** Centralized helper to map a raw database task row to the frontend Task model. */
-export function mapBackendTaskToFrontend(row: any): Task {
+export function mapOccurrenceToTask(row: RoutineOccurrence): Task {
+  const category = CATEGORY_MAP[row.category] ?? 'custom';
   return {
-    id:                 row.id,
-    patientId:          row.patient_id,
-    title:              row.title          ?? '',
-    instructionsMd:     row.instructions_md ?? row.patient_hint ?? '',
-    description:        row.patient_hint   ?? row.description   ?? '',
-    category:           (row.category as TaskCategory) ?? 'custom',
-    priority:           (row.priority as TaskPriority) ?? 'medium',
-    iconName:           row.icon_name,
-    icon:               row.emoji,
-    scheduledTimestamp: row.scheduled_timestamp,
-    time:               extractDisplayTime(row.scheduled_timestamp, row.scheduled_time),
-    status:             row.status ? (row.status.toLowerCase() as TaskStatus) : 'pending',
-    clientActionId:     row.client_action_id,
-    completedAt:        row.completed_at,
-    completedBy:        row.completed_by,
-    createdAt:          row.created_at,
-    updatedAt:          row.updated_at ?? row.created_at,
-    caregiverNote:      row.caregiver_note,
-    voiceNoteUrl:       row.voice_note_url,
+    id: row.id,
+    patientId: row.patient_id,
+    routineId: row.routine_id,
+    title: row.title ?? '',
+    instructionsMd: row.description ?? '',
+    description: row.description ?? '',
+    category,
+    priority: 'medium',
+    iconName: category,
+    icon: category,
+    time: displayTime(row.scheduled_time),
+    scheduledTimestamp: `${row.scheduled_date}T${row.scheduled_time}`,
+    scheduledDate: row.scheduled_date,
+    status: CANONICAL_STATUS_MAP[row.status] ?? 'pending',
+    canonicalStatus: row.status,
+    completedAt: row.completed_at ?? undefined,
+    completedBy: row.completed_by ?? undefined,
+    completionSource: row.completion_source ?? undefined,
+    signedOffAt: row.signed_off_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.signed_off_at ?? row.created_at,
   };
 }
 
@@ -156,7 +143,7 @@ const TaskContext = createContext<TaskContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const TaskProvider = ({ children }: { children: ReactNode }) => {
-  const [tasks,   setTasks]   = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
 
   const tasksRef = useRef<Task[]>([]);
@@ -169,184 +156,118 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  // Real-time WebSocket subscriptions for task events
+  // Canonical occurrence updates (emitted by the routine sign-off service).
   useEffect(() => {
     const socket = getSocket();
     if (!socket || !firebaseUser) return;
 
-    const handleTaskUpdate = (data: any) => {
-      if (!data || !data.task) return;
-      const updatedTask = mapBackendTaskToFrontend(data.task);
-      setTasks((prev) => {
-        const exists = prev.some((t) => t.id === updatedTask.id);
-        if (exists) {
-          return prev.map((t) => (t.id === updatedTask.id ? updatedTask : t));
-        } else {
-          return [...prev, updatedTask];
+    const refreshPatient = (data: any) => {
+      const patientId = data?.patientId ?? data?.patient_id;
+      if (!patientId) return;
+      lastFetchedRef.current[patientId] = 0;
+      void (async () => {
+        try {
+          const rows = await fetchOccurrences(patientId);
+          const mapped = rows.map(mapOccurrenceToTask);
+          setTasks((prev) => [...prev.filter((t) => t.patientId !== patientId), ...mapped]);
+          lastFetchedRef.current[patientId] = Date.now();
+        } catch {
+          // Next focus/refresh will reconcile.
         }
-      });
+      })();
     };
 
-    const handleTaskDelete = (data: any) => {
-      if (!data || !data.taskId) return;
-      setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
-    };
-
-    socket.on('task:update', handleTaskUpdate);
-    socket.on('task:change', handleTaskUpdate);
-    socket.on('task:delete', handleTaskDelete);
+    socket.on('routine:occurrence:updated', refreshPatient);
+    socket.on('routine:occurrence:created', refreshPatient);
 
     return () => {
-      socket.off('task:update', handleTaskUpdate);
-      socket.off('task:change', handleTaskUpdate);
-      socket.off('task:delete', handleTaskDelete);
+      socket.off('routine:occurrence:updated', refreshPatient);
+      socket.off('routine:occurrence:created', refreshPatient);
     };
   }, [firebaseUser]);
 
-  const loadTasksForPatient = useCallback(async (patientId: string, forceRefresh = false) => {
-    const socket = getSocket();
-    if (socket) {
-      socket.emit('join:patient', patientId);
-    }
+  const loadTasksForPatient = useCallback(
+    async (patientId: string, forceRefresh = false, date?: string) => {
+      const socket = getSocket();
+      if (socket) socket.emit('join:patient', patientId);
 
-    const now = Date.now();
-    const lastFetched = lastFetchedRef.current[patientId] || 0;
-    const isStale = now - lastFetched > 60_000;
-    const hasCached = tasksRef.current.some((t) => t.patientId === patientId);
+      const cacheKey = `${patientId}:${date ?? 'today'}`;
+      const now = Date.now();
+      const lastFetched = lastFetchedRef.current[cacheKey] || 0;
+      const isStale = now - lastFetched > 60_000;
+      const hasCached = tasksRef.current.some((t) => t.patientId === patientId);
 
-    if (hasCached && !isStale && !forceRefresh) {
-      return;
-    }
+      if (hasCached && !isStale && !forceRefresh) return;
 
-    if (inFlightRef.current[patientId] !== undefined) {
-      return inFlightRef.current[patientId];
-    }
-
-    const promise = (async () => {
-      setLoading(true);
-      try {
-        const { data } = await taskService.getTodaysTasks(patientId);
-        const mapped: Task[] = (data.data?.tasks ?? []).map((row: any) => mapBackendTaskToFrontend(row));
-        setTasks((prev) => {
-          const others = prev.filter((t) => t.patientId !== patientId);
-          const merged = mapped.map((backendTask) => {
-            const localTask = prev.find((t) => t.id === backendTask.id);
-            if (localTask) {
-              const isQueued = hasPendingTaskUpdate(backendTask.id);
-              // 15s window — longer than the 10s polling interval — guarantees optimistic
-              // update survives at least one full poll cycle after the API call completes.
-              const isRecent = localTask.localUpdateTs && (Date.now() - localTask.localUpdateTs < 15_000);
-              if (isQueued || isRecent) {
-                return {
-                  ...backendTask,
-                  status: localTask.status,
-                  clientActionId: localTask.clientActionId,
-                  completedAt: localTask.completedAt,
-                  localUpdateTs: localTask.localUpdateTs,
-                };
-              }
-            }
-            return backendTask;
-          });
-          return [...others, ...merged];
-        });
-        lastFetchedRef.current[patientId] = Date.now();
-      } catch (e) {
-        console.warn('[TaskContext] loadTasksForPatient failed:', e);
-      } finally {
-        setLoading(false);
-        delete inFlightRef.current[patientId];
+      if (inFlightRef.current[cacheKey] !== undefined) {
+        return inFlightRef.current[cacheKey];
       }
-    })();
 
-    inFlightRef.current[patientId] = promise;
-    return promise;
-  }, []);
+      const promise = (async () => {
+        setLoading(true);
+        try {
+          const rows = await fetchOccurrences(patientId, date);
+          const mapped = rows.map(mapOccurrenceToTask);
+          setTasks((prev) => [...prev.filter((t) => t.patientId !== patientId), ...mapped]);
+          lastFetchedRef.current[cacheKey] = Date.now();
+        } catch (e) {
+          console.warn('[TaskContext] loadTasksForPatient failed:', e);
+        } finally {
+          setLoading(false);
+          delete inFlightRef.current[cacheKey];
+        }
+      })();
 
-  const createTask = useCallback(async (draft: TaskDraft): Promise<Task> => {
-    const { data } = await taskService.createTask(draft.patientId, {
-      title:              draft.title,
-      instructions_md:    draft.instructionsMd,
-      patient_hint:       draft.description,
-      category:           draft.category ?? 'custom',
-      priority:           draft.priority ?? 'medium',
-      icon_name:          draft.iconName,
-      scheduled_time:     draft.time,
-      recurrence_pattern: draft.recurrencePattern,
-      start_date:         draft.startDate,
-      end_date:           draft.endDate,
-      completion_window:  draft.completionWindow,
-    });
-    const created = mapBackendTaskToFrontend(data.data);
-    setTasks((prev) => [...prev, created]);
-    return created;
-  }, []);
-
-  const updateTask = useCallback(async (taskId: string, patch: Partial<TaskDraft>) => {
-    try {
-      await taskService.updateTask(taskId, {
-        title:           patch.title,
-        instructions_md: patch.instructionsMd,
-        patient_hint:    patch.description,
-        category:        patch.category,
-        priority:        patch.priority,
-        icon_name:       patch.iconName,
-        scheduled_time:  patch.time,
-      });
-      setTasks((prev) => prev.map((t) =>
-        t.id === taskId ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t,
-      ));
-    } catch {
-      // Offline: queue for later
-      enqueue({ endpoint: `/tasks/${taskId}`, method: 'PATCH', body: patch });
-    }
-  }, []);
+      inFlightRef.current[cacheKey] = promise;
+      return promise;
+    },
+    []
+  );
 
   const updateTaskStatus = useCallback(async (taskId: string, status: TaskStatus) => {
-    // Generate a client-side UUID to make this action idempotent
-    // so retries after offline queue flush don't create duplicate completions.
-    const clientActionId = generateUUIDv4();
-    const now = Date.now();
-
-    // 1. Optimistic update
-    setTasks((prev) => prev.map((t) =>
-      t.id === taskId
-        ? {
-            ...t,
-            status,
-            clientActionId,
-            localUpdateTs: now,
-            completedAt: status === 'done' ? new Date().toISOString() : t.completedAt,
-          }
-        : t,
-    ));
-
-    // 2. Network sync
-    try {
-      await taskService.updateTaskStatusIdempotent(taskId, status, clientActionId);
-    } catch {
-      enqueue({
-        endpoint: `/tasks/${taskId}/status`,
-        method: 'POST',
-        body: { status, client_action_id: clientActionId },
-      });
+    if (status !== 'done') {
+      throw new Error(
+        'Routine occurrences only support sign-off. Missed, skipped, unsure, and undo states do not exist in V1.'
+      );
     }
-  }, []);
 
-  const deleteTask = useCallback(async (taskId: string) => {
-    await taskService.deleteTask(taskId);
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    const target = tasksRef.current.find((t) => t.id === taskId);
+    if (!target) throw new Error('Routine occurrence not found in the current agenda');
+    if (target.status === 'done') return;
+
+    await signOffOccurrence(taskId);
+
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              status: 'done',
+              canonicalStatus: 'COMPLETED',
+              completedAt: new Date().toISOString(),
+              signedOffAt: new Date().toISOString(),
+            }
+          : t
+      )
+    );
+    lastFetchedRef.current[`${target.patientId}:today`] = 0;
   }, []);
 
   const getTasksForPatient = useCallback(
     (patientId: string) => tasks.filter((t) => t.patientId === patientId),
-    [tasks],
+    [tasks]
   );
 
-  const value = useMemo<TaskContextValue>(() => ({
-    tasks, loading,
-    loadTasksForPatient, createTask, updateTask, updateTaskStatus, deleteTask, getTasksForPatient,
-  }), [tasks, loading, loadTasksForPatient, createTask, updateTask, updateTaskStatus, deleteTask, getTasksForPatient]);
+  const value = useMemo<TaskContextValue>(
+    () => ({
+      tasks,
+      loading,
+      loadTasksForPatient,
+      updateTaskStatus,
+      getTasksForPatient,
+    }),
+    [tasks, loading, loadTasksForPatient, updateTaskStatus, getTasksForPatient]
+  );
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
 };

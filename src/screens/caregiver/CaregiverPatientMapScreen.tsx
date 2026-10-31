@@ -26,12 +26,16 @@ import { F } from '../../theme/fonts';
 import {
   haversineMeters,
   fetchBreachHistory,
-  acknowledgeAlert,
   fetchPatientGeofences,
   type Coords,
   type GeofenceZone,
 } from '../../utils/geofenceUtils';
-import { resolveActiveIncident, fetchPatientCareCircle, type CareCircleMember } from '../../services/geofenceService';
+import { respondToAlert } from '../../services/safetyService';
+import {
+  listCareCirclePeopleForPatient,
+  resolveCircleIdForPatient,
+  type CareCirclePerson,
+} from '../../services/careCircleService';
 import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import { relativeTime } from '../../utils/dateUtils';
@@ -42,7 +46,8 @@ type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientMapSc
 export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }) => {
   const { patientId, patientName } = route.params;
   const { firebaseUser } = useAuth();
-  const [careCircle, setCareCircle] = useState<CareCircleMember[]>([]);
+  const [careCircle, setCareCircle] = useState<CareCirclePerson[]>([]);
+  const [circleId, setCircleId] = useState<string | null>(null);
   const [memberLocations, setMemberLocations] = useState<Record<string, {
     id: string;
     role: 'PATIENT' | 'CAREGIVER' | 'FAMILY';
@@ -78,7 +83,9 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
           if (active && fetchedZones) {
             setZones(fetchedZones);
           }
-          const circleMembers = await fetchPatientCareCircle(patientId);
+          const resolvedCircleId = await resolveCircleIdForPatient(patientId);
+          if (active) setCircleId(resolvedCircleId);
+          const circleMembers = await listCareCirclePeopleForPatient(patientId);
           if (active && circleMembers) {
             setCareCircle(circleMembers);
           }
@@ -285,8 +292,8 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
   const checkActiveAlerts = useCallback(async () => {
     try {
       const alertsHistory = await fetchBreachHistory(patientId, 10);
-      // Find oldest unacknowledged EXIT or enter/alert
-      const openExits = alertsHistory.filter((a) => !a.acknowledgedAt);
+      // Canonical open alerts are anything not yet resolved by the Circle Owner.
+      const openExits = alertsHistory.filter((a) => a.status !== 'RESOLVED');
       if (openExits.length > 0 && openExits[0]) {
         const sorted = [...openExits].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         const oldest = sorted[0];
@@ -409,39 +416,15 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
   const handleAcknowledge = async () => {
     if (responding) return;
     try {
-      if (breachAlertId) {
-        await acknowledgeAlert(breachAlertId, '');
+      if (breachAlertId && circleId) {
+        await respondToAlert(circleId, breachAlertId, 'Responding from live map');
       }
       setResponding(true);
       Alert.alert('Responding', 'You are marked as responding. Other caregivers have been notified.');
     } catch (e) {
-      console.warn('Failed to acknowledge:', e);
+      console.warn('Failed to respond to alert:', e);
       setResponding(true);
     }
-  };
-
-  const handleResolve = () => {
-    Alert.alert(
-      'Resolve Incident',
-      'Are you sure the patient is safe and you want to resolve this wandering incident?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Resolve',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await resolveActiveIncident(patientId);
-              setResponding(false);
-              Alert.alert('Resolved', 'Incident resolved successfully.');
-            } catch (err) {
-              console.warn('Failed to resolve incident:', err);
-              Alert.alert('Error', 'Failed to resolve incident. Please try again.');
-            }
-          }
-        }
-      ]
-    );
   };
 
   const fallbackCoords = activeZones.length > 0 && activeZones[0]
@@ -760,14 +743,6 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                     <Text style={[styles.gridButtonSecondaryText, responding && styles.gridButtonActiveText]}>
                       {responding ? 'Responding' : "I'm Responding"}
                     </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={handleResolve}
-                    style={({ pressed }) => [styles.gridButtonResolve, pressed && { opacity: 0.85 }]}
-                  >
-                    <Feather name="check-circle" size={18} color="#059669" style={{ marginRight: 6 }} />
-                    <Text style={styles.gridButtonResolveText}>Resolve Incident</Text>
                   </Pressable>
                 </View>
               </View>

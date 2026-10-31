@@ -21,7 +21,12 @@ import { F } from '../../theme/fonts';
 import { Feather } from '@expo/vector-icons';
 import { getCategoryIcon } from '../../components/shared/RoutineCapsule';
 import type { CaregiverStackParams } from '../../types/navigation.types';
-import { createRoutineTemplate, updateRoutineTemplate } from '../../services/taskService';
+import {
+  createRoutineDefinition,
+  updateRoutineDefinition,
+  normalizeRoutineCategory,
+  type RoutineCategory,
+} from '../../services/routineService';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverRoutineEditorScreen'>;
 
@@ -50,12 +55,11 @@ const DownIcon = () => (
 );
 
 const CATEGORIES = [
-  { label: 'Morning', icon: 'sun' },
   { label: 'Medication', icon: 'activity' },
   { label: 'Meal', icon: 'coffee' },
-  { label: 'Sleep', icon: 'moon' },
-  { label: 'Hygiene', icon: 'droplet' },
   { label: 'Exercise', icon: 'zap' },
+  { label: 'Hygiene', icon: 'droplet' },
+  { label: 'Appointment', icon: 'calendar' },
 ];
 const DAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -65,37 +69,50 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
 
   // ─── Form State ─────────────────────────────────────────────────────────────
   const [name, setName] = useState(mode === 'edit' && routine ? routine.title : '');
-  const [category, setCategory] = useState(mode === 'edit' && routine ? routine.category || 'Morning' : 'Morning');
+  const [category, setCategory] = useState(
+    mode === 'edit' && routine ? routine.category || 'Medication' : 'Medication'
+  );
   
 
 
-  // Recurrence state
+  // Recurrence state (canonical schedule_pattern)
   const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY'>(
-    mode === 'edit' && routine?.recurrence_pattern?.type === 'WEEKLY' ? 'WEEKLY' : 'DAILY'
+    mode === 'edit' && routine?.schedule_pattern?.frequency === 'WEEKLY' ? 'WEEKLY' : 'DAILY'
   );
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>(
-    mode === 'edit' && routine?.recurrence_pattern?.days ? routine.recurrence_pattern.days : [1, 2, 3, 4, 5]
+    mode === 'edit' && routine?.schedule_pattern?.daysOfWeek
+      ? routine.schedule_pattern.daysOfWeek
+      : [1, 2, 3, 4, 5]
   );
 
-  // Multiple Execution Times state (Default to empty)
-  const [times, setTimes] = useState<string[]>(
-    mode === 'edit' && routine?.execution_times
-      ? routine.execution_times.map((et: any) => et.scheduled_time.slice(0, 5))
-      : []
-  );
+  // Scheduled times (canonical schedule_pattern.times; first value is the seed time)
+  const [times, setTimes] = useState<string[]>(() => {
+    if (mode !== 'edit' || !routine?.schedule_pattern) return [];
+    const patternTimes = routine.schedule_pattern.times;
+    if (Array.isArray(patternTimes) && patternTimes.length > 0) {
+      return patternTimes.map((t: string) => t.slice(0, 5));
+    }
+    return routine.schedule_pattern.time ? [routine.schedule_pattern.time.slice(0, 5)] : [];
+  });
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [timePickerValue, setTimePickerValue] = useState(new Date());
 
   // Step-by-Step Custom Ordered Instructions State
   const [steps, setSteps] = useState<Array<{ text: string; photo_url?: string }>>(() => {
-    if (mode === 'edit' && routine?.instructions_md) {
+    if (mode === 'edit' && routine?.description) {
       try {
-        const parsed = JSON.parse(routine.instructions_md);
-        if (Array.isArray(parsed)) return parsed;
+        const parsed = JSON.parse(routine.description);
+        if (Array.isArray(parsed)) {
+          return parsed.map((item: any) =>
+            typeof item === 'string'
+              ? { text: item }
+              : { text: item.text ?? item.title ?? '', photo_url: item.photo_url }
+          );
+        }
       } catch {
-        // Fallback for raw text instructions
-        return [{ text: routine.instructions_md }];
+        // Plain-text canonical description.
       }
+      return [{ text: routine.description }];
     }
     return [{ text: '' }];
   });
@@ -203,32 +220,39 @@ export const CaregiverRoutineEditorScreen: React.FC<Props> = ({ route, navigatio
     const activeSteps = steps.filter(s => s.text.trim() || s.photo_url);
     setSaving(true);
 
-    // Build payload matching backend service model
+    const canonicalCategory: RoutineCategory = normalizeRoutineCategory(category);
+    const description = activeSteps
+      .map((step, index) => (step.photo_url ? `${index + 1}. ${step.text}` : step.text))
+      .filter(Boolean)
+      .join('\n');
+
+    // Canonical routine definition payload. Multiple scheduled times are
+    // preserved in schedule_pattern.times so occurrence materialization can
+    // generate one occurrence per time.
     const payload = {
       title: cleanTitle,
-      category,
-      instructions_md: activeSteps.length > 0 ? JSON.stringify(activeSteps) : null,
-      icon_name: getCategoryIcon(category),
-      recurrence_pattern: {
-        type: recurrenceType,
-        ...(recurrenceType === 'WEEKLY' ? { days: recurrenceDays } : {})
+      category: canonicalCategory,
+      description: description || null,
+      schedulePattern: {
+        frequency: recurrenceType,
+        time: times[0],
+        times,
+        ...(recurrenceType === 'WEEKLY' ? { daysOfWeek: recurrenceDays } : {}),
       },
-      execution_times: times.map(t => ({ scheduled_time: `${t}:00` })),
-      attachments: [] // Deprecated
     };
 
     try {
       if (mode === 'edit' && routine) {
-        await updateRoutineTemplate(routine.id, payload);
-        Alert.alert('Success', 'Routine template updated successfully.');
+        await updateRoutineDefinition(patientId, routine.id, payload);
+        Alert.alert('Success', 'Routine definition updated successfully.');
       } else {
-        await createRoutineTemplate(patientId, payload);
-        Alert.alert('Success', 'New routine template configured.');
+        await createRoutineDefinition(patientId, payload);
+        Alert.alert('Success', 'New routine definition configured.');
       }
       navigation.navigate('CaregiverPatientDetailScreen', { patientId, patientName, refresh: true });
     } catch (err) {
       console.error('[CaregiverRoutineEditor] Save failed:', err);
-      Alert.alert('Error', 'Failed to save routine template. Please check your connection.');
+      Alert.alert('Error', 'Failed to save routine definition. Please check your connection.');
     } finally {
       setSaving(false);
     }

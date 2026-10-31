@@ -31,8 +31,6 @@ type FilterTab = 'active' | 'acknowledged' | 'resolved';
 export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, route }) => {
   const { patientId, patientName, relationshipType } = route.params as any;
 
-  const canResolve = !relationshipType || relationshipType === 'CAREGIVER' || relationshipType === 'GUARDIAN';
-
   const [activeTab, setActiveTab] = useState<FilterTab>('active');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,9 +38,7 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
   const {
     getAlertsForPatient,
     getUnackedCountForPatient,
-    acknowledgeAlert,
     respondToAlert,
-    resolveAlert,
     fetchPatientAlerts,
   } = useAlerts();
 
@@ -173,9 +169,7 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
             patientName={patientName}
             responderName={item.responderName}
             responderRole={item.responderRole}
-            onAcknowledge={acknowledgeAlert}
             onRespond={respondToAlert}
-            onResolve={canResolve ? resolveAlert : undefined}
           />
         )}
         contentContainerStyle={styles.listContainer}

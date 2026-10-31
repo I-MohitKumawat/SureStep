@@ -58,6 +58,29 @@ export interface SafeZoneItem {
   boundary_type?: 'soft' | 'hard';
   monitored_patients?: { patient_id: string; patient_name?: string }[];
   created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Resolve the caller's active Circle that contains the given Patient.
+ * V1 exposes one active Circle per user via GET /care-circles/my; the response
+ * includes the associated Patients for membership and Patient callers.
+ */
+export async function resolveCircleIdForPatient(patientId: string): Promise<string | null> {
+  const circles = await listMyCareCircles();
+  for (const circle of circles) {
+    const patients = (circle as any).patients;
+    if (
+      Array.isArray(patients) &&
+      patients.some((p: any) => (p.id ?? p.patient_id) === patientId)
+    ) {
+      return circle.id;
+    }
+    if (Array.isArray((circle as any).patient_ids) && (circle as any).patient_ids.includes(patientId)) {
+      return circle.id;
+    }
+  }
+  return circles[0]?.id ?? null;
 }
 
 export interface JoinRequest {
@@ -70,6 +93,21 @@ export interface JoinRequest {
   role_in_circle?: string;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   created_at: string;
+}
+
+export interface CareCirclePerson {
+  id: string;
+  name: string;
+  role: string;
+  relationship_type: string;
+  photo_url?: string | null;
+  relation_label?: string | null;
+  check_in_lat?: number | null;
+  check_in_lng?: number | null;
+  last_location_update?: string | null;
+  last_known_lat?: number | null;
+  last_known_lng?: number | null;
+  last_ping_at?: string | null;
 }
 
 // ─── Care Circles CRUD ────────────────────────────────────────────────────────
@@ -300,8 +338,7 @@ export async function reviewJoinRequest(
 
 // ─── Associated Patients ──────────────────────────────────────────────────────
 
-export async function listCirclePatients(circleId: string): Promise<CirclePatient[]> {
-  try {
+export async function listCirclePatients(circleId: string): Promise<CirclePatient[]> {  try {
     const res = await apiClient.get(`/care-circles/${circleId}/patients`);
     const d = res.data?.data ?? res.data?.patients;
     const rawList = Array.isArray(d) ? d : (Array.isArray(res.data?.data?.patients) ? res.data.data.patients : []);
@@ -331,6 +368,32 @@ export async function associatePatientToCircle(circleId: string, patientId: stri
   await apiClient.post(`/care-circles/${circleId}/patients`, { patientId });
 }
 
+/**
+ * Care Circle people for map display: Owner, Family, and Caregiver members.
+ * The Patient is represented by the map's patient marker and excluded here.
+ */
+export async function listCareCirclePeopleForPatient(patientId: string): Promise<CareCirclePerson[]> {
+  const circleId = await resolveCircleIdForPatient(patientId);
+  if (!circleId) return [];
+  const members = await listCircleMembers(circleId);
+  return members
+    .filter((m) => m.user_global_role !== 'PATIENT')
+    .map((m) => ({
+      id: m.user_id,
+      name: m.name,
+      role: m.user_global_role === 'CAREGIVER' ? 'CAREGIVER' : 'FAMILY',
+      relationship_type: m.user_global_role === 'CAREGIVER' ? 'CAREGIVER' : 'FAMILY',
+      photo_url: m.photo_url ?? null,
+      relation_label: m.role_in_circle,
+      check_in_lat: null,
+      check_in_lng: null,
+      last_location_update: null,
+      last_known_lat: null,
+      last_known_lng: null,
+      last_ping_at: null,
+    }));
+}
+
 // ─── Safe Zones ───────────────────────────────────────────────────────────────
 
 export async function listCircleSafeZones(circleId: string): Promise<SafeZoneItem[]> {
@@ -346,6 +409,22 @@ export async function listCircleSafeZones(circleId: string): Promise<SafeZoneIte
   }
 }
 
+/**
+ * List canonical Safe Zones that monitor the given Patient.
+ * Safe Zones are Circle-owned; zones with no monitored patients are excluded
+ * because they do not apply to any Patient in V1.
+ */
+export async function listSafeZonesForPatient(patientId: string): Promise<SafeZoneItem[]> {
+  const circleId = await resolveCircleIdForPatient(patientId);
+  if (!circleId) return [];
+  const zones = await listCircleSafeZones(circleId);
+  return zones.filter((zone) => {
+    const monitored = zone.monitored_patients;
+    if (!Array.isArray(monitored) || monitored.length === 0) return false;
+    return monitored.some((p) => p.patient_id === patientId);
+  });
+}
+
 export async function createCircleSafeZone(
   circleId: string,
   dto: {
@@ -357,7 +436,7 @@ export async function createCircleSafeZone(
   }
 ): Promise<SafeZoneItem> {
   const res = await apiClient.post(`/care-circles/${circleId}/safe-zones`, dto);
-  return res.data?.data?.safe_zone ?? res.data?.safe_zone;
+  return res.data?.data?.safe_zone ?? res.data?.data ?? res.data?.safe_zone;
 }
 
 export async function updateCircleSafeZone(
@@ -372,7 +451,7 @@ export async function updateCircleSafeZone(
   }
 ): Promise<SafeZoneItem> {
   const res = await apiClient.patch(`/care-circles/${circleId}/safe-zones/${zoneId}`, dto);
-  return res.data?.data?.safe_zone ?? res.data?.safe_zone;
+  return res.data?.data?.safe_zone ?? res.data?.data ?? res.data?.safe_zone;
 }
 
 export async function deleteCircleSafeZone(circleId: string, zoneId: string): Promise<void> {

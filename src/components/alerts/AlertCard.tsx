@@ -144,32 +144,17 @@ export const AlertCard: React.FC<AlertCardProps> = ({
       {!isResolved && (
         <View style={styles.actionsRow}>
           {status === 'new' && (
-            <>
-              {/* Acknowledge Button */}
-              {/* TODO: Call POST /api/v1/alerts/:id/acknowledge */}
-              <Pressable
-                style={({ pressed }) => [styles.btnSecondary, pressed && styles.btnPressed]}
-                onPress={() => onAcknowledge?.(id)}
-              >
-                <Ionicons name="checkmark" size={16} color="#3B82F6" style={styles.btnIcon} />
-                <Text style={styles.btnSecondaryText}>Acknowledge</Text>
-              </Pressable>
-
-              {/* Respond Button */}
-              {/* TODO: Call POST /api/v1/alerts/:id/respond */}
-              <Pressable
-                style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPressed]}
-                onPress={() => onRespond?.(id)}
-              >
-                <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" style={styles.btnIcon} />
-                <Text style={styles.btnPrimaryText}>Respond</Text>
-              </Pressable>
-            </>
+            <Pressable
+              style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPressed]}
+              onPress={() => onRespond?.(id)}
+            >
+              <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" style={styles.btnIcon} />
+              <Text style={styles.btnPrimaryText}>I'm Responding</Text>
+            </Pressable>
           )}
 
           {status !== 'new' && onResolve && (
-            /* Resolve Button (for Responding state) */
-            /* TODO: Call POST /api/v1/alerts/:id/resolve with incident reports */
+            /* Resolution is Circle Owner-only; callers omit this for caregivers. */
             <Pressable
               style={({ pressed }) => [
                 styles.btnPrimary,
