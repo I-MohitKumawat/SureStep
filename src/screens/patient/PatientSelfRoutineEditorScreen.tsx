@@ -1,25 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Image,
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
   Text,
   TextInput,
   View
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
-import { C } from '../../theme/colors';
-import { F } from '../../theme/fonts';
+import { useTheme } from '../../theme/ThemeContext';
 import { Feather } from '@expo/vector-icons';
-import { getCategoryIcon } from '../../components/shared/RoutineCapsule';
 import type { PatientStackParams } from '../../types/navigation.types';
 import {
   createRoutineDefinition,
@@ -30,30 +28,6 @@ import {
 
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientSelfRoutineEditorScreen'>;
 
-const BackIcon = () => (
-  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-    <Path d="M15 19l-7-7 7-7" stroke={C.textPrimary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const TrashIcon = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke="#DC2626" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const UpIcon = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M5 15l7-7 7 7" stroke={C.textPrimary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const DownIcon = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 9l-7 7-7-7" stroke={C.textPrimary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
 const CATEGORIES = [
   { label: 'Medication', icon: 'activity' },
   { label: 'Meal', icon: 'coffee' },
@@ -61,9 +35,12 @@ const CATEGORIES = [
   { label: 'Hygiene', icon: 'droplet' },
   { label: 'Appointment', icon: 'calendar' },
 ];
-const DAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const DAYS_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const PatientSelfRoutineEditorScreen: React.FC<Props> = ({ route, navigation }) => {
+  const { mode: themeMode } = useTheme();
+  const isDark = themeMode === 'dark';
   const { patientId, patientName, mode } = route.params;
   const routine = mode === 'edit' ? route.params.routine : undefined;
 
@@ -118,7 +95,8 @@ export const PatientSelfRoutineEditorScreen: React.FC<Props> = ({ route, navigat
   });
 
   const [saving, setSaving] = useState(false);
-  const screenTitle = mode === 'edit' ? 'Edit Routine Template' : 'Add Routine Template';
+  const screenTitle = mode === 'edit' ? 'Edit routine' : 'Create routine';
+  const [webTime, setWebTime] = useState('08:00');
 
   // Toggle day selection for weekly recurrence
   const toggleDay = (dayIndex: number) => {
@@ -142,9 +120,7 @@ export const PatientSelfRoutineEditorScreen: React.FC<Props> = ({ route, navigat
       const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
       const timeStr = `${hours}:${minutes}`;
       
-      if (!times.includes(timeStr)) {
-        setTimes(prev => [...prev, timeStr].sort());
-      }
+      setTimes(prev => prev.includes(timeStr) ? prev : [...prev, timeStr].sort());
     }
   };
 
@@ -206,6 +182,7 @@ export const PatientSelfRoutineEditorScreen: React.FC<Props> = ({ route, navigat
 
   // Save the form
   const handleSave = async () => {
+    if (saving) return;
     const cleanTitle = name.trim();
     if (!cleanTitle) {
       Alert.alert('Required Field', 'Please enter a routine title.');
@@ -214,6 +191,11 @@ export const PatientSelfRoutineEditorScreen: React.FC<Props> = ({ route, navigat
 
     if (times.length === 0) {
       Alert.alert('Required Field', 'Please schedule at least one execution time.');
+      return;
+    }
+
+    if (recurrenceType === 'WEEKLY' && recurrenceDays.length === 0) {
+      Alert.alert('Required Field', 'Please select at least one day.');
       return;
     }
 
@@ -258,533 +240,147 @@ export const PatientSelfRoutineEditorScreen: React.FC<Props> = ({ route, navigat
     }
   };
 
-  return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={15}>
-          <BackIcon />
-        </Pressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>{screenTitle}</Text>
-          <Text style={styles.headerSub}>For {patientName}</Text>
-        </View>
-        <View style={styles.headerRightPlaceholder} />
+  const primary = isDark ? '#6EE7B7' : '#0E7A67';
+  const muted = isDark ? '#A6BDB2' : '#52605D';
+  const ink = isDark ? 'text-[#F0FDF4]' : 'text-[#152D24]';
+  const secondary = isDark ? 'text-[#A6BDB2]' : 'text-[#52605D]';
+  const surface = isDark ? 'bg-[#1B2924] border-[#30453B]' : 'bg-white border-[#DFE9E4]';
+  const soft = isDark ? 'bg-[#263A31] border-[#3D5A4D]' : 'bg-[#F6F8F7] border-[#DFE9E4]';
+  const card = `mb-4 rounded-3xl border p-4 ${surface}`;
+  const field = `min-h-[48px] rounded-xl border px-4 py-3 text-base ${soft} ${ink}`;
+  const label = `mb-2 text-sm font-semibold ${ink}`;
+  const action = `min-h-[44px] flex-row items-center justify-center rounded-xl px-3 py-2 active:opacity-70 ${isDark ? 'bg-[#203E32]' : 'bg-[#E8F6EF]'}`;
+  const actionText = `font-semibold ${isDark ? 'text-emerald-200' : 'text-[#0E6650]'}`;
+  const iconButton = `h-11 w-11 items-center justify-center rounded-xl active:opacity-70 ${soft}`;
+  const sectionHeading = (icon: React.ComponentProps<typeof Feather>['name'], title: string, subtitle?: string) => (
+    <View className="mb-4">
+      <View className="flex-row items-center gap-2">
+        <Feather name={icon} size={21} color={primary} />
+        <Text className={`text-lg font-bold ${ink}`}>{title}</Text>
       </View>
+      {!!subtitle && <Text className={`mt-2 text-sm leading-5 ${secondary}`}>{subtitle}</Text>}
+    </View>
+  );
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Title */}
-        <View style={styles.formSection}>
-          <Text style={styles.label}>Routine Title</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Breakfast & Medication"
-            placeholderTextColor={C.textMuted}
-            style={styles.input}
-            autoCapitalize="sentences"
-            returnKeyType="next"
-          />
-        </View>
+  const addWebTime = () => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(webTime)) {
+      Alert.alert('Invalid time', 'Enter a time in 24-hour HH:MM format.');
+      return;
+    }
+    setTimes(prev => prev.includes(webTime) ? prev : [...prev, webTime].sort());
+    setShowTimePicker(false);
+  };
 
-        {/* Category Picker */}
-        <View style={styles.formSection}>
-          <Text style={styles.label}>Category</Text>
-          <TextInput
-            value={category}
-            onChangeText={setCategory}
-            placeholder="Type or select a category"
-            placeholderTextColor={C.textMuted}
-            style={[styles.input, { marginBottom: 10 }]}
-          />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesRow}>
-            {CATEGORIES.map((cat) => {
-              const active = category.toLowerCase() === cat.label.toLowerCase();
-              return (
-                <Pressable
-                  key={cat.label}
-                  style={[styles.categoryCard, active && styles.categoryCardActive]}
-                  onPress={() => setCategory(cat.label)}
-                >
-                  <Feather 
-                    name={cat.icon as any} 
-                    size={22} 
-                    color={active ? C.primary : C.textSecondary} 
-                    style={{ marginBottom: 4 }} 
-                  />
-                  <Text style={[styles.categoryText, active && styles.categoryTextActive]}>{cat.label}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Recurrence Selection */}
-        <View style={styles.formSection}>
-          <Text style={styles.label}>Schedule Recurrence</Text>
-          <View style={styles.recurrenceTypeRow}>
-            <Pressable
-              style={[styles.recurrenceTypeBtn, recurrenceType === 'DAILY' && styles.recurrenceTypeBtnActive]}
-              onPress={() => setRecurrenceType('DAILY')}
-            >
-              <Text style={[styles.recurrenceTypeLabel, recurrenceType === 'DAILY' && styles.recurrenceTypeLabelActive]}>Daily</Text>
+  return (
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, paddingHorizontal: 0, paddingVertical: 0, backgroundColor: isDark ? '#101916' : '#F5F8F6' }}>
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View className={`border-b px-4 py-3 ${surface}`}>
+          <View className="mx-auto w-full max-w-[720px] flex-row items-center gap-3">
+            <Pressable onPress={() => navigation.goBack()} disabled={saving} accessibilityRole="button" accessibilityLabel="Go back" className={iconButton}>
+              <Feather name="arrow-left" size={24} color={primary} />
             </Pressable>
-            <Pressable
-              style={[styles.recurrenceTypeBtn, recurrenceType === 'WEEKLY' && styles.recurrenceTypeBtnActive]}
-              onPress={() => setRecurrenceType('WEEKLY')}
-            >
-              <Text style={[styles.recurrenceTypeLabel, recurrenceType === 'WEEKLY' && styles.recurrenceTypeLabelActive]}>Weekly</Text>
-            </Pressable>
-          </View>
-
-          {recurrenceType === 'WEEKLY' && (
-            <View style={styles.daysRow}>
-              {DAYS_SHORT.map((day, idx) => {
-                const active = recurrenceDays.includes(idx);
-                return (
-                  <Pressable
-                    key={idx}
-                    style={[styles.dayCircle, active && styles.dayCircleActive]}
-                    onPress={() => toggleDay(idx)}
-                  >
-                    <Text style={[styles.dayText, active && styles.dayTextActive]}>{day}</Text>
-                  </Pressable>
-                );
-              })}
+            <View className="flex-1">
+              <Text className={`text-2xl font-bold tracking-tight ${ink}`}>{screenTitle}</Text>
+              <Text className={`mt-0.5 text-sm ${secondary}`}>For {patientName}</Text>
             </View>
-          )}
-        </View>
-
-        {/* Multiple Execution Times Selection */}
-        <View style={styles.formSection}>
-          <Text style={styles.label}>Scheduled Execution Times</Text>
-          <View style={styles.timeControlRow}>
-            <Pressable
-              style={styles.addTimeBtn}
-              onPress={() => setShowTimePicker(true)}
-            >
-              <Text style={styles.addTimeBtnText}>⏰ Add Scheduled Time</Text>
-            </Pressable>
+            <View className={iconButton}><Feather name="clipboard" size={22} color={primary} /></View>
           </View>
-
-          {times.length > 0 ? (
-            <View style={styles.timesContainer}>
-              {times.map((t) => (
-                <View key={t} style={styles.timeTag}>
-                  <Text style={styles.timeTagText}>⏰ {t}</Text>
-                  <Pressable onPress={() => handleRemoveTime(t)} hitSlop={6} style={styles.removeTimeBtn}>
-                    <TrashIcon />
+        </View>
+        <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View className="mx-auto w-full max-w-[720px] px-4 pb-6 pt-4">
+            <View className="mb-4 rounded-3xl bg-[#105C49] p-5">
+              <Text className="text-xl font-bold text-white">Build a healthier day</Text>
+              <Text className="mt-2 text-sm leading-5 text-emerald-100">Create a familiar routine, one step at a time.</Text>
+            </View>
+            <View className={card}>
+              {sectionHeading('clipboard', 'Routine details')}
+              <Text className={label}>Routine title</Text>
+              <TextInput value={name} onChangeText={setName} placeholder="e.g. Morning medication" placeholderTextColor={muted} className={field} accessibilityLabel="Routine title" autoCapitalize="sentences" returnKeyType="next" />
+              <Text className={`mt-5 ${label}`}>Category</Text>
+              <TextInput value={category} onChangeText={setCategory} placeholder="Type or select a category" placeholderTextColor={muted} className={field} accessibilityLabel="Routine category" />
+              <View className="mt-3 flex-row flex-wrap gap-2">
+                {CATEGORIES.map(cat => {
+                  const active = category.toLowerCase() === cat.label.toLowerCase();
+                  return (
+                    <Pressable key={cat.label} onPress={() => setCategory(cat.label)} accessibilityRole="button" accessibilityState={{ selected: active }} className={`min-w-[30%] flex-1 items-center justify-center rounded-xl border px-2 py-3 active:opacity-70 ${active ? (isDark ? 'border-emerald-400 bg-[#203E32]' : 'border-[#0E7A67] bg-[#E3F5EB]') : soft}`}>
+                      <Feather name={cat.icon as React.ComponentProps<typeof Feather>['name']} size={23} color={active ? primary : muted} />
+                      <Text className={`mt-2 text-center text-xs font-semibold ${active ? actionText : secondary}`}>{cat.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <View className={card}>
+              {sectionHeading('calendar', 'Schedule', 'Choose when this routine repeats.')}
+              <View className={`flex-row gap-1 rounded-2xl border p-1 ${soft}`}>
+                {(['DAILY', 'WEEKLY'] as const).map(freq => (
+                  <Pressable key={freq} onPress={() => setRecurrenceType(freq)} accessibilityRole="button" accessibilityState={{ selected: recurrenceType === freq }} className={`min-h-[44px] flex-1 items-center justify-center rounded-xl ${recurrenceType === freq ? 'bg-[#0E7A67]' : ''}`}>
+                    <Text className={`font-semibold ${recurrenceType === freq ? 'text-white' : secondary}`}>{freq === 'DAILY' ? 'Daily' : 'Weekly'}</Text>
                   </Pressable>
+                ))}
+              </View>
+              {recurrenceType === 'WEEKLY' && (
+                <View className="mt-4 flex-row flex-wrap gap-1.5">
+                  {DAYS_SHORT.map((day, idx) => {
+                    const active = recurrenceDays.includes(idx);
+                    return <Pressable key={idx} onPress={() => toggleDay(idx)} accessibilityRole="button" accessibilityLabel={DAYS_FULL[idx]} accessibilityState={{ selected: active }} className={`h-11 min-w-[36px] flex-1 items-center justify-center rounded-xl border ${active ? 'border-[#0E7A67] bg-[#0E7A67]' : soft}`}><Text className={`text-sm font-semibold ${active ? 'text-white' : secondary}`}>{day}</Text></Pressable>;
+                  })}
+                </View>
+              )}
+              <View className={`my-5 h-px ${isDark ? 'bg-[#30453B]' : 'bg-[#DFE9E4]'}`} />
+              <View className="flex-row flex-wrap items-center justify-between gap-2">
+                <Text className={`text-base font-bold ${ink}`}>Scheduled times</Text>
+                <Pressable onPress={() => { setTimePickerValue(new Date()); setShowTimePicker(true); }} accessibilityRole="button" className={action}>
+                  <Feather name="plus" size={18} color={primary} /><Text className={`ml-1 ${actionText}`}>Add time</Text>
+                </Pressable>
+              </View>
+              <View className="mt-3 flex-row flex-wrap gap-2">
+                {times.map(t => <View key={t} className={`flex-row items-center rounded-xl border pl-3 ${soft}`}><Feather name="clock" size={17} color={primary} /><Text className={`ml-2 font-semibold ${ink}`}>{t}</Text><Pressable onPress={() => handleRemoveTime(t)} accessibilityRole="button" accessibilityLabel={`Remove time ${t}`} className="h-11 w-11 items-center justify-center"><Feather name="x" size={19} color={muted} /></Pressable></View>)}
+                {!times.length && <Text className={`text-sm ${secondary}`}>No scheduled times yet. Add at least one.</Text>}
+              </View>
+              {showTimePicker && (Platform.OS === 'web' ? (
+                <View className="mt-4 gap-2">
+                  <TextInput value={webTime} onChangeText={setWebTime} placeholder="HH:MM" placeholderTextColor={muted} accessibilityLabel="Time in 24-hour format" className={field} />
+                  <View className="flex-row gap-2"><Pressable className={action} onPress={() => setShowTimePicker(false)}><Text className={actionText}>Cancel</Text></Pressable><Pressable className={action} onPress={addWebTime}><Text className={actionText}>Confirm time</Text></Pressable></View>
+                </View>
+              ) : Platform.OS === 'ios' ? (
+                <View className="mt-3">
+                  <DateTimePicker value={timePickerValue} mode="time" display="spinner" is24Hour themeVariant={isDark ? 'dark' : 'light'} onChange={(_, date) => { if (date) setTimePickerValue(date); }} />
+                  <View className="flex-row gap-2"><Pressable className={action} onPress={() => setShowTimePicker(false)}><Text className={actionText}>Cancel</Text></Pressable><Pressable className={action} onPress={() => handleTimeConfirm({ type: 'set' }, timePickerValue)}><Text className={actionText}>Confirm time</Text></Pressable></View>
+                </View>
+              ) : <DateTimePicker value={timePickerValue} mode="time" display="default" is24Hour onChange={handleTimeConfirm} />)}
+            </View>
+            <View className={card}>
+              {sectionHeading('list', 'Instruction steps', 'Add simple instructions in the correct order. Photos can help clarify each step.')}
+              {steps.map((step, idx) => (
+                <View key={idx} className={`mb-3 gap-3 rounded-2xl border p-3 ${soft}`}>
+                  <View className="flex-row flex-wrap items-center gap-1">
+                    <View className="h-8 w-8 items-center justify-center rounded-lg bg-[#0E7A67]"><Text className="font-bold text-white">{idx + 1}</Text></View>
+                    <Text className={`ml-1 flex-1 font-bold ${ink}`}>Step {idx + 1}</Text>
+                    {idx > 0 && <Pressable onPress={() => handleMoveStep(idx, 'up')} accessibilityRole="button" accessibilityLabel={`Move step ${idx + 1} up`} className={iconButton}><Feather name="chevron-up" size={20} color={muted} /></Pressable>}
+                    {idx < steps.length - 1 && <Pressable onPress={() => handleMoveStep(idx, 'down')} accessibilityRole="button" accessibilityLabel={`Move step ${idx + 1} down`} className={iconButton}><Feather name="chevron-down" size={20} color={muted} /></Pressable>}
+                    {steps.length > 1 && <Pressable onPress={() => handleRemoveStep(idx)} accessibilityRole="button" accessibilityLabel={`Delete step ${idx + 1}`} className={iconButton}><Feather name="trash-2" size={19} color={isDark ? '#FCA5A5' : '#DC2626'} /></Pressable>}
+                  </View>
+                  <TextInput value={step.text} onChangeText={text => handleStepTextChange(text, idx)} placeholder="Describe this step..." placeholderTextColor={muted} accessibilityLabel={`Instruction for step ${idx + 1}`} multiline scrollEnabled={false} textAlignVertical="top" className={`min-h-[90px] rounded-xl border px-3 py-3 text-base ${surface} ${ink}`} />
+                  {step.photo_url ? (
+                    <View className="overflow-hidden rounded-xl">
+                      <Image source={{ uri: step.photo_url }} className="h-44 w-full" resizeMode="cover" accessibilityLabel={`Reference photo for step ${idx + 1}`} />
+                      <Pressable onPress={() => handleRemoveStepPhoto(idx)} accessibilityRole="button" className="mt-2 min-h-[44px] flex-row items-center justify-center gap-2 rounded-xl bg-red-600"><Feather name="trash-2" color="white" size={17} /><Text className="font-semibold text-white">Remove photo</Text></Pressable>
+                    </View>
+                  ) : <Pressable onPress={() => handlePickStepPhoto(idx)} accessibilityRole="button" accessibilityLabel={`Add reference photo to step ${idx + 1}`} className={`min-h-[48px] flex-row items-center justify-center gap-2 rounded-xl border border-dashed ${isDark ? 'border-emerald-500' : 'border-[#B8D9CB]'}`}><Feather name="image" size={19} color={primary} /><Text className={actionText}>Add reference photo</Text></Pressable>}
                 </View>
               ))}
+              <Pressable onPress={handleAddStep} accessibilityRole="button" className={action}><Feather name="plus-circle" size={20} color={primary} /><Text className={`ml-2 ${actionText}`}>Add another step</Text></Pressable>
             </View>
-          ) : (
-            <Text style={styles.noTimesText}>No execution times added yet.</Text>
-          )}
-
-          {showTimePicker && (
-            <DateTimePicker
-              value={timePickerValue}
-              mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              is24Hour={true}
-              onChange={handleTimeConfirm}
-            />
-          )}
-        </View>
-
-        {/* Step by Step Visual Instructions */}
-        <View style={styles.formSection}>
-          <Text style={styles.label}>Instruction Steps</Text>
-          <Text style={styles.instructionsHelper}>
-            Specify steps in custom order. Add photos for clarity (e.g. meds locations, pill appearance).
-          </Text>
-
-          {steps.map((step, idx) => (
-            <View key={idx} style={styles.stepCard}>
-              {/* Step Header / Controls */}
-              <View style={styles.stepHeaderRow}>
-                <View style={styles.stepNumberBadge}>
-                  <Text style={styles.stepNumberVal}>{idx + 1}</Text>
-                </View>
-                
-                <View style={{ flex: 1 }} />
-                
-                <View style={styles.stepReorderGroup}>
-                  {idx > 0 && (
-                    <Pressable
-                      style={styles.stepReorderBtn}
-                      onPress={() => handleMoveStep(idx, 'up')}
-                      hitSlop={6}
-                    >
-                      <UpIcon />
-                    </Pressable>
-                  )}
-                  {idx < steps.length - 1 && (
-                    <Pressable
-                      style={styles.stepReorderBtn}
-                      onPress={() => handleMoveStep(idx, 'down')}
-                      hitSlop={6}
-                    >
-                      <DownIcon />
-                    </Pressable>
-                  )}
-                </View>
-
-                {steps.length > 1 && (
-                  <Pressable
-                    style={styles.stepDeleteBtn}
-                    onPress={() => handleRemoveStep(idx)}
-                    hitSlop={6}
-                  >
-                    <TrashIcon />
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Step Text Area (Auto growing multiline text input) */}
-              <TextInput
-                value={step.text}
-                onChangeText={(txt) => handleStepTextChange(txt, idx)}
-                placeholder="e.g. Take 1 green capsule from the kitchen pillbox..."
-                placeholderTextColor={C.textMuted}
-                style={styles.stepTextInput}
-                multiline={true}
-                scrollEnabled={false}
-              />
-
-              {/* Step Reference Image */}
-              {step.photo_url ? (
-                <View style={styles.photoPreviewContainer}>
-                  <Image source={{ uri: step.photo_url }} style={styles.photoPreview} />
-                  <Pressable
-                    style={styles.removePhotoBtn}
-                    onPress={() => handleRemoveStepPhoto(idx)}
-                  >
-                    <Text style={styles.removePhotoBtnText}>✕ Remove Photo</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  style={styles.addPhotoBtn}
-                  onPress={() => handlePickStepPhoto(idx)}
-                >
-                  <Text style={styles.addPhotoBtnText}>📷 Add Reference Photo</Text>
-                </Pressable>
-              )}
-            </View>
-          ))}
-
-          <Pressable style={styles.addStepBtn} onPress={handleAddStep}>
-            <Text style={styles.addStepBtnText}>＋ Add Step</Text>
+          </View>
+        </ScrollView>
+        <View className={`border-t px-4 py-3 ${surface}`}>
+          <Pressable onPress={handleSave} disabled={saving} accessibilityRole="button" accessibilityState={{ disabled: saving, busy: saving }} className={`mx-auto min-h-[54px] w-full max-w-[720px] flex-row items-center justify-center gap-2 rounded-2xl bg-[#0E7A67] px-4 py-4 active:opacity-80 ${saving ? 'opacity-60' : ''}`}>
+            {saving ? <ActivityIndicator color="white" /> : <Feather name="check-circle" size={21} color="white" />}
+            <Text className="text-base font-bold text-white">{saving ? 'Saving...' : 'Save routine template'}</Text>
           </Pressable>
         </View>
-
-        {/* Submit Save Button */}
-        <Pressable
-          style={({ pressed }) => [styles.saveBtn, (pressed || saving) && styles.saveBtnPressed]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Routine Template'}</Text>
-        </Pressable>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  screen: { backgroundColor: '#F4F7F6', paddingHorizontal: 0, paddingVertical: 0 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
-
-  // Header Styles
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-  },
-  backBtn: { padding: 4 },
-  headerTitleWrap: { alignItems: 'center', flex: 1 },
-  headerTitle: { fontFamily: F.extraBold, fontSize: 18, color: C.textPrimary },
-  headerSub: { fontFamily: F.bold, fontSize: 12, color: C.primary, marginTop: 1 },
-  headerRightPlaceholder: { width: 32 },
-
-  // Form styles
-  formSection: { marginBottom: 20 },
-  label: { fontFamily: F.bold, fontSize: 13, color: C.textSecondary, marginBottom: 8 },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: F.regular,
-    fontSize: 15,
-    color: C.textPrimary,
-  },
-
-  // Emoji styles
-  emojiInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  emojiDisplayCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiDisplayVal: {
-    fontSize: 24,
-  },
-  emojiTextInput: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: F.medium,
-    fontSize: 15,
-    color: C.textPrimary,
-  },
-  emojiSuggestions: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  emojiSuggestionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiSuggestionText: {
-    fontSize: 18,
-  },
-
-  // Categories Horizontal Picker
-  categoriesRow: { gap: 8, paddingBottom: 6 },
-  categoryCard: {
-    width: 86,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryCardActive: { borderColor: C.primary, backgroundColor: '#E6F4EA' },
-  categoryEmoji: { fontSize: 22, marginBottom: 4 },
-  categoryText: { fontFamily: F.bold, fontSize: 11, color: C.textMuted },
-  categoryTextActive: { color: C.primary },
-
-  // Recurrence
-  recurrenceTypeRow: { flexDirection: 'row', borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 14, overflow: 'hidden', backgroundColor: '#FFFFFF', marginBottom: 10 },
-  recurrenceTypeBtn: { flex: 1, paddingVertical: 11, alignItems: 'center', justifyContent: 'center' },
-  recurrenceTypeBtnActive: { backgroundColor: '#E2E8F0' },
-  recurrenceTypeLabel: { fontFamily: F.bold, fontSize: 13, color: C.textMuted },
-  recurrenceTypeLabelActive: { color: C.textPrimary },
-
-  daysRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  dayCircle: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  dayCircleActive: { borderColor: C.primary, backgroundColor: C.primaryLight },
-  dayText: { fontFamily: F.bold, fontSize: 13, color: C.textMuted },
-  dayTextActive: { color: C.primary },
-
-  // Execution Times
-  timeControlRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  addTimeBtn: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  addTimeBtnText: {
-    fontFamily: F.bold,
-    fontSize: 13,
-    color: C.textPrimary,
-  },
-  timesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  timeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingLeft: 10,
-    paddingRight: 6,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  timeTagText: {
-    fontFamily: F.bold,
-    fontSize: 12,
-    color: C.textPrimary,
-  },
-  removeTimeBtn: {
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: '#FEE2E2',
-  },
-  noTimesText: {
-    fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textMuted,
-    fontStyle: 'italic',
-  },
-
-  // Steps UI
-  instructionsHelper: {
-    fontFamily: F.medium,
-    fontSize: 12,
-    color: C.textMuted,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  stepCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    gap: 10,
-  },
-  stepHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  stepNumberBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepNumberVal: {
-    fontFamily: F.extraBold,
-    fontSize: 11,
-    color: C.primaryText,
-  },
-  stepReorderGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  stepReorderBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepDeleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepTextInput: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 10,
-    fontFamily: F.regular,
-    fontSize: 14,
-    color: C.textPrimary,
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  addPhotoBtn: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: C.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FAFAFA',
-  },
-  addPhotoBtnText: {
-    fontFamily: F.bold,
-    fontSize: 12,
-    color: C.primary,
-  },
-  photoPreviewContainer: {
-    width: '100%',
-    height: 160,
-    borderRadius: 10,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  photoPreview: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#F1F5F9',
-  },
-  removePhotoBtn: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  removePhotoBtnText: {
-    fontFamily: F.bold,
-    fontSize: 10,
-    color: '#FFFFFF',
-  },
-  addStepBtn: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#94A3B8',
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    marginTop: 4,
-  },
-  addStepBtnText: {
-    fontFamily: F.bold,
-    fontSize: 14,
-    color: '#475569',
-  },
-
-  // Save Button
-  saveBtn: { backgroundColor: C.primary, borderRadius: 16, paddingVertical: 14, alignItems: 'center', marginTop: 12, shadowColor: C.primary, shadowOpacity: 0.26, shadowOffset: { width: 0, height: 6 }, shadowRadius: 12, elevation: 6 },
-  saveBtnPressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
-  saveBtnText: { fontFamily: F.bold, color: C.primaryText, fontSize: 16 },
-});

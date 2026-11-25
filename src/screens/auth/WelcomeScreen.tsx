@@ -1,12 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
-import { useTheme } from '../../theme/ThemeContext';
-import { C } from '../../theme/colors';
-import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,83 +18,84 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <ScreenContainer
       edges={['top', 'bottom', 'left', 'right']}
-      style={styles.container}
+      style={{"flex":1,"backgroundColor":"transparent"}}
     >
       {(theme) => (
         <>
+          <StatusBar barStyle="dark-content" />
           {/* SKY BACKGROUND */}
           <LinearGradient
             colors={['#57CFF2', '#BFEFFF', theme.colors.background]}
             locations={[0, 0.45, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
-            style={styles.gradient}
+            style={{"position":"absolute","top":0,"left":0,"right":0,"height":250}}
           />
 
           {/* CONTENT */}
-          <View style={styles.content}>
+          <View className="flex-1 justify-between">
             {/* LOGO AREA */}
-            <View style={styles.heroSection}>
+            <View className="items-center pt-[80px]">
               {/* PIN SHAPE */}
-              <View style={styles.pinWrapper}>
+              <View className="items-center mb-[35px]">
                 {/* Outer PIN */}
-                <View style={styles.pinOuter}>
+                <View className="w-[210px] h-[210px] rounded-[105px] bg-[#45C8EE] items-center justify-center" style={{"shadowColor":"#000","shadowOpacity":0.12,"shadowOffset":{"width":0,"height":14},"shadowRadius":24,"elevation":12}}>
                   {/* Inner Dark */}
-                  <View style={styles.pinInner}>
+                  <View className="w-[165px] h-[165px] rounded-[82.5px] bg-care-plum items-center justify-center">
                     {/* FACE */}
-                    <View style={styles.faceCircle}>
-                      <View style={styles.eyesRow}>
-                        <View style={styles.eye} />
-                        <View style={styles.eye} />
+                    <View className="w-[96px] h-[96px] rounded-[48px] bg-white items-center justify-center">
+                      <View className="flex-row gap-[18px] mb-[12px]">
+                        <View className="w-[10px] h-[10px] rounded-[5px] bg-care-plum" />
+                        <View className="w-[10px] h-[10px] rounded-[5px] bg-care-plum" />
                       </View>
-                      <View style={styles.smile} />
+                      <View className="w-[40px] h-[20px] border-[6px] border-t-[0px] border-care-plum rounded-bl-[24px] rounded-br-[24px]" />
                     </View>
                   </View>
                 </View>
                 {/* PIN DOT */}
-                <View style={styles.pinDot} />
+                <View className="w-[28px] h-[28px] rounded-[14px] bg-[#45C8EE] mt-[10px]" style={{"shadowColor":"#000","shadowOpacity":0.1,"shadowOffset":{"width":0,"height":6},"shadowRadius":10,"elevation":5}} />
               </View>
 
-              <Text style={styles.brandText}>SURESTEP</Text>
-              <Text style={styles.taglineText}>Your daily care companion</Text>
+              <Text className="font-inter-extrabold text-[28px] text-care-plum tracking-[9px]">SURESTEP</Text>
+              <Text className="font-inter-medium text-[14px] text-care-plum text-center mt-[6px]">Your daily care companion</Text>
             </View>
 
             {/* BOTTOM SECTION */}
-            <View style={styles.bottomSection}>
+            <View className="relative px-[28px] pb-[36px] pt-[44px] items-center w-[100%]">
               {/* SLANTED SURFACE */}
-              <View style={styles.slantBg} pointerEvents="none" />
+              <View className="absolute top-[0px] left-[-30px] right-[-30px] bottom-[-80px] bg-brand-light rounded-tl-[60px] rounded-tr-[60px]" style={{"transform":[{"rotate":"-6deg"}]}} pointerEvents="none" />
 
               {isOnboarding ? (
                 // Mid-onboarding: user is Firebase-authenticated but hasn't finished DB setup
-                <View style={styles.ctaWrapper}>
+                <View className="w-[100%] items-center z-[10]">
                   <TouchableOpacity
                     activeOpacity={0.88}
                     onPress={() => status === 'no_role'
                       ? navigation.navigate('RoleSelectionScreen')
                       : navigation.navigate('ProfileSetupScreen', { role: 'PATIENT' })
                     }
-                    style={styles.ctaButton}
+                    className="w-[100%] h-[58px] rounded-[29px] bg-brand items-center justify-center mb-[16px]" style={{"shadowColor":"#0A5D50","shadowOpacity":0.28,"shadowOffset":{"width":0,"height":6},"shadowRadius":12,"elevation":6}}
                   >
-                    <Text style={styles.ctaText}>
+                    <Text className="font-inter-bold text-[18px] tracking-[1.2px] text-white">
                       Continue as{' '}
-                      <Text style={{ fontFamily: F.extraBold }}>{firebaseUser?.phoneNumber ?? 'your number'}</Text>
+                      <Text className="font-inter-extrabold">{firebaseUser?.phoneNumber ?? 'your number'}</Text>
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.7} onPress={() => logout()} style={styles.signOutLink}>
-                    <Text style={styles.signOutLinkText}>Sign out / use a different number</Text>
+                  <TouchableOpacity activeOpacity={0.7} onPress={() => logout()} className="mt-[8px] py-[10px] px-[16px] z-[10]">
+                    <Text className="font-inter-bold text-[14px] text-brand underline">Sign out / use a different number</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 // Unified Sign In entry point
-                <View style={styles.ctaWrapper}>
+                <View className="w-[100%] items-center z-[10]">
                   <TouchableOpacity
                     activeOpacity={0.88}
                     onPress={() => navigation.navigate('PhoneAuthScreen')}
-                    style={styles.ctaButton}
+                    className="w-[100%] h-[58px] rounded-[29px] bg-brand items-center justify-center mb-[16px]" style={{"shadowColor":"#0A5D50","shadowOpacity":0.28,"shadowOffset":{"width":0,"height":6},"shadowRadius":12,"elevation":6}}
                   >
-                    <Text style={styles.ctaText}>Sign In with Phone</Text>
+                    <Text className="font-inter-bold text-[18px] tracking-[1.2px] text-white">Sign In with Phone</Text>
                   </TouchableOpacity>
-                  <Text style={styles.secondaryText}>
+                  <Text className="font-inter-medium text-[14px] text-[#084C41] text-center leading-[20px]">
                     New to SureStep? Sign in to set up your profile.
                   </Text>
                 </View>
@@ -109,237 +107,3 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
     </ScreenContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-
-  gradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 250,
-  },
-
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-
-  heroSection: {
-    alignItems: 'center',
-    paddingTop: 80,
-  },
-
-  pinWrapper: {
-    alignItems: 'center',
-    marginBottom: 35,
-  },
-
-  pinOuter: {
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-
-    backgroundColor: '#45C8EE',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: {
-      width: 0,
-      height: 14,
-    },
-    shadowRadius: 24,
-    elevation: 12,
-  },
-
-  pinInner: {
-    width: 165,
-    height: 165,
-    borderRadius: 82.5,
-
-    backgroundColor: '#2D2342',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  faceCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-
-    backgroundColor: '#FFFFFF',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  eyesRow: {
-    flexDirection: 'row',
-    gap: 18,
-    marginBottom: 12,
-  },
-
-  eye: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#2D2342',
-  },
-
-  smile: {
-    width: 40,
-    height: 20,
-
-    borderWidth: 6,
-    borderTopWidth: 0,
-    borderColor: '#2D2342',
-
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-
-  pinDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-
-    backgroundColor: '#45C8EE',
-
-    marginTop: 10,
-
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowRadius: 10,
-    elevation: 5,
-  },
-
-  brandText: {
-    fontFamily: F.extraBold,
-    fontSize: 28,
-    color: '#2D2342',
-    letterSpacing: 9,
-  },
-
-  taglineText: {
-    fontFamily: F.medium,
-    fontSize: 14,
-    color: '#2D2342',
-    textAlign: 'center',
-    marginTop: 6,
-  },
-
-  bottomSection: {
-    position: 'relative',
-    paddingHorizontal: 28,
-    paddingBottom: 36,
-    paddingTop: 44,
-    alignItems: 'center',
-    width: '100%',
-  },
-
-  slantBg: {
-    position: 'absolute',
-    top: 0,
-    left: -30,
-    right: -30,
-    bottom: -80,
-    backgroundColor: C.primaryLight,
-    transform: [{ rotate: '-6deg' }],
-    borderTopLeftRadius: 60,
-    borderTopRightRadius: 60,
-  },
-
-  ctaWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-
-  ctaButton: {
-    width: '100%',
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#0E7A67',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0A5D50',
-    shadowOpacity: 0.28,
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowRadius: 12,
-    elevation: 6,
-    marginBottom: 16,
-  },
-
-  ctaPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
-  },
-
-  ctaText: {
-    fontFamily: F.bold,
-    fontSize: 18,
-    letterSpacing: 1.2,
-    color: '#FFFFFF',
-  },
-
-  ctaButtonOutline: {
-    width: '100%',
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-
-  ctaTextOutline: {
-    fontFamily: F.bold,
-    fontSize: 18,
-    letterSpacing: 1.5,
-    color: C.primary,
-  },
-
-  textWithLink: {
-    color: C.primary,
-    fontFamily: F.bold,
-    textDecorationLine: 'underline',
-    textAlign: "center",
-  },
-
-  secondaryText: {
-    fontFamily: F.medium,
-    fontSize: 14,
-    color: '#084C41',
-    textAlign: "center",
-    lineHeight: 20,
-  },
-
-  signOutLink: {
-    marginTop: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    zIndex: 10,
-  },
-  signOutLinkText: {
-    fontFamily: F.bold,
-    fontSize: 14,
-    color: C.primary,
-    textDecorationLine: 'underline',
-  },
-});

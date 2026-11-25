@@ -8,7 +8,25 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
+      fontFamily: {
+        'inter-regular': ['Inter_400Regular'],
+        'inter-medium': ['Inter_500Medium'],
+        'inter-semibold': ['Inter_600SemiBold'],
+        'inter-bold': ['Inter_700Bold'],
+        'inter-extrabold': ['Inter_800ExtraBold'],
+      },
       colors: {
+        care: {
+          sky: '#57CFF2',
+          mist: '#BFEFFF',
+          mint: '#B1F3DA',
+          canvas: '#FAF8F5',
+          plum: '#2D2342',
+          ink: '#161E1C',
+          muted: '#52605D',
+          border: '#E5E0D8',
+          selected: '#EFF8F5',
+        },
         brand: {
           DEFAULT: '#0E7A67',
           light: '#b1f3da',

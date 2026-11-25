@@ -1,12 +1,22 @@
+
 /**
  * SureStep — src/screens/auth/patient-onboarding/PatientOnboardingScreen.tsx
  * Master orchestrator for the 9-group adaptive Patient Onboarding experience.
  */
-import React, { useState } from 'react';
+
+import React, { useState, useCallback } from 'react';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 import { useAuth } from '../../../context/AuthContext';
 import { provisionUser } from '../../../services/authService';
-import { updateMe, updatePatientProfile, uploadProfilePhoto } from '../../../services/userService';
+import {
+  updateMe,
+  updatePatientProfile,
+  uploadProfilePhoto,
+} from '../../../services/userService';
+
 import type { AuthStackParams } from '../../../types/navigation.types';
 import type { PatientMedicationItem } from '../../../types/api.types';
 
@@ -20,7 +30,10 @@ import { Step7SafetyConcerns } from './Step7SafetyConcerns';
 import { Step8EmergencyContact } from './Step8EmergencyContact';
 import { Step9Review } from './Step9Review';
 
-type Props = NativeStackScreenProps<AuthStackParams, 'PatientOnboardingScreen'>;
+type Props = NativeStackScreenProps<
+  AuthStackParams,
+  'PatientOnboardingScreen'
+>;
 
 export interface PatientOnboardingState {
   name: string;
@@ -45,14 +58,29 @@ export interface PatientOnboardingState {
   emergencyContactPhone: string;
 }
 
-export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { intent = 'RECEIVING_CARE', returnToStep } = route.params || {};
+export const PatientOnboardingScreen: React.FC<Props> = ({
+  route,
+  navigation,
+}) => {
+  const {
+    intent = 'RECEIVING_CARE',
+    returnToStep,
+  } = route.params || {};
+
   const { firebaseUser, login, refreshUser } = useAuth();
 
-  const [currentStep, setCurrentStep] = useState<number>(returnToStep || 1);
-  const [returnToReview, setReturnToReview] = useState<boolean>(false);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<number>(
+    returnToStep || 1
+  );
+
+  const [returnToReview, setReturnToReview] =
+    useState<boolean>(false);
+
+  const [submitting, setSubmitting] =
+    useState<boolean>(false);
+
+  const [submitError, setSubmitError] =
+    useState<string | null>(null);
 
   const [state, setState] = useState<PatientOnboardingState>({
     name: '',
@@ -77,109 +105,229 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
     emergencyContactPhone: '',
   });
 
-  const updateState = (fields: Partial<PatientOnboardingState>) => {
-    setState((prev) => ({ ...prev, ...fields }));
+  const updateState = (
+    fields: Partial<PatientOnboardingState>
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      ...fields,
+    }));
   };
+
+  /* ──────────────────────────────────────────
+     NEXT STEP
+  ────────────────────────────────────────── */
 
   const handleNext = () => {
+    if (submitting) return;
+
     if (returnToReview) {
       setCurrentStep(9);
       setReturnToReview(false);
       return;
     }
+
     if (currentStep < 9) {
-      setCurrentStep((s) => s + 1);
+      setCurrentStep((step) => Math.min(9, step + 1));
     }
   };
 
-  const handleBack = () => {
+  /* ──────────────────────────────────────────
+     PREVIOUS STEP
+  ────────────────────────────────────────── */
+
+  const handleBack = useCallback(() => {
+    // Prevent accidental exit during submission.
+    if (submitting) return;
+
+    // Return to review if editing an existing step.
     if (returnToReview) {
       setCurrentStep(9);
       setReturnToReview(false);
       return;
     }
+
+    // Navigate to the previous onboarding step.
     if (currentStep > 1) {
-      setCurrentStep((s) => s - 1);
-    } else {
-      navigation.navigate('RoleSelectionScreen');
+      setCurrentStep((step) => Math.max(1, step - 1));
+      return;
     }
-  };
+
+    // Exit onboarding only when currently on Step 1.
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.replace('RoleSelectionScreen');
+    }
+  }, [
+    currentStep,
+    returnToReview,
+    submitting,
+    navigation,
+  ]);
+
+  /* ──────────────────────────────────────────
+     ANDROID HARDWARE / SYSTEM BACK BUTTON
+  ────────────────────────────────────────── */
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBackPress = () => {
+        // Block back navigation during profile submission.
+        if (submitting) {
+          return true;
+        }
+
+        // Use onboarding navigation instead of
+        // React Navigation's default back action.
+        handleBack();
+
+        // Prevent Android from exiting this screen.
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onHardwareBackPress
+      );
+
+      // Remove listener when onboarding loses focus.
+      return () => {
+        subscription.remove();
+      };
+    }, [handleBack, submitting])
+  );
+
+  /* ──────────────────────────────────────────
+     EDIT FROM REVIEW
+  ────────────────────────────────────────── */
 
   const handleJumpToStep = (stepNumber: number) => {
+    if (submitting) return;
+
     setReturnToReview(true);
     setCurrentStep(stepNumber);
   };
 
+  /* ──────────────────────────────────────────
+     FINAL PROFILE SUBMISSION
+  ────────────────────────────────────────── */
+
   const handleFinalSubmit = async () => {
     if (submitting) return;
+
     setSubmitting(true);
     setSubmitError(null);
 
     try {
       const phone = firebaseUser?.phoneNumber || '';
 
-      // 1. Provision account as PATIENT
-      console.log('[PATIENT_ONBOARDING] Provisioning patient account, intent:', intent);
+      // 1. Provision account as PATIENT.
+
+      console.log(
+        '[PATIENT_ONBOARDING] Provisioning patient account, intent:',
+        intent
+      );
+
       const provRes = await provisionUser({
         name: state.name.trim(),
         role: 'PATIENT',
         phone: phone || undefined,
-        preferred_language: state.primaryLanguage === 'Hindi' ? 'hi' : 'en',
+        preferred_language:
+          state.primaryLanguage === 'Hindi' ? 'hi' : 'en',
       });
 
       const provisionedUser = provRes.data?.data?.user;
+
       if (!provisionedUser?.id) {
-        throw new Error('Account creation failed. Please try again.');
+        throw new Error(
+          'Account creation failed. Please try again.'
+        );
       }
 
-      // 2. Upload profile photo if provided
+      // 2. Upload profile photo if provided.
+
       let remotePhotoUrl: string | undefined = undefined;
+
       if (state.photoUri) {
         try {
-          remotePhotoUrl = await uploadProfilePhoto(state.photoUri);
+          remotePhotoUrl = await uploadProfilePhoto(
+            state.photoUri
+          );
         } catch (photoErr) {
-          console.warn('[PATIENT_ONBOARDING] Photo upload non-fatal notice:', photoErr);
+          console.warn(
+            '[PATIENT_ONBOARDING] Photo upload non-fatal notice:',
+            photoErr
+          );
         }
       }
 
-      // 3. Update core user fields
+      // 3. Update core user fields.
+
       await updateMe({
         name: state.name.trim(),
         date_of_birth: state.dob || undefined,
         gender: state.gender || undefined,
         city: state.city.trim() || undefined,
-        preferred_language: state.primaryLanguage === 'Hindi' ? 'hi' : 'en',
+        preferred_language:
+          state.primaryLanguage === 'Hindi' ? 'hi' : 'en',
         photo_url: remotePhotoUrl || undefined,
       });
 
-      // 4. Update rich patient profile fields
+      // 4. Update rich patient profile fields.
+
       const diagnosisValue =
         state.diagnosisStatus === 'NO_DEMENTIA'
           ? null
-          : state.dementiaType || state.diagnosisStatus || null;
+          : state.dementiaType ||
+            state.diagnosisStatus ||
+            null;
 
       await updatePatientProfile({
-        emergency_contact_name: state.emergencyContactName.trim() || null,
-        emergency_contact_phone: state.emergencyContactPhone.trim() || null,
-        emergency_contact_relation: state.emergencyContactRelation.trim() || null,
+        emergency_contact_name:
+          state.emergencyContactName.trim() || null,
+
+        emergency_contact_phone:
+          state.emergencyContactPhone.trim() || null,
+
+        emergency_contact_relation:
+          state.emergencyContactRelation.trim() || null,
+
         diagnosis: diagnosisValue,
         diagnosis_date: null,
+
         severity_level: state.stage || null,
-        living_arrangement: state.livingArrangement || null,
+
+        living_arrangement:
+          state.livingArrangement || null,
+
         care_needs: state.careNeeds,
+
         safety_concerns: state.safetyConcerns,
-        communication_preferences: state.communicationPreferences,
+
+        communication_preferences:
+          state.communicationPreferences,
+
         other_conditions: state.otherConditions,
-        onboarding_source: intent === 'RECEIVING_CARE' ? 'SELF' : 'FAMILY',
+
+        onboarding_source:
+          intent === 'RECEIVING_CARE' ? 'SELF' : 'FAMILY',
+
+        takes_medication: state.takesMedication,
+
         medications: state.medications,
+
         known_triggers: [],
         comfort_items: [],
         favourite_songs: [],
       });
 
-      console.log('[PATIENT_ONBOARDING] Patient profile successfully saved');
+      console.log(
+        '[PATIENT_ONBOARDING] Patient profile successfully saved'
+      );
 
-      // 5. Authenticate session as PATIENT
+      // 5. Authenticate session as PATIENT.
+
       await login(
         {
           id: provisionedUser.id,
@@ -192,21 +340,34 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
         'PATIENT'
       );
 
-      // 6. Refresh user context — mounts PatientNavigator
+      // 6. Refresh user context.
+
       await refreshUser();
-      console.log('[PATIENT_ONBOARDING] Onboarding successfully completed');
+
+      console.log(
+        '[PATIENT_ONBOARDING] Onboarding successfully completed'
+      );
     } catch (err: any) {
-      console.error('[PATIENT_ONBOARDING] Submission error:', err);
+      console.error(
+        '[PATIENT_ONBOARDING] Submission error:',
+        err
+      );
+
       const message =
         err.response?.data?.error?.message ||
         err.response?.data?.message ||
         err.message ||
         'Failed to complete onboarding. Please try again.';
+
       setSubmitError(message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  /* ──────────────────────────────────────────
+     ONBOARDING SCREENS
+  ────────────────────────────────────────── */
 
   switch (currentStep) {
     case 1:
@@ -222,18 +383,22 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
           onBack={handleBack}
         />
       );
+
     case 2:
       return (
         <Step2Communication
           intent={intent}
           primaryLanguage={state.primaryLanguage}
           additionalLanguages={state.additionalLanguages}
-          communicationPreferences={state.communicationPreferences}
+          communicationPreferences={
+            state.communicationPreferences
+          }
           onUpdate={updateState}
           onNext={handleNext}
           onBack={handleBack}
         />
       );
+
     case 3:
       return (
         <Step3LivingSituation
@@ -245,6 +410,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
           onBack={handleBack}
         />
       );
+
     case 4:
       return (
         <Step4HealthStatus
@@ -258,6 +424,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
           onBack={handleBack}
         />
       );
+
     case 5:
       return (
         <Step5Medications
@@ -269,6 +436,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
           onBack={handleBack}
         />
       );
+
     case 6:
       return (
         <Step6CareNeeds
@@ -279,6 +447,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
           onBack={handleBack}
         />
       );
+
     case 7:
       return (
         <Step7SafetyConcerns
@@ -289,18 +458,26 @@ export const PatientOnboardingScreen: React.FC<Props> = ({ route, navigation }) 
           onBack={handleBack}
         />
       );
+
     case 8:
       return (
         <Step8EmergencyContact
           intent={intent}
-          emergencyContactName={state.emergencyContactName}
-          emergencyContactRelation={state.emergencyContactRelation}
-          emergencyContactPhone={state.emergencyContactPhone}
+          emergencyContactName={
+            state.emergencyContactName
+          }
+          emergencyContactRelation={
+            state.emergencyContactRelation
+          }
+          emergencyContactPhone={
+            state.emergencyContactPhone
+          }
           onUpdate={updateState}
           onNext={handleNext}
           onBack={handleBack}
         />
       );
+
     case 9:
     default:
       return (

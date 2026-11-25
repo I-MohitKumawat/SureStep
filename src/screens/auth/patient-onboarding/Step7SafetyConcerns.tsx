@@ -1,13 +1,18 @@
+
 /**
  * SureStep — src/screens/auth/patient-onboarding/Step7SafetyConcerns.tsx
  * Step 7: Safety concerns selection.
  */
+
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
-import { OptionCard } from '../../../components/onboarding/OptionCard';
-import { C } from '../../../theme/colors';
-import { F } from '../../../theme/fonts';
 import type { OnboardingIntent } from '../../../types/navigation.types';
 
 interface Step7Props {
@@ -21,45 +26,33 @@ interface Step7Props {
 const SAFETY_OPTIONS = [
   {
     id: 'wandering',
-    title: 'Wandering or Wayfinding Difficulty',
-    desc: 'Leaving home unexpectedly or difficulty navigating back',
-    icon: 'walk-outline' as const,
+    title: 'Getting lost',
+    icon: 'navigate-outline' as const,
   },
   {
     id: 'falls',
-    title: 'Balance & Fall Vulnerability',
-    desc: 'Occasional unsteadiness or requiring walking assistance',
+    title: 'Risk of falling',
     icon: 'alert-circle-outline' as const,
   },
   {
     id: 'confusion',
-    title: 'Orientation & Familiarity Lapses',
-    desc: 'Moments of uncertainty about time, location, or surroundings',
+    title: 'Confusion',
     icon: 'help-circle-outline' as const,
   },
   {
     id: 'night_restlessness',
-    title: 'Evening Restlessness',
-    desc: 'Heightened anxiety or wakefulness during evening hours',
+    title: 'Night restlessness',
     icon: 'moon-outline' as const,
   },
   {
     id: 'phone_difficulty',
-    title: 'Phone & Screen Hurdles',
-    desc: 'Difficulty answering calls, unlocking screens, or reading text',
+    title: 'Difficulty using a phone',
     icon: 'phone-portrait-outline' as const,
   },
   {
     id: 'forgetting_meals',
-    title: 'Hydration & Meal Consistency',
-    desc: 'Skipping water or meals without a friendly prompt',
+    title: 'Forgetting meals or water',
     icon: 'restaurant-outline' as const,
-  },
-  {
-    id: 'none',
-    title: 'No Immediate Safety Concerns',
-    desc: 'General monitoring and peace of mind is sufficient',
-    icon: 'checkmark-circle-outline' as const,
   },
 ];
 
@@ -72,73 +65,199 @@ export const Step7SafetyConcerns: React.FC<Step7Props> = ({
 }) => {
   const isSelf = intent === 'RECEIVING_CARE';
 
+  const { width, fontScale } = useWindowDimensions();
+
+  const singleColumn = width < 340 || fontScale > 1.3;
+
   const toggleConcern = (id: string) => {
+    // None cannot coexist with other safety concerns.
     if (id === 'none') {
       onUpdate({ safetyConcerns: ['none'] });
       return;
     }
-    const filtered = safetyConcerns.filter((c) => c !== 'none');
+
+    const filtered = safetyConcerns.filter(
+      (concern) => concern !== 'none'
+    );
+
     onUpdate({
       safetyConcerns: filtered.includes(id)
-        ? filtered.filter((c) => c !== id)
+        ? filtered.filter((concern) => concern !== id)
         : [...filtered, id],
     });
   };
 
-  const isComplete = safetyConcerns.length > 0;
+  const rows = singleColumn
+    ? SAFETY_OPTIONS.map((item) => [item])
+    : [
+        SAFETY_OPTIONS.slice(0, 2),
+        SAFETY_OPTIONS.slice(2, 4),
+        SAFETY_OPTIONS.slice(4, 6),
+      ];
+
+  const noConcerns = safetyConcerns.includes('none');
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Safety & Peace of Mind' : 'Safety & Peace of Mind'}
-      subtitle={
-        isSelf
-          ? 'Tell us if any of these situations ever come up, so we can be ready with gentle protection.'
-          : 'Configures sensible notifications and gentle safeguards for their daily care circle.'
-      }
+      title="Safety & Peace of Mind"
       currentStep={7}
-      iconName="shield-checkmark"
+      iconName="shield-checkmark-outline"
+      backgroundVariant="mint"
       onBack={onBack}
       onNext={onNext}
-      isNextDisabled={!isComplete}
+      isNextDisabled={safetyConcerns.length === 0}
     >
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Safety Check *</Text>
-        <Text style={s.sectionHint}>Select all that apply</Text>
-        <View style={s.cardGroup}>
-          {SAFETY_OPTIONS.map((item) => (
-            <OptionCard
-              key={item.id}
-              title={item.title}
-              description={item.desc}
-              icon={item.icon}
-              selected={safetyConcerns.includes(item.id)}
-              onPress={() => toggleConcern(item.id)}
-              multiSelect
+      <View className="gap-[12px]">
+        <Text className="font-inter-regular text-[13px] leading-[20px] text-care-muted">
+          {isSelf
+            ? 'Select any concerns that apply to you.'
+            : 'Select any concerns that apply to them.'}
+        </Text>
+
+        {/* Main white container */}
+
+        <View
+          className="rounded-[20px] border border-care-border bg-white p-[12px]"
+          style={{
+            shadowColor: '#244A42',
+            shadowOpacity: 0.08,
+            shadowOffset: { width: 0, height: 3 },
+            shadowRadius: 8,
+            elevation: 2,
+          }}
+        >
+          {/* Safety selection grid */}
+
+          <View className="gap-[8px]">
+            {rows.map((row, index) => (
+              <View
+                key={index}
+                className="flex-row items-stretch gap-[8px]"
+              >
+                {row.map((item) => {
+                  const selected =
+                    safetyConcerns.includes(item.id);
+
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => toggleConcern(item.id)}
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={item.title}
+                      accessibilityState={{
+                        checked: selected,
+                      }}
+                      className={`relative flex-1 rounded-[12px] border p-[12px] active:opacity-70 ${
+                        singleColumn
+                          ? 'min-h-[64px] flex-row items-center gap-[12px] pr-[36px]'
+                          : 'min-h-[112px] items-center justify-center gap-[8px] pt-[24px]'
+                      } ${
+                        selected
+                          ? 'border-brand bg-care-selected'
+                          : 'border-care-border bg-care-canvas'
+                      }`}
+                    >
+                      {/* Selection indicator */}
+
+                      <View className="absolute right-[8px] top-[8px]">
+                        <Ionicons
+                          name={
+                            selected
+                              ? 'checkmark-circle'
+                              : 'ellipse-outline'
+                          }
+                          size={18}
+                          color={
+                            selected
+                              ? '#0E7A67'
+                              : '#AAB8B2'
+                          }
+                        />
+                      </View>
+
+                      {/* Safety icon */}
+
+                      <Ionicons
+                        name={item.icon}
+                        size={27}
+                        color={
+                          selected
+                            ? '#0E7A67'
+                            : '#52605D'
+                        }
+                      />
+
+                      {/* Safety label */}
+
+                      <Text
+                        className={`font-inter-medium text-[13px] leading-[18px] ${
+                          singleColumn
+                            ? 'flex-1'
+                            : 'text-center'
+                        } ${
+                          selected
+                            ? 'text-brand-dark'
+                            : 'text-care-ink'
+                        }`}
+                      >
+                        {item.title}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+
+          {/* Divider */}
+
+          <View className="my-[14px] h-px bg-care-border" />
+
+          {/* No safety concerns */}
+
+          <Pressable
+            onPress={() => toggleConcern('none')}
+            accessibilityRole="checkbox"
+            accessibilityLabel="No safety concerns"
+            accessibilityState={{ checked: noConcerns }}
+            className={`min-h-[56px] flex-row items-center gap-[12px] rounded-[12px] border px-[12px] py-[10px] active:opacity-70 ${
+              noConcerns
+                ? 'border-brand bg-care-selected'
+                : 'border-care-border bg-care-canvas'
+            }`}
+          >
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={24}
+              color={
+                noConcerns ? '#0E7A67' : '#52605D'
+              }
             />
-          ))}
+
+            <Text
+              className={`flex-1 font-inter-medium text-[13px] leading-[18px] ${
+                noConcerns
+                  ? 'text-brand-dark'
+                  : 'text-care-ink'
+              }`}
+            >
+              No safety concerns
+            </Text>
+
+            <Ionicons
+              name={
+                noConcerns
+                  ? 'checkmark-circle'
+                  : 'ellipse-outline'
+              }
+              size={20}
+              color={
+                noConcerns ? '#0E7A67' : '#AAB8B2'
+              }
+            />
+          </Pressable>
         </View>
       </View>
     </OnboardingLayout>
   );
 };
-
-const s = StyleSheet.create({
-  section: {
-    marginBottom: 18,
-  },
-  sectionTitle: {
-    fontFamily: F.semiBold,
-    fontSize: 15,
-    color: '#161E1C',
-    marginBottom: 4,
-  },
-  sectionHint: {
-    fontFamily: F.regular,
-    fontSize: 13,
-    color: '#52605D',
-    marginBottom: 10,
-  },
-  cardGroup: {
-    gap: 2,
-  },
-});

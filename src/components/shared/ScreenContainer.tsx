@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../theme/ThemeContext';
@@ -22,17 +22,17 @@ export const ScreenContainer = ({ children, style, className, edges = DEFAULT_ED
     <SafeAreaView
       edges={edges}
       style={[
-        styles.safeOuter,
+        { flex: 1 },
         {
           backgroundColor: theme.colors.background
         }
       ]}
     >
       <View
-        className={className}
+        className={`flex-1 ${className ?? ''}`}
         style={[
-          styles.inner,
           {
+            flex: 1,
             paddingHorizontal: theme.spacing.lg,
             paddingVertical: theme.spacing.md
           },
@@ -46,12 +46,3 @@ export const ScreenContainer = ({ children, style, className, edges = DEFAULT_ED
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  safeOuter: {
-    flex: 1
-  },
-  inner: {
-    flex: 1
-  }
-});

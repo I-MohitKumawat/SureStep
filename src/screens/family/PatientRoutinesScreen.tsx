@@ -1,14 +1,3 @@
-/**
- * SureStep — src/screens/family/PatientRoutinesScreen.tsx
- * Visual source of truth: Calm Healthcare Routine Manager UI.png
- *
- * Implements Routine Manager for Family:
- *   - Header: Back arrow, "Routines", "+ Add routine" button
- *   - Patient card: Avatar, Name, "Manage daily routines"
- *   - Filter tabs: All (N) | Active (N) | Paused (N)
- *   - Routine Cards: Category icon, Title, Category badge, Time, Recurrence, Switch toggle, 3-dots menu
- *   - Actions: Edit routine, Pause/Resume routine, Delete routine
- */
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
@@ -18,7 +7,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Switch,
   Text,
   View,
@@ -39,8 +27,7 @@ import {
   type RoutineDefinition,
 } from '../../services/routineService';
 import type { FamilyStackParams } from '../../types/navigation.types';
-import { C } from '../../theme/colors';
-import { F } from '../../theme/fonts';
+import { useTheme } from '../../theme/ThemeContext';
 
 type NavigationProp = NativeStackNavigationProp<FamilyStackParams>;
 type ScreenRouteProp = RouteProp<FamilyStackParams, 'PatientRoutinesScreen'>;
@@ -48,6 +35,8 @@ type ScreenRouteProp = RouteProp<FamilyStackParams, 'PatientRoutinesScreen'>;
 type FilterTab = 'ALL' | 'ACTIVE' | 'PAUSED';
 
 export const PatientRoutinesScreen: React.FC = () => {
+  const { mode } = useTheme();
+  const isDark = mode === 'dark';
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScreenRouteProp>();
   const { patientId } = route.params;
@@ -62,10 +51,19 @@ export const PatientRoutinesScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeMenuRoutine, setActiveMenuRoutine] = useState<RoutineDefinition | null>(null);
 
+  const [loadError, setLoadError] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+  useEffect(() => setImageError(false), [currentPatient?.photo_url]);
+
   const loadRoutines = useCallback(async () => {
     try {
       const data = await fetchRoutineDefinitions(patientId);
       setRoutines(data);
+      setLoadError(false);
+    } catch (err) {
+      console.warn('[PatientRoutines] Load failed:', err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -86,6 +84,8 @@ export const PatientRoutinesScreen: React.FC = () => {
   };
 
   const handleToggleStatus = async (routine: RoutineDefinition) => {
+    if (busyIds.includes(routine.id)) return;
+    setBusyIds(prev => [...prev, routine.id]);
     const nextActive = !routine.is_active;
     try {
       // Optimistic update
@@ -95,7 +95,9 @@ export const PatientRoutinesScreen: React.FC = () => {
       await updateRoutineDefinition(patientId, routine.id, { isActive: nextActive });
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.error?.message || 'Failed to update routine status.');
-      void loadRoutines();
+      setRoutines(prev => prev.map(r => r.id === routine.id ? { ...r, is_active: routine.is_active } : r));
+    } finally {
+      setBusyIds(prev => prev.filter(id => id !== routine.id));
     }
   };
 
@@ -151,471 +153,150 @@ export const PatientRoutinesScreen: React.FC = () => {
     return true;
   });
 
+  const primary = isDark ? '#6EE7B7' : '#0E7A67';
+  const muted = isDark ? '#A6BDB2' : '#64748B';
+  const heading = isDark ? 'text-[#F0FDF4]' : 'text-[#152D24]';
+  const secondary = isDark ? 'text-[#A6BDB2]' : 'text-slate-500';
+  const card = isDark ? 'border-[#30453B] bg-[#1B2924]' : 'border-[#DFE9E4] bg-white';
+  const line = isDark ? 'bg-[#30453B]' : 'bg-[#E8EFEB]';
+  const openCreate = () => navigation.navigate('PatientRoutineEditorScreen', {
+    patientId, patientName, mode: 'create',
+  });
+  const tabs: { key: FilterTab; label: string; count: number }[] = [
+    { key: 'ALL', label: 'All', count: routines.length },
+    { key: 'ACTIVE', label: 'Active', count: activeCount },
+    { key: 'PAUSED', label: 'Paused', count: pausedCount },
+  ];
+
   return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
-      {/* ─── Header ───────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="chevron-back" size={24} color="#161E1C" />
-        </Pressable>
-
-        <Text style={styles.headerTitle}>Routines</Text>
-
-        <Pressable
-          style={styles.addRoutineBtn}
-          onPress={() =>
-            navigation.navigate('PatientRoutineEditorScreen', {
-              patientId,
-              patientName,
-              mode: 'create',
-            })
-          }
-        >
-          <Feather name="plus-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.addRoutineBtnText}>Add routine</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-      >
-        {/* Patient Summary Card */}
-        <View style={styles.patientSummaryCard}>
-          {currentPatient?.photo_url ? (
-            <Image source={{ uri: currentPatient.photo_url }} style={styles.patientAvatar} />
-          ) : (
-            <View style={styles.patientAvatarFallback}>
-              <Text style={styles.patientAvatarInitial}>{patientName[0]?.toUpperCase()}</Text>
-            </View>
-          )}
-          <View style={styles.patientMeta}>
-            <Text style={styles.patientName}>{patientName}</Text>
-            <Text style={styles.patientSub}>Manage daily routines</Text>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, paddingHorizontal: 0, paddingVertical: 0, backgroundColor: isDark ? '#101916' : '#F5F8F6' }}>
+      <View className="w-full max-w-[760px] flex-1 self-center">
+        <View className="flex-row items-center px-4 pb-4 pt-3">
+          <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} className={`mr-3 h-11 w-11 items-center justify-center rounded-2xl border active:opacity-70 ${card}`}>
+            <Ionicons name="arrow-back" size={22} color={primary} />
+          </Pressable>
+          <View className="mr-2 flex-1">
+            <Text className={`text-2xl font-bold tracking-tight ${heading}`}>Routines</Text>
+            <Text className={`mt-0.5 text-xs ${secondary}`}>Daily care management</Text>
           </View>
-        </View>
-
-        {/* ─── Filter Tabs ─────────────────────────────────────────────────── */}
-        <View style={styles.filterRow}>
-          <Pressable
-            style={[styles.filterPill, filter === 'ALL' && styles.filterPillActive]}
-            onPress={() => setFilter('ALL')}
-          >
-            <Text style={[styles.filterPillText, filter === 'ALL' && styles.filterPillTextActive]}>
-              All ({routines.length})
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, filter === 'ACTIVE' && styles.filterPillActive]}
-            onPress={() => setFilter('ACTIVE')}
-          >
-            <Text style={[styles.filterPillText, filter === 'ACTIVE' && styles.filterPillTextActive]}>
-              Active ({activeCount})
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, filter === 'PAUSED' && styles.filterPillActive]}
-            onPress={() => setFilter('PAUSED')}
-          >
-            <Text style={[styles.filterPillText, filter === 'PAUSED' && styles.filterPillTextActive]}>
-              Paused ({pausedCount})
-            </Text>
+          <Pressable accessibilityRole="button" onPress={openCreate} className="min-h-[44px] flex-row items-center justify-center rounded-xl bg-[#0E7A67] px-3 py-2 active:opacity-80">
+            <Feather name="plus" size={18} color="white" />
+            <Text className="ml-1 text-sm font-semibold text-white">Add routine</Text>
           </Pressable>
         </View>
-
-        {/* ─── Routine Cards List ──────────────────────────────────────────── */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={C.primary} />
-          </View>
-        ) : filteredRoutines.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No routines found for this filter.</Text>
-          </View>
-        ) : (
-          filteredRoutines.map((routine) => {
-            const theme = getCategoryTheme(routine.category);
-            const isActive = routine.is_active;
-            const days = routineDays(routine);
-            const recurrenceLabel =
-              routineFrequency(routine) === 'DAILY'
-                ? 'Every day'
-                : days.length === 5 && !days.includes(0) && !days.includes(6)
-                  ? 'Weekdays'
-                  : days.length === 2 && days.includes(0) && days.includes(6)
-                    ? 'Weekends'
-                    : days.length > 0
-                      ? `Weekly on ${days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}`
-                      : 'Weekly';
-
-            return (
-              <View key={routine.id} style={styles.routineCard}>
-                <View style={styles.routineMainRow}>
-                  {/* Category Icon */}
-                  <View style={[styles.categoryIconCircle, { backgroundColor: theme.bg }]}>
-                    <MaterialCommunityIcons name={theme.icon as any} size={22} color={theme.color} />
-                  </View>
-
-                  {/* Routine Information */}
-                  <View style={styles.routineMeta}>
-                    <View style={styles.routineTitleRow}>
-                      <Text style={styles.routineTitle}>{routine.title}</Text>
-                      <View style={[styles.categoryBadge, { backgroundColor: theme.bg }]}>
-                        <Text style={[styles.categoryBadgeText, { color: theme.color }]}>
-                          {theme.label}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.routineTimeRow}>
-                      <Ionicons name="time-outline" size={14} color="#52605D" style={{ marginRight: 4 }} />
-                      <Text style={styles.routineTimeText}>{routineTime(routine)}</Text>
-                    </View>
-
-                    <View style={styles.routineRepeatRow}>
-                      <Ionicons name="calendar-outline" size={14} color="#52605D" style={{ marginRight: 4 }} />
-                      <Text style={styles.routineRepeatText}>
-                        {recurrenceLabel}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Switch Toggle */}
-                  <Switch
-                    value={isActive}
-                    onValueChange={() => handleToggleStatus(routine)}
-                    trackColor={{ false: '#E5E7EB', true: '#6EE7B7' }}
-                    thumbColor={isActive ? '#0E7A67' : '#9CA3AF'}
-                  />
-
-                  {/* 3-dots Menu Button */}
-                  <Pressable
-                    style={styles.moreBtn}
-                    onPress={() => setActiveMenuRoutine(routine)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="ellipsis-vertical" size={20} color="#6B7280" />
-                  </Pressable>
+        <ScrollView className="flex-1" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primary} colors={[primary]} />}>
+          <View className="px-4 pb-10">
+            <View className="mb-5 rounded-3xl bg-[#105C49] p-5">
+              <View className="flex-row items-center">
+                <View className="mr-4 h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-emerald-100">
+                  {currentPatient?.photo_url && !imageError ? (
+                    <Image source={{ uri: currentPatient.photo_url }} className="h-full w-full" onError={() => setImageError(true)} resizeMode="cover" />
+                  ) : (
+                    <Text className="text-2xl font-bold text-[#105C49]">{patientName.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase() || 'P'}</Text>
+                  )}
                 </View>
+                <View className="flex-1">
+                  <Text className="text-xs font-semibold tracking-wider text-emerald-200">CARE PROFILE</Text>
+                  <Text className="mt-1 text-xl font-bold text-white">{patientName}</Text>
+                  <Text className="mt-1 text-sm text-emerald-100">Manage daily routines</Text>
+                </View>
+                <Ionicons name="heart-outline" size={25} color="#A7F3D0" />
               </View>
-            );
-          })
-        )}
-      </ScrollView>
-
-      {/* ─── 3-dots Context Menu Modal ────────────────────────────────────── */}
-      <Modal
-        visible={Boolean(activeMenuRoutine)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActiveMenuRoutine(null)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setActiveMenuRoutine(null)}>
-          <View style={styles.menuContainer}>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                const r = activeMenuRoutine;
-                setActiveMenuRoutine(null);
-                if (r) {
-                  navigation.navigate('PatientRoutineEditorScreen', {
-                    patientId,
-                    patientName,
-                    mode: 'edit',
-                    routine: r,
-                  });
-                }
-              }}
-            >
-              <Feather name="edit-2" size={16} color="#161E1C" style={{ marginRight: 12 }} />
-              <Text style={styles.menuItemText}>Edit routine</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                if (activeMenuRoutine) {
-                  void handleToggleStatus(activeMenuRoutine);
-                  setActiveMenuRoutine(null);
-                }
-              }}
-            >
-              <Feather
-                name={activeMenuRoutine?.is_active ? 'pause-circle' : 'play-circle'}
-                size={16}
-                color="#161E1C"
-                style={{ marginRight: 12 }}
-              />
-              <Text style={styles.menuItemText}>
-                {activeMenuRoutine?.is_active ? 'Pause routine' : 'Resume routine'}
-              </Text>
-            </Pressable>
-
-            <View style={styles.menuDivider} />
-
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                if (activeMenuRoutine) {
-                  handleDeleteRoutine(activeMenuRoutine);
-                }
-              }}
-            >
-              <Feather name="trash-2" size={16} color="#EF4444" style={{ marginRight: 12 }} />
-              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete routine</Text>
-            </Pressable>
+              <View className="my-4 h-px bg-[#387B6B]" />
+              <View className="flex-row">
+                {tabs.map((tab, index) => (
+                  <View key={tab.key} className={`flex-1 items-center ${index > 0 ? 'border-l border-[#387B6B]' : ''}`}>
+                    <Text className="text-2xl font-bold text-white">{loading ? '—' : tab.count}</Text>
+                    <Text className="mt-1 text-xs text-emerald-100">{tab.key === 'ALL' ? 'Total routines' : tab.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+            <View className={`mb-5 flex-row rounded-2xl p-1 ${isDark ? 'bg-[#20352C]' : 'bg-[#E8EEEA]'}`}>
+              {tabs.map(tab => (
+                <Pressable key={tab.key} onPress={() => setFilter(tab.key)} accessibilityRole="button" accessibilityState={{ selected: filter === tab.key }} className={`min-h-[44px] flex-1 items-center justify-center rounded-xl px-1 ${filter === tab.key ? (isDark ? 'bg-[#345648]' : 'bg-white') : ''}`}>
+                  <Text className={`text-sm font-semibold ${filter === tab.key ? (isDark ? 'text-emerald-200' : 'text-[#0E6650]') : secondary}`}>{tab.label} ({tab.count})</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View className="mb-3 flex-row items-center justify-between">
+              <Text className={`text-lg font-bold ${heading}`}>Routine list</Text>
+              <Text className={`text-sm ${secondary}`}>{filteredRoutines.length} routines</Text>
+            </View>
+            {loading ? (
+              <View className="items-center py-12"><ActivityIndicator size="large" color={primary} /><Text className={`mt-3 ${secondary}`}>Loading routines…</Text></View>
+            ) : loadError ? (
+              <View className={`items-center rounded-3xl border p-6 ${card}`}>
+                <Ionicons name="cloud-offline-outline" size={36} color={muted} />
+                <Text className={`mt-3 text-lg font-bold ${heading}`}>Couldn't load routines</Text>
+                <Pressable onPress={handleRefresh} accessibilityRole="button" className="mt-4 rounded-xl bg-[#0E7A67] px-5 py-3"><Text className="font-semibold text-white">Try again</Text></Pressable>
+              </View>
+            ) : filteredRoutines.length === 0 ? (
+              <View className={`items-center rounded-3xl border p-7 ${card}`}>
+                <Ionicons name="clipboard-outline" size={38} color={primary} />
+                <Text className={`mt-4 text-lg font-bold ${heading}`}>{routines.length ? 'No matching routines' : 'No routines yet'}</Text>
+                <Text className={`mt-2 text-center text-sm ${secondary}`}>{routines.length ? 'Choose another filter to see your routines.' : 'Create a routine to help organize daily care.'}</Text>
+                <Pressable accessibilityRole="button" onPress={routines.length ? () => setFilter('ALL') : openCreate} className="mt-5 rounded-xl bg-[#0E7A67] px-5 py-3"><Text className="font-semibold text-white">{routines.length ? 'View all routines' : 'Create routine'}</Text></Pressable>
+              </View>
+            ) : filteredRoutines.map(routine => {
+              const theme = getCategoryTheme(routine.category);
+              const days = routineDays(routine);
+              const recurrence = routineFrequency(routine) === 'DAILY' ? 'Every day' : days.length === 5 && !days.includes(0) && !days.includes(6) ? 'Weekdays' : days.length === 2 && days.includes(0) && days.includes(6) ? 'Weekends' : days.length ? `Weekly on ${days.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}` : 'Weekly';
+              const busy = busyIds.includes(routine.id);
+              return (
+                <View key={routine.id} className={`mb-3 rounded-3xl border p-4 ${card}`}>
+                  <View className="flex-row items-center">
+                    <View className="mr-3 h-12 w-12 items-center justify-center rounded-2xl" style={{ backgroundColor: theme.bg }}>
+                      <MaterialCommunityIcons name={theme.icon as React.ComponentProps<typeof MaterialCommunityIcons>['name']} size={24} color={theme.color} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className={`text-xs font-medium ${secondary}`}>{theme.label}</Text>
+                      <Text className={`mt-1 text-lg font-bold ${heading}`}>{routine.title}</Text>
+                    </View>
+                    <Pressable onPress={() => setActiveMenuRoutine(routine)} disabled={busy} accessibilityRole="button" accessibilityLabel={`Actions for ${routine.title}`} className="h-11 w-11 items-center justify-center rounded-xl active:opacity-60">
+                      <Ionicons name="ellipsis-vertical" size={21} color={muted} />
+                    </Pressable>
+                  </View>
+                  <View className="mt-4 flex-row flex-wrap gap-x-4 gap-y-2">
+                    <View className="flex-row items-center"><Ionicons name="time-outline" size={17} color={muted} /><Text className={`ml-1.5 text-sm font-medium ${secondary}`}>{routineTime(routine)}</Text></View>
+                    <View className="flex-row items-center"><Ionicons name="calendar-outline" size={17} color={muted} /><Text className={`ml-1.5 text-sm ${secondary}`}>{recurrence}</Text></View>
+                  </View>
+                  <View className={`my-3 h-px ${line}`} />
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-row items-center"><View className={`mr-2 h-2.5 w-2.5 rounded-full ${routine.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`} /><Text className={`text-sm font-semibold ${routine.is_active ? (isDark ? 'text-emerald-300' : 'text-emerald-700') : secondary}`}>{routine.is_active ? 'Active' : 'Paused'}</Text></View>
+                    <View className="flex-row items-center">
+                      {busy && <ActivityIndicator size="small" color={primary} />}
+                      <Switch value={routine.is_active} disabled={busy} onValueChange={() => void handleToggleStatus(routine)} accessibilityLabel={`Enable ${routine.title}`} trackColor={{ false: '#94A3B8', true: '#0E7A67' }} thumbColor="#FFFFFF" />
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
           </View>
-        </Pressable>
+        </ScrollView>
+      </View>
+      <Modal visible={Boolean(activeMenuRoutine)} transparent animationType="slide" onRequestClose={() => setActiveMenuRoutine(null)}>
+        <View className="flex-1 justify-end bg-black/50">
+          <Pressable className="flex-1" onPress={() => setActiveMenuRoutine(null)} accessibilityLabel="Close routine actions" accessibilityRole="button" />
+          <View accessibilityViewIsModal className={`w-full max-w-[560px] self-center rounded-t-3xl p-5 pb-8 ${isDark ? 'bg-[#1B2924]' : 'bg-white'}`}>
+            <View className={`mb-5 h-1 w-10 self-center rounded-full ${isDark ? 'bg-[#52605D]' : 'bg-slate-300'}`} />
+            <Text className={`text-xl font-bold ${heading}`}>{activeMenuRoutine?.title}</Text>
+            <Text className={`mb-4 mt-1 text-sm ${secondary}`}>Manage this routine</Text>
+            {([
+              { icon: 'edit-2', label: 'Edit routine', action: () => { const r = activeMenuRoutine; setActiveMenuRoutine(null); if (r) navigation.navigate('PatientRoutineEditorScreen', { patientId, patientName, mode: 'edit', routine: r }); } },
+              { icon: activeMenuRoutine?.is_active ? 'pause-circle' : 'play-circle', label: activeMenuRoutine?.is_active ? 'Pause routine' : 'Resume routine', action: () => { const r = activeMenuRoutine; setActiveMenuRoutine(null); if (r) void handleToggleStatus(r); } },
+              { icon: 'trash-2', label: 'Delete routine', action: () => { if (activeMenuRoutine) handleDeleteRoutine(activeMenuRoutine); }, danger: true },
+            ] as const).map(item => (
+              <Pressable key={item.label} onPress={item.action} accessibilityRole="button" className="min-h-[56px] flex-row items-center rounded-xl px-2 py-3 active:opacity-60">
+                <View className={`mr-3 h-10 w-10 items-center justify-center rounded-xl ${'danger' in item ? (isDark ? 'bg-[#381D20]' : 'bg-red-50') : (isDark ? 'bg-[#203E32]' : 'bg-[#E8F6EF]')}`}><Feather name={item.icon} size={19} color={'danger' in item ? (isDark ? '#FCA5A5' : '#DC2626') : primary} /></View>
+                <Text className={`flex-1 text-base font-semibold ${'danger' in item ? (isDark ? 'text-red-300' : 'text-red-600') : heading}`}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={18} color={muted} />
+              </Pressable>
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => setActiveMenuRoutine(null)} className={`mt-4 items-center rounded-xl border py-3 ${card}`}><Text className={`font-semibold ${heading}`}>Cancel</Text></Pressable>
+          </View>
+        </View>
       </Modal>
     </ScreenContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#FAF8F5',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
-    backgroundColor: '#FAF8F5',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: F.extraBold,
-    fontSize: 22,
-    color: '#161E1C',
-    flex: 1,
-    marginLeft: 8,
-  },
-  addRoutineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0E7A67',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-  },
-  addRoutineBtnText: {
-    fontFamily: F.bold,
-    fontSize: 13,
-    color: '#FFFFFF',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  patientSummaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E0D8',
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 10,
-    marginBottom: 16,
-  },
-  patientAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginRight: 14,
-  },
-  patientAvatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#E6F4F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  patientAvatarInitial: {
-    fontFamily: F.bold,
-    fontSize: 20,
-    color: '#0E7A67',
-  },
-  patientMeta: {
-    flex: 1,
-  },
-  patientName: {
-    fontFamily: F.bold,
-    fontSize: 18,
-    color: '#161E1C',
-  },
-  patientSub: {
-    fontFamily: F.regular,
-    fontSize: 13,
-    color: '#52605D',
-    marginTop: 2,
-  },
-
-  // ─── Filter Tabs ───────────────────────────────────────────────────────────
-  filterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  filterPill: {
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-  },
-  filterPillActive: {
-    backgroundColor: '#E6F4F1',
-  },
-  filterPillText: {
-    fontFamily: F.medium,
-    fontSize: 13,
-    color: '#4B5563',
-  },
-  filterPillTextActive: {
-    fontFamily: F.bold,
-    color: '#0E7A67',
-  },
-
-  // ─── Routine Cards ─────────────────────────────────────────────────────────
-  routineCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E0D8',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-  },
-  routineMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  categoryIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  routineMeta: {
-    flex: 1,
-  },
-  routineTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: 8,
-    marginBottom: 4,
-  },
-  routineTitle: {
-    fontFamily: F.bold,
-    fontSize: 15,
-    color: '#161E1C',
-    flex: 1,
-  },
-  categoryBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginLeft: 6,
-  },
-  categoryBadgeText: {
-    fontFamily: F.bold,
-    fontSize: 11,
-  },
-  routineTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  routineTimeText: {
-    fontFamily: F.semiBold,
-    fontSize: 12,
-    color: '#52605D',
-  },
-  routineRepeatRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  routineRepeatText: {
-    fontFamily: F.regular,
-    fontSize: 12,
-    color: '#52605D',
-  },
-  moreBtn: {
-    padding: 6,
-    marginLeft: 6,
-  },
-  loadingContainer: {
-    paddingTop: 40,
-    alignItems: 'center',
-  },
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E0D8',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: F.regular,
-    fontSize: 14,
-    color: '#52605D',
-  },
-
-  // ─── Modal Context Menu ────────────────────────────────────────────────────
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  menuContainer: {
-    width: '100%',
-    maxWidth: 280,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-  },
-  menuItemText: {
-    fontFamily: F.medium,
-    fontSize: 15,
-    color: '#161E1C',
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginVertical: 4,
-  },
-});

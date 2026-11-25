@@ -5,20 +5,19 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
+  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { getAuth, signInWithPhoneNumber, signOut, getIdToken, type FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { getAuth, signInWithPhoneNumber, getIdToken, type FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
-import { C } from '../../theme/colors';
-import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
 import { setFirebaseTokenResolver } from '../../services/apiClient';
 
@@ -153,34 +152,32 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={[styles.container, { paddingHorizontal: 0, paddingVertical: 0 }]}>
+    <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={[{"flex":1}, { paddingHorizontal: 0, paddingVertical: 0 }]}>
       {(theme) => {
         const isDark = theme.mode === 'dark';
         return (
           <View style={{ flex: 1 }}>
+            <StatusBar barStyle="dark-content" />
             {/* SKY BACKGROUND (rendered outside ScrollView) */}
             <LinearGradient
               colors={['#57CFF2', '#BFEFFF', theme.colors.background]}
               locations={[0, 0.45, 1]}
               start={{ x: 0.5, y: 0 }}
               end={{ x: 0.5, y: 1 }}
-              style={styles.gradient}
+              style={{"position":"absolute","top":0,"left":0,"right":0,"height":250}}
             />
 
             <ScrollView
-              contentContainerStyle={[
-                styles.scrollContent,
-                {
+              contentContainerClassName="grow pb-[24px] justify-between" contentContainerStyle={{
                   paddingHorizontal: theme.spacing.lg,
                   paddingTop: theme.spacing.md,
-                }
-              ]}
+                }}
               keyboardShouldPersistTaps="handled"
             >
 
               {/* TOP HEADER / BACK BUTTON */}
-              <View style={styles.headerRow}>
-                <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
+              <View className="h-[40px] justify-center mb-[20px]">
+                <TouchableOpacity onPress={handleBack} className="w-[44px] h-[44px] rounded-[22px] justify-center items-center" activeOpacity={0.7}>
                   <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
                     <Path
                       d="M19 12H5M5 12L12 19M5 12L12 5"
@@ -194,78 +191,65 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
               </View>
 
               {/* LOGO AREA */}
-              <View style={styles.logoContainer}>
-                <View style={[
-                  styles.logoOutline,
-                  {
+              <View className="items-center mb-[24px]">
+                <View className="w-[64px] h-[64px] rounded-[32px] border-[1.5px]" style={[{"shadowColor":"#000","shadowOpacity":0.1,"shadowRadius":5,"elevation":2}, {
                     borderColor: theme.colors.borderSubtle,
                     backgroundColor: theme.colors.surface
-                  }
-                ]} />
+                  }]} >
+                  <View className="flex-1 items-center justify-center">
+                    <Ionicons name={codeSent ? "shield-checkmark-outline" : "phone-portrait-outline"} size={28} color="#0E7A67" />
+                  </View>
+                </View>
               </View>
 
               {/* TEXT HEADER */}
-              <Text style={[styles.brandTitle, { color: theme.colors.textPrimary }]}>
+              <Text className="font-inter-bold text-[22px] text-center mb-[6px]" style={{ color: theme.colors.textPrimary }}>
                 {codeSent ? 'Enter verification code' : 'Sign in to SureStep'}
               </Text>
-              <Text style={[styles.brandSubtitle, { color: theme.colors.textSecondary }]}>
+              <Text className="font-inter-regular text-[14px] text-center mb-[36px]" style={{ color: theme.colors.textSecondary }}>
                 {codeSent
                   ? `Enter the 6-digit code sent to ${selectedCountry.code} ${phoneNumber}`
                   : 'Enter your phone number to receive a verification code'}
               </Text>
 
               {/* FORM AREA */}
-              <View style={styles.formSection}>
+              <View className="flex-1 w-[100%]">
 
                 {/* THE FORM BUBBLE CARD */}
-                <View style={[
-                  styles.formCard,
-                  {
+                <View className="rounded-[20px] border-[1px] p-[20px] w-[100%] mb-[20px]" style={[{"shadowColor":"#000","shadowOpacity":0.04,"shadowRadius":10,"elevation":2}, {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.borderSubtle,
-                  }
-                ]}>
+                  }]}>
                   {!codeSent ? (
                     <>
                       {/* PHONE INPUT ROW WITH COUNTRY PICKER */}
-                      <View style={styles.phoneInputRow}>
+                      <View className="flex-row gap-[10px] w-[100%] mb-[6px]">
                         {/* COUNTRY CODE PICKER */}
                         <Pressable
-                          style={[
-                            styles.countryPickerButton,
-                            {
+                          className="flex-row items-center justify-center h-[54px] rounded-[8px] border-[1px] px-[12px] gap-[4px]" style={{
                               borderColor: theme.colors.borderSubtle,
                               backgroundColor: theme.colors.background
-                            }
-                          ]}
+                            }}
                           onPress={() => setCountryModalVisible(true)}
                         >
-                          <Text style={styles.countryFlagText}>{selectedCountry.flag}</Text>
-                          <Text style={[styles.countryCodeText, { color: theme.colors.textPrimary }]}>{selectedCountry.code}</Text>
-                          <Text style={[styles.dropdownArrow, { color: theme.colors.textSecondary }]}>▼</Text>
+                          <Text className="text-[18px]">{selectedCountry.flag}</Text>
+                          <Text className="text-[15px] font-inter-medium" style={{ color: theme.colors.textPrimary }}>{selectedCountry.code}</Text>
+                          <Text className="text-[12px] ml-[2px]" style={{ color: theme.colors.textSecondary }}>▼</Text>
                         </Pressable>
 
                         {/* PHONE INPUT WRAPPER */}
-                        <View style={[
-                          styles.phoneInputWrapper,
-                          isPhoneFocused && { borderColor: theme.colors.accent },
-                          phoneInvalid && { borderColor: theme.colors.error },
-                          {
-                            borderColor: theme.colors.borderSubtle,
-                            backgroundColor: theme.colors.background
-                          }
-                        ]}>
-                          <Text style={[
-                            styles.floatingLabel,
-                            {
+                        <View className="flex-1 h-[54px] rounded-[8px] border-[1px] px-[14px] justify-center relative" style={[{
+                            borderColor: phoneInvalid ? theme.colors.error : isPhoneFocused ? theme.colors.accent : theme.colors.borderSubtle,
+                          backgroundColor: theme.colors.background
+                        }]}>
+                          <Text className="absolute top-[-8px] left-[10px] px-[6px] font-inter-medium text-[10px] z-[2]" style={{
                               color: theme.colors.textSecondary,
                               backgroundColor: theme.colors.surface
-                            }
-                          ]}>
+                            }}>
                             Phone number
                           </Text>
                           <TextInput
-                            style={[styles.input, { color: theme.colors.textPrimary }]}
+                            className="h-[100%] font-inter-medium text-[15px] p-[0px]" style={{ color: theme.colors.textPrimary }}
                             placeholder="10-digit number"
                             placeholderTextColor={theme.colors.textSecondary}
                             keyboardType="phone-pad"
@@ -277,16 +261,13 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           />
                         </View>
                       </View>
-                      {phoneInvalid && <Text style={[styles.errorText, { color: theme.colors.error }]}>Phone number must be 10 digits.</Text>}
+                      {phoneInvalid && <Text className="font-inter-regular text-[12px] mb-[12px] ml-[4px]" style={{ color: theme.colors.error }}>Phone number must be 10 digits.</Text>}
 
                       {authError ? (
-                        <View style={[
-                          styles.authErrorBox,
-                          {
+                        <View className="my-[12px] rounded-[8px] border-[1px] px-[14px] py-[10px]" style={{
                             backgroundColor: isDark ? '#2D1E1E' : '#FEE2E2',
                             borderColor: theme.colors.error
-                          }
-                        ]}>
+                          }}>
                           <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
                             <Path
                               d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
@@ -296,15 +277,12 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                               strokeLinejoin="round"
                             />
                           </Svg>
-                          <Text style={[styles.authErrorText, { color: theme.colors.error }]}>{authError}</Text>
+                          <Text className="font-inter-semibold text-[13px] leading-[18px]" style={{ color: theme.colors.error }}>{authError}</Text>
                         </View>
                       ) : null}
 
                       <TouchableOpacity
-                        style={[
-                          styles.loginButton,
-                          !isPhoneReady && styles.loginButtonDisabled,
-                        ]}
+                        className="mt-[18px] h-[52px] rounded-[14px] bg-brand items-center justify-center flex-row gap-[6px]" style={[{"shadowColor":"#0E7A67","shadowOpacity":0.22,"shadowOffset":{"width":0,"height":4},"shadowRadius":8,"elevation":3}, !isPhoneReady && {"backgroundColor":"#E5E0D8","shadowOpacity":0,"elevation":0}]}
                         onPress={() => void handleSendCode()}
                         disabled={!isPhoneReady || loading}
                         activeOpacity={0.88}
@@ -313,34 +291,26 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
                           <>
-                            <Text style={[styles.loginText, !isPhoneReady && styles.loginTextDisabled]}>Send Code</Text>
-                            <Text style={[styles.buttonArrow, !isPhoneReady && styles.loginTextDisabled]}>▸</Text>
+                            <Text className="font-inter-bold text-[16px] text-white tracking-[0.3px]" style={!isPhoneReady && {"color":"#9CA3AF"}}>Send Code</Text>
+                            <Text className="text-[16px] text-white leading-[18px]" style={!isPhoneReady && {"color":"#9CA3AF"}}>▸</Text>
                           </>
                         )}
                       </TouchableOpacity>
                     </>
                   ) : (
                     <>
-                      <View style={[
-                        styles.inputWrapper,
-                        isOtpFocused && { borderColor: theme.colors.accent },
-                        otpInvalid && { borderColor: theme.colors.error },
-                        {
-                          borderColor: theme.colors.borderSubtle,
+                      <View className="h-[54px] rounded-[8px] border-[1px] px-[14px] justify-center relative mb-[6px]" style={[{
+                          borderColor: otpInvalid ? theme.colors.error : isOtpFocused ? theme.colors.accent : theme.colors.borderSubtle,
                           backgroundColor: theme.colors.background
-                        }
-                      ]}>
-                        <Text style={[
-                          styles.floatingLabel,
-                          {
+                        }]}>
+                        <Text className="absolute top-[-8px] left-[10px] px-[6px] font-inter-medium text-[10px] z-[2]" style={{
                             color: theme.colors.textSecondary,
                             backgroundColor: theme.colors.surface
-                          }
-                        ]}>
+                          }}>
                           Verification code
                         </Text>
                         <TextInput
-                          style={[styles.input, { color: theme.colors.textPrimary }]}
+                          className="h-[100%] font-inter-medium text-[15px] p-[0px]" style={{ color: theme.colors.textPrimary }}
                           placeholder="6-digit OTP"
                           placeholderTextColor={theme.colors.textSecondary}
                           keyboardType="number-pad"
@@ -352,16 +322,13 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           autoFocus
                         />
                       </View>
-                      {otpInvalid && <Text style={[styles.errorText, { color: theme.colors.error }]}>OTP must be exactly 6 digits.</Text>}
+                      {otpInvalid && <Text className="font-inter-regular text-[12px] mb-[12px] ml-[4px]" style={{ color: theme.colors.error }}>OTP must be exactly 6 digits.</Text>}
 
                       {authError ? (
-                        <View style={[
-                          styles.authErrorBox,
-                          {
+                        <View className="my-[12px] rounded-[8px] border-[1px] px-[14px] py-[10px]" style={{
                             backgroundColor: isDark ? '#2D1E1E' : '#FEE2E2',
                             borderColor: theme.colors.error
-                          }
-                        ]}>
+                          }}>
                           <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
                             <Path
                               d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
@@ -371,15 +338,12 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                               strokeLinejoin="round"
                             />
                           </Svg>
-                          <Text style={[styles.authErrorText, { color: theme.colors.error }]}>{authError}</Text>
+                          <Text className="font-inter-semibold text-[13px] leading-[18px]" style={{ color: theme.colors.error }}>{authError}</Text>
                         </View>
                       ) : null}
 
                       <TouchableOpacity
-                        style={[
-                          styles.loginButton,
-                          !isOtpReady && styles.loginButtonDisabled,
-                        ]}
+                        className="mt-[18px] h-[52px] rounded-[14px] bg-brand items-center justify-center flex-row gap-[6px]" style={[{"shadowColor":"#0E7A67","shadowOpacity":0.22,"shadowOffset":{"width":0,"height":4},"shadowRadius":8,"elevation":3}, !isOtpReady && {"backgroundColor":"#E5E0D8","shadowOpacity":0,"elevation":0}]}
                         onPress={() => void handleVerifyCode()}
                         disabled={!isOtpReady || loading}
                         activeOpacity={0.88}
@@ -388,31 +352,31 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                           <ActivityIndicator color="#FFFFFF" />
                         ) : (
                           <>
-                            <Text style={[styles.loginText, !isOtpReady && styles.loginTextDisabled]}>Verify & Continue</Text>
-                            <Text style={[styles.buttonArrow, !isOtpReady && styles.loginTextDisabled]}>▸</Text>
+                            <Text className="font-inter-bold text-[16px] text-white tracking-[0.3px]" style={!isOtpReady && {"color":"#9CA3AF"}}>Verify & Continue</Text>
+                            <Text className="text-[16px] text-white leading-[18px]" style={!isOtpReady && {"color":"#9CA3AF"}}>▸</Text>
                           </>
                         )}
                       </TouchableOpacity>
 
                       {/* RESEND / CHANGE NUMBER SECONDARY ACTIONS */}
-                      <View style={styles.otpActionsRow}>
+                      <View className="flex-row items-center justify-center mt-[18px] gap-[12px]">
                         <TouchableOpacity
                           onPress={() => void handleSendCode()}
                           disabled={loading}
-                          style={styles.secondaryActionButton}
+                          className="py-[8px] px-[8px] min-h-[44px] justify-center"
                           activeOpacity={0.7}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <Text style={styles.resendActionText}>Resend Code</Text>
+                          <Text className="font-inter-semibold text-[14px] text-brand">Resend Code</Text>
                         </TouchableOpacity>
-                        <Text style={[styles.actionDivider, { color: theme.colors.borderSubtle }]}>•</Text>
+                        <Text className="text-[14px]" style={{ color: theme.colors.borderSubtle }}>•</Text>
                         <TouchableOpacity
                           onPress={handleBack}
-                          style={styles.secondaryActionButton}
+                          className="py-[8px] px-[8px] min-h-[44px] justify-center"
                           activeOpacity={0.7}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <Text style={[styles.changeNumberActionText, { color: theme.colors.textSecondary }]}>Change Number</Text>
+                          <Text className="font-inter-medium text-[14px]" style={{ color: theme.colors.textSecondary }}>Change Number</Text>
                         </TouchableOpacity>
                       </View>
                     </>
@@ -421,24 +385,24 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
 
                 {/* TERMS */}
                 {!codeSent && (
-                  <Text style={[styles.secondaryText, { color: theme.colors.textSecondary, marginTop: 24 }]}>
+                  <Text className="font-inter-medium text-[12px] text-center" style={{ color: theme.colors.textSecondary, marginTop: 24 }}>
                     By signing in, you agree to our{"\n"}
-                    <Text style={[styles.textWithLink, { color: theme.colors.accent }]}>Terms and Conditions</Text>
+                    <Text className="font-inter-bold underline" style={{ color: theme.colors.accent }}>Terms and Conditions</Text>
                     {" and "}
-                    <Text style={[styles.textWithLink, { color: theme.colors.accent }]}>Privacy Policy</Text>
+                    <Text className="font-inter-bold underline" style={{ color: theme.colors.accent }}>Privacy Policy</Text>
                   </Text>
                 )}
               </View>
 
               {/* FOOTER */}
-              <View style={[styles.footer, { borderTopColor: theme.colors.borderSubtle }]}>
-                <Text style={[styles.footerSecured, { color: theme.colors.textSecondary }]}>
-                  Secured by <Text style={[styles.firebaseBold, { color: theme.colors.textPrimary }]}>Firebase</Text>
+              <View className="flex-row justify-between items-center mt-[40px] border-t-[1px] pt-[20px]" style={{ borderTopColor: theme.colors.borderSubtle }}>
+                <Text className="text-[11px] font-inter-regular" style={{ color: theme.colors.textSecondary }}>
+                  Secured by <Text className="font-inter-bold" style={{ color: theme.colors.textPrimary }}>Firebase</Text>
                 </Text>
-                <View style={styles.footerLinks}>
-                  <Text style={[styles.footerLink, { color: theme.colors.textSecondary }]}>Help</Text>
-                  <Text style={[styles.footerLink, { color: theme.colors.textSecondary }]}>Privacy</Text>
-                  <Text style={[styles.folderLink, { color: theme.colors.textSecondary }]}>Terms</Text>
+                <View className="flex-row gap-[12px]">
+                  <Text className="text-[11px] font-inter-medium" style={{ color: theme.colors.textSecondary }}>Help</Text>
+                  <Text className="text-[11px] font-inter-medium" style={{ color: theme.colors.textSecondary }}>Privacy</Text>
+                  <Text className="text-[11px] font-inter-medium" style={{ color: theme.colors.textSecondary }}>Terms</Text>
                 </View>
               </View>
 
@@ -449,30 +413,27 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
                 animationType="slide"
                 onRequestClose={() => setCountryModalVisible(false)}
               >
-                <View style={styles.modalRoot}>
-                  <Pressable style={styles.modalOverlay} onPress={() => setCountryModalVisible(false)} />
-                  <View style={[styles.modalSheet, { backgroundColor: theme.colors.surface }]}>
-                    <View style={[styles.modalHeader, { borderBottomColor: theme.colors.borderSubtle }]}>
-                      <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>Select Country Code</Text>
+                <View className="flex-1 justify-end">
+                  <Pressable className="absolute top-[0px] left-[0px] right-[0px] bottom-[0px] bg-[rgba(0,0,0,0.4)]" onPress={() => setCountryModalVisible(false)} />
+                  <View className="rounded-tl-[16px] rounded-tr-[16px] pt-[16px] px-[20px] pb-[40px] max-h-[40%]" style={{ backgroundColor: theme.colors.surface }}>
+                    <View className="pb-[12px] border-b-[1px] mb-[8px]" style={{ borderBottomColor: theme.colors.borderSubtle }}>
+                      <Text className="font-inter-bold text-[16px] text-center" style={{ color: theme.colors.textPrimary }}>Select Country Code</Text>
                     </View>
                     <FlatList
                       data={countries}
                       keyExtractor={(item) => item.code}
                       renderItem={({ item }) => (
                         <TouchableOpacity
-                          style={[
-                            styles.countryItem,
-                            { borderBottomColor: theme.colors.borderSubtle },
-                          ]}
+                          className="flex-row items-center py-[14px] border-b-[0.5px]" style={{ borderBottomColor: theme.colors.borderSubtle }}
                           activeOpacity={0.7}
                           onPress={() => {
                             setSelectedCountry(item);
                             setCountryModalVisible(false);
                           }}
                         >
-                          <Text style={styles.countryItemFlag}>{item.flag}</Text>
-                          <Text style={[styles.countryItemName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
-                          <Text style={[styles.countryItemCode, { color: theme.colors.textSecondary }]}>{item.code}</Text>
+                          <Text className="text-[20px] mr-[12px]">{item.flag}</Text>
+                          <Text className="flex-1 font-inter-medium text-[15px]" style={{ color: theme.colors.textPrimary }}>{item.name}</Text>
+                          <Text className="font-inter-bold text-[15px]" style={{ color: theme.colors.textSecondary }}>{item.code}</Text>
                         </TouchableOpacity>
                       )}
                     />
@@ -487,296 +448,3 @@ export const PhoneAuthScreen: React.FC<Props> = ({ navigation }) => {
     </ScreenContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  gradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 250,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 24,
-    justifyContent: 'space-between',
-  },
-  headerRow: {
-    height: 40,
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoOutline: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  brandTitle: {
-    fontFamily: F.bold,
-    fontSize: 22,
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  brandSubtitle: {
-    fontFamily: F.regular,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 36,
-  },
-  formSection: {
-    flex: 1,
-    width: '100%',
-  },
-  formCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 20,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-    marginBottom: 20,
-  },
-  phoneInputRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-    marginBottom: 6,
-  },
-  countryPickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 54,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    gap: 4,
-  },
-  countryFlagText: {
-    fontSize: 18,
-  },
-  countryCodeText: {
-    fontSize: 15,
-    fontFamily: F.medium,
-  },
-  dropdownArrow: {
-    fontSize: 12,
-    marginLeft: 2,
-  },
-  phoneInputWrapper: {
-    flex: 1,
-    height: 54,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  inputWrapper: {
-    height: 54,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: 6,
-  },
-  floatingLabel: {
-    position: 'absolute',
-    top: -8,
-    left: 10,
-    paddingHorizontal: 6,
-    fontFamily: F.medium,
-    fontSize: 10,
-    zIndex: 2,
-  },
-  input: {
-    height: '100%',
-    fontFamily: F.medium,
-    fontSize: 15,
-    padding: 0,
-  },
-  errorText: {
-    fontFamily: F.regular,
-    fontSize: 12,
-    marginBottom: 12,
-    marginLeft: 4,
-  },
-  authErrorBox: {
-    marginVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  authErrorText: {
-    fontFamily: F.semiBold,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  loginButton: {
-    marginTop: 18,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-    shadowColor: C.primary,
-    shadowOpacity: 0.22,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  loginButtonDisabled: {
-    backgroundColor: '#E5E0D8',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  loginButtonPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  loginText: {
-    fontFamily: F.bold,
-    fontSize: 16,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  loginTextDisabled: {
-    color: '#9CA3AF',
-  },
-  buttonArrow: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    lineHeight: 18,
-  },
-  otpActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-    gap: 12,
-  },
-  secondaryActionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  resendActionText: {
-    fontFamily: F.semiBold,
-    fontSize: 14,
-    color: C.primary,
-  },
-  actionDivider: {
-    fontSize: 14,
-  },
-  changeNumberActionText: {
-    fontFamily: F.medium,
-    fontSize: 14,
-  },
-  secondaryText: {
-    fontFamily: F.medium,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  textWithLink: {
-    fontFamily: F.bold,
-    textDecorationLine: 'underline',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 40,
-    borderTopWidth: 1,
-    paddingTop: 20,
-  },
-  footerSecured: {
-    fontSize: 11,
-    fontFamily: F.regular,
-  },
-  firebaseBold: {
-    fontFamily: F.bold,
-  },
-  footerLinks: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  footerLink: {
-    fontSize: 11,
-    fontFamily: F.medium,
-  },
-  folderLink: {
-    fontSize: 11,
-    fontFamily: F.medium,
-  },
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  modalSheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    maxHeight: '40%',
-  },
-  modalHeader: {
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontFamily: F.bold,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  countryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  countryItemFlag: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  countryItemName: {
-    flex: 1,
-    fontFamily: F.medium,
-    fontSize: 15,
-  },
-  countryItemCode: {
-    fontFamily: F.bold,
-    fontSize: 15,
-  },
-});

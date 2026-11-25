@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Platform, Pressable,
-  ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
+  ScrollView, Switch, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,7 +15,6 @@ import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
 import { C } from '../../theme/colors';
-import { F } from '../../theme/fonts';
 import type { AuthStackParams } from '../../types/navigation.types';
 import { updateCaregiverProfile, updatePatientProfile, updateMe, uploadProfilePhoto } from '../../services/userService';
 import { updateFamilyProfile } from '../../services/familyService';
@@ -62,42 +61,34 @@ function StepIndicator({
   labels: string[];
 }) {
   return (
-    <View style={si.wrap}>
+    <View className="flex-row items-start justify-center my-[20px] px-[8px]">
       {Array.from({ length: total }, (_, i) => {
         const idx = i + 1;
         const done = idx < current;
         const active = idx === current;
         return (
           <React.Fragment key={idx}>
-            <View style={si.item}>
+            <View className="items-center gap-[6px] w-[72px]">
               <View
-                style={[
-                  si.circle,
-                  done && si.circleDone,
-                  active && si.circleActive,
-                ]}
+                className="w-[36px] h-[36px] rounded-[18px] border-[2px] border-[#D6DDDD] bg-[#F9FAFB] items-center justify-center" style={[done && {"borderColor":"#0E7A67","backgroundColor":"#0E7A67"}, active && {"borderColor":"#0E7A67","backgroundColor":"#0E7A67"}]}
               >
                 {done ? (
-                  <Text style={si.check}>✓</Text>
+                  <Text className="font-inter-bold text-[14px] text-white">✓</Text>
                 ) : (
                   <Text
-                    style={[
-                      si.num,
-                      active && si.numActive,
-                      !active && !done && si.numMuted,
-                    ]}
+                    className="font-inter-bold text-[14px] text-[#9CA3AF]" style={[active && {"color":"#FFFFFF"}, !active && !done && {"color":"#9CA3AF"}]}
                   >
                     {idx}
                   </Text>
                 )}
               </View>
               <Text
-                style={[si.label, active && si.labelActive, done && si.labelDone]}
+                className="font-inter-regular text-[10px] text-[#9CA3AF] text-center tracking-[0.3px] uppercase" style={[active && {"color":"#0E7A67","fontFamily":"Inter_600SemiBold"}, done && {"color":"#0E7A67"}]}
               >
                 {labels[i]}
               </Text>
             </View>
-            {i < total - 1 && <View style={[si.dash, done && si.dashDone]} />}
+            {i < total - 1 && <View className="flex-1 h-[2px] bg-[#E6EAEC] mt-[17px] border-dashed border-[1px] border-[#D6DDDD]" style={done && {"borderColor":"#0E7A67","backgroundColor":"#0E7A67"}} />}
           </React.Fragment>
         );
       })}
@@ -129,26 +120,16 @@ function UnderlineInput({
   const showFloatingLabel = value.length > 0 || focused;
 
   return (
-    <View style={ui.container}>
-      <View style={ui.wrapper}>
+    <View className="mb-[16px]">
+      <View className="border-b-[1.5px] border-[#D6DDDD] py-[4px]">
         <Text
-          style={[
-            ui.label,
-            showFloatingLabel ? ui.labelVisible : ui.labelHidden,
-            focused && ui.labelFocused,
-            error && ui.labelError,
-          ]}
+          className="font-inter-regular text-[11px] text-[#6B7280] mb-[2px] capitalize" style={[showFloatingLabel ? {"opacity":1} : {"opacity":0}, focused && {"color":"#0E7A67"}, error && {"color":"#DC2626"}]}
         >
           {label}
         </Text>
-        <View style={ui.row}>
+        <View className="flex-row items-center justify-between">
           <TextInput
-            style={[
-              ui.input,
-              multiline && ui.inputMultiline,
-              focused && ui.inputFocused,
-              error && ui.inputError,
-            ]}
+            className="flex-1 font-inter-regular text-[16px] text-[#111827] p-[0px] min-h-[32px]" style={[multiline && {"minHeight":64,"textAlignVertical":"top"}, focused && {"color":"#000000"}, error && {}]}
             value={value}
             onChangeText={onChangeText}
             placeholder={focused ? "" : placeholder || label}
@@ -182,31 +163,31 @@ function DropdownPicker({
   const [open, setOpen] = useState(false);
 
   return (
-    <View style={dp.container}>
-      <Pressable style={dp.wrapper} onPress={() => setOpen((prev) => !prev)}>
-        <Text style={[dp.label, value.length > 0 && dp.labelVisible, error && dp.labelError]}>
+    <View className="mb-[16px]">
+      <Pressable className="border-b-[1.5px] border-[#D6DDDD] py-[4px]" onPress={() => setOpen((prev) => !prev)}>
+        <Text className="font-inter-regular text-[11px] text-[#6B7280] mb-[2px] opacity-[0]" style={[value.length > 0 && {"opacity":1}, error && {"color":"#DC2626"}]}>
           {label}
         </Text>
-        <View style={dp.inputRow}>
-          <Text style={[dp.valueText, !value && dp.valuePlaceholder]}>
+        <View className="flex-row items-center justify-between">
+          <Text className="font-inter-regular text-[16px] text-[#111827]" style={!value && {"color":"#9CA3AF"}}>
             {value || label}
           </Text>
-          <Text style={dp.chevron}>{open ? "▲" : "▼"}</Text>
+          <Text className="text-[11px] text-[#6B7280]">{open ? "▲" : "▼"}</Text>
         </View>
       </Pressable>
 
       {open && (
-        <View style={dp.dropdown}>
+        <View className="bg-white border-[1px] border-[#E6EAEC] rounded-[8px] mt-[4px] max-h-[180px]" style={{"shadowColor":"#000","shadowOpacity":0.05,"shadowOffset":{"width":0,"height":2},"shadowRadius":6,"elevation":3,"overflow":"scroll"}}>
           {options.map((opt) => (
             <Pressable
               key={opt}
-              style={[dp.item, value === opt && dp.itemSelected]}
+              className="p-[12px] border-b-[0.5px] border-b-[#F2F5F5]" style={value === opt && {"backgroundColor":"#b1f3da"}}
               onPress={() => {
                 onSelect(opt);
                 setOpen(false);
               }}
             >
-              <Text style={[dp.itemText, value === opt && dp.itemTextSelected]}>
+              <Text className="font-inter-regular text-[14px] text-[#1F2937]" style={value === opt && {"color":"#0E7A67","fontFamily":"Inter_600SemiBold"}}>
                 {opt}
               </Text>
             </Pressable>
@@ -228,16 +209,16 @@ function SelectionChips({
   onToggle: (val: string) => void;
 }) {
   return (
-    <View style={ch.container}>
+    <View className="flex-row flex-wrap gap-[8px] mt-[8px]">
       {options.map((opt) => {
         const isSelected = selected.includes(opt);
         return (
           <Pressable
             key={opt}
             onPress={() => onToggle(opt)}
-            style={[ch.chip, isSelected && ch.chipActive]}
+            className="px-[12px] py-[8px] rounded-[18px] border-[1px] border-[#D6DDDD] bg-white" style={isSelected && {"borderColor":"#0E7A67","backgroundColor":"#b1f3da"}}
           >
-            <Text style={[ch.chipText, isSelected && ch.chipTextActive]}>
+            <Text className="font-inter-regular text-[13px] text-[#6B7280]" style={isSelected && {"color":"#0E7A67","fontFamily":"Inter_600SemiBold"}}>
               {opt}
             </Text>
           </Pressable>
@@ -258,18 +239,18 @@ function StepperRow({
   onChange: (v: number) => void;
 }) {
   return (
-    <View style={st.container}>
-      <Text style={st.label}>{label}</Text>
-      <View style={st.controls}>
+    <View className="flex-row items-center justify-between py-[12px] border-b-[1px] border-b-[#F2F5F5]">
+      <Text className="font-inter-regular text-[15px] text-[#1F2937]">{label}</Text>
+      <View className="flex-row items-center gap-[16px]">
         <Pressable
-          style={st.button}
+          className="w-[32px] h-[32px] rounded-[16px] bg-[#F2F5F5] items-center justify-center"
           onPress={() => onChange(Math.max(0, value - 1))}
         >
-          <Text style={st.buttonText}>−</Text>
+          <Text className="text-[18px] font-inter-bold text-[#6B7280]">−</Text>
         </Pressable>
-        <Text style={st.value}>{value}</Text>
-        <Pressable style={st.button} onPress={() => onChange(value + 1)}>
-          <Text style={st.buttonText}>+</Text>
+        <Text className="font-inter-bold text-[16px] text-[#111827] min-w-[20px] text-center">{value}</Text>
+        <Pressable className="w-[32px] h-[32px] rounded-[16px] bg-[#F2F5F5] items-center justify-center" onPress={() => onChange(value + 1)}>
+          <Text className="text-[18px] font-inter-bold text-[#6B7280]">+</Text>
         </Pressable>
       </View>
     </View>
@@ -646,11 +627,11 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   };
 
   return (
-    <ScreenContainer edges={["top", "bottom", "left", "right"]} style={s.root}>
+    <ScreenContainer edges={["top", "bottom", "left", "right"]} style={{"flex":1,"backgroundColor":"#FFFFFF"}}>
       {() => (
         <>
           {/* Top action bar */}
-          <View style={s.topBar}>
+          <View className="flex-row justify-between items-center px-[20px] h-[48px]">
             <Pressable
               onPress={() => {
                 if (role === "CAREGIVER" && step === 3) {
@@ -659,22 +640,22 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                   navigation.goBack();
                 }
               }}
-              style={s.topBtn}
+              className="py-[6px] px-[4px]"
             >
-              <Text style={s.topBtnText}>
+              <Text className="font-inter-medium text-[14px] text-[#6B7280]">
                 {role === "CAREGIVER" && step === 3 ? "← Back" : "← Cancel"}
               </Text>
             </Pressable>
 
-            <Text style={s.topTitle}>Welcome back!</Text>
+            <Text className="font-inter-bold text-[16px] text-[#111827]">Welcome back!</Text>
 
-            <Pressable onPress={handleLogout} style={s.topBtn}>
-              <Text style={[s.topBtnText, s.logoutColor]}>Log out</Text>
+            <Pressable onPress={handleLogout} className="py-[6px] px-[4px]">
+              <Text className="font-inter-medium text-[14px] text-[#6B7280]" style={{"color":"#DC2626"}}>Log out</Text>
             </Pressable>
           </View>
 
           <ScrollView
-            contentContainerStyle={s.scroll}
+            contentContainerClassName="px-[20px] pb-[48px]"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -682,30 +663,30 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
 
             {/* Profile Avatar (Step 2 Only) */}
             {step === 2 && (
-              <View style={s.avatarContainer}>
-                <Pressable onPress={pickPhoto} style={s.avatarTouchable}>
+              <View className="items-center my-[16px]">
+                <Pressable onPress={pickPhoto} className="relative w-[100px] h-[100px]">
                   {photoUri ? (
-                    <Image source={{ uri: photoUri }} style={s.avatarImage} />
+                    <Image source={{ uri: photoUri }} className="w-[100px] h-[100px] rounded-[50px]" />
                   ) : (
-                    <View style={s.avatarPlaceholder}>
-                      <Text style={s.avatarInitials}>
+                    <View className="w-[100px] h-[100px] rounded-[50px] bg-[#F2F5F5] items-center justify-center">
+                      <Text className="font-inter-bold text-[32px] text-[#9CA3AF]">
                         {name ? name.substring(0, 2).toUpperCase() : "?"}
                       </Text>
                     </View>
                   )}
                   {/* Badge Camera icon */}
-                  <View style={s.cameraBadge}>
-                    <Text style={s.cameraIcon}>📷</Text>
+                  <View className="absolute bottom-[2px] right-[2px] w-[30px] h-[30px] rounded-[15px] bg-brand items-center justify-center border-[2px] border-white">
+                    <Text className="text-[14px]">📷</Text>
                   </View>
                 </Pressable>
-                <Text style={s.avatarTip}>
+                <Text className="font-inter-regular text-[12px] text-[#6B7280] text-center max-w-[240px] mt-[12px] leading-[16px]">
                   Please make sure that your profile picture is a photo of yourself *
                 </Text>
               </View>
             )}
 
             {/* White Rounded Form Box (matches reference image) */}
-            <View style={s.card}>
+            <View className="bg-[#F8FAFA] rounded-[24px] p-[20px] mb-[16px] border-[1px] border-[#E6EAEC]">
               {step === 2 && (
                 <>
                   {/* Basic Fields */}
@@ -768,12 +749,12 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                       <Pressable
                         onPress={detectLocation}
                         disabled={locLoading}
-                        style={s.locDetectBtn}
+                        className="bg-brand-light rounded-[12px] px-[12px] py-[6px] justify-center items-center ml-[8px]"
                       >
                         {locLoading ? (
                           <ActivityIndicator size="small" color={C.primary} />
                         ) : (
-                          <Text style={s.locDetectText}>📍 Locate</Text>
+                          <Text className="font-inter-bold text-[12px] text-brand">📍 Locate</Text>
                         )}
                       </Pressable>
                     }
@@ -782,8 +763,8 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                   {/* Patient Emergency Details */}
                   {role === "PATIENT" && (
                     <>
-                      <View style={s.divider} />
-                      <Text style={s.sectionHeader}>Emergency Contact</Text>
+                      <View className="h-[1px] bg-[#E6EAEC] my-[20px]" />
+                      <Text className="font-inter-bold text-[15px] text-[#111827] mb-[16px]">Emergency Contact</Text>
 
                       <UnderlineInput
                         label="Contact Person Name"
@@ -805,7 +786,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                   {/* Caregiver Bio */}
                   {role === "CAREGIVER" && (
                     <>
-                      <View style={s.divider} />
+                      <View className="h-[1px] bg-[#E6EAEC] my-[20px]" />
                       <UnderlineInput
                         label="About Me (Short Bio)"
                         value={bio}
@@ -818,8 +799,8 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                   {/* Family Role Details */}
                   {role === "FAMILY" && (
                     <>
-                      <View style={s.divider} />
-                      <Text style={s.sectionHeader}>Family Member Profile</Text>
+                      <View className="h-[1px] bg-[#E6EAEC] my-[20px]" />
+                      <Text className="font-inter-bold text-[15px] text-[#111827] mb-[16px]">Family Member Profile</Text>
 
                       <DropdownPicker
                         label="Relationship to Patient"
@@ -836,13 +817,13 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                         keyboardType="phone-pad"
                       />
 
-                      <View style={s.divider} />
-                      <Text style={s.sectionHeader}>Notification Preferences</Text>
+                      <View className="h-[1px] bg-[#E6EAEC] my-[20px]" />
+                      <Text className="font-inter-bold text-[15px] text-[#111827] mb-[16px]">Notification Preferences</Text>
 
-                      <View style={s.toggleRow}>
-                        <View style={s.toggleTextWrap}>
-                          <Text style={s.toggleLabel}>Geofence Breach</Text>
-                          <Text style={s.toggleSub}>Alert when patient leaves safe zone</Text>
+                      <View className="flex-row items-center justify-between py-[14px] border-b-[1px] border-b-[#F2F5F5]">
+                        <View className="flex-1 mr-[8px]">
+                          <Text className="font-inter-medium text-[15px] text-[#1F2937]">Geofence Breach</Text>
+                          <Text className="font-inter-regular text-[12px] text-[#6B7280] mt-[2px]">Alert when patient leaves safe zone</Text>
                         </View>
                         <Switch
                           value={notifyOnBreach}
@@ -852,10 +833,10 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                         />
                       </View>
 
-                      <View style={s.toggleRow}>
-                        <View style={s.toggleTextWrap}>
-                          <Text style={s.toggleLabel}>SOS Triggered</Text>
-                          <Text style={s.toggleSub}>Emergency SOS alerts (always critical)</Text>
+                      <View className="flex-row items-center justify-between py-[14px] border-b-[1px] border-b-[#F2F5F5]">
+                        <View className="flex-1 mr-[8px]">
+                          <Text className="font-inter-medium text-[15px] text-[#1F2937]">SOS Triggered</Text>
+                          <Text className="font-inter-regular text-[12px] text-[#6B7280] mt-[2px]">Emergency SOS alerts (always critical)</Text>
                         </View>
                         <Switch
                           value={notifyOnSos}
@@ -865,10 +846,10 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                         />
                       </View>
 
-                      <View style={s.toggleRow}>
-                        <View style={s.toggleTextWrap}>
-                          <Text style={s.toggleLabel}>Critical Task Missed</Text>
-                          <Text style={s.toggleSub}>When a critical routine task is overdue</Text>
+                      <View className="flex-row items-center justify-between py-[14px] border-b-[1px] border-b-[#F2F5F5]">
+                        <View className="flex-1 mr-[8px]">
+                          <Text className="font-inter-medium text-[15px] text-[#1F2937]">Critical Task Missed</Text>
+                          <Text className="font-inter-regular text-[12px] text-[#6B7280] mt-[2px]">When a critical routine task is overdue</Text>
                         </View>
                         <Switch
                           value={notifyOnMissedCritical}
@@ -878,10 +859,10 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                         />
                       </View>
 
-                      <View style={s.toggleRow}>
-                        <View style={s.toggleTextWrap}>
-                          <Text style={s.toggleLabel}>Daily Digest</Text>
-                          <Text style={s.toggleSub}>Summary of the day's events</Text>
+                      <View className="flex-row items-center justify-between py-[14px] border-b-[1px] border-b-[#F2F5F5]">
+                        <View className="flex-1 mr-[8px]">
+                          <Text className="font-inter-medium text-[15px] text-[#1F2937]">Daily Digest</Text>
+                          <Text className="font-inter-regular text-[12px] text-[#6B7280] mt-[2px]">Summary of the day's events</Text>
                         </View>
                         <Switch
                           value={notifyOnDailyDigest}
@@ -892,22 +873,16 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                       </View>
 
                       {notifyOnDailyDigest && (
-                        <View style={s.chipGroup}>
-                          <Text style={s.chipGroupTitle}>Digest Frequency</Text>
+                        <View className="my-[12px]">
+                          <Text className="font-inter-medium text-[14px] text-[#1F2937]">Digest Frequency</Text>
                           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                             {(['DAILY', 'WEEKLY'] as const).map(f => (
                               <Pressable
                                 key={f}
-                                style={[
-                                  ch.chip,
-                                  digestFrequency === f && ch.chipActive
-                                ]}
+                                className="px-[12px] py-[8px] rounded-[18px] border-[1px] border-[#D6DDDD] bg-white" style={digestFrequency === f && {"borderColor":"#0E7A67","backgroundColor":"#b1f3da"}}
                                 onPress={() => setDigestFrequency(f)}
                               >
-                                <Text style={[
-                                  ch.chipText,
-                                  digestFrequency === f && ch.chipTextActive
-                                ]}>
+                                <Text className="font-inter-regular text-[13px] text-[#6B7280]" style={digestFrequency === f && {"color":"#0E7A67","fontFamily":"Inter_600SemiBold"}}>
                                   {f === 'DAILY' ? 'Daily' : 'Weekly'}
                                 </Text>
                               </Pressable>
@@ -921,12 +896,12 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                   {/* Opt-in Newsletter */}
                   <Pressable
                     onPress={() => setOptInNews(!optInNews)}
-                    style={s.checkboxRow}
+                    className="flex-row items-start mt-[18px] gap-[12px]"
                   >
-                    <View style={[s.checkbox, optInNews && s.checkboxChecked]}>
-                      {optInNews && <Text style={s.checkmark}>✓</Text>}
+                    <View className="w-[24px] h-[24px] rounded-[6px] border-[2px] border-[#D6DDDD] items-center justify-center bg-white" style={optInNews && {"borderColor":"#0E7A67","backgroundColor":"#0E7A67"}}>
+                      {optInNews && <Text className="text-white text-[13px] font-inter-bold">✓</Text>}
                     </View>
-                    <Text style={s.checkboxLabel}>
+                    <Text className="flex-1 font-inter-regular text-[12px] text-[#1F2937] leading-[17px]">
                       Be the first to know about new features, community news, and
                       events. Opt in to receive occasional emails from Carefully.
                     </Text>
@@ -937,7 +912,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
               {step === 3 && role === "CAREGIVER" && (
                 <>
                   {/* Professional details */}
-                  <Text style={s.sectionHeader}>Professional Information</Text>
+                  <Text className="font-inter-bold text-[15px] text-[#111827] mb-[16px]">Professional Information</Text>
 
                   <StepperRow
                     label="Years of Experience"
@@ -957,8 +932,8 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                     onChange={setRadiusKm}
                   />
 
-                  <View style={s.chipGroup}>
-                    <Text style={s.chipGroupTitle}>Specializations</Text>
+                  <View className="my-[12px]">
+                    <Text className="font-inter-medium text-[14px] text-[#1F2937]">Specializations</Text>
                     <SelectionChips
                       options={SPECIALIZATIONS}
                       selected={specs}
@@ -966,8 +941,8 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                     />
                   </View>
 
-                  <View style={s.chipGroup}>
-                    <Text style={s.chipGroupTitle}>Languages Spoken</Text>
+                  <View className="my-[12px]">
+                    <Text className="font-inter-medium text-[14px] text-[#1F2937]">Languages Spoken</Text>
                     <SelectionChips
                       options={LANGUAGES}
                       selected={langsSpoken}
@@ -975,8 +950,8 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                     />
                   </View>
 
-                  <View style={s.chipGroup}>
-                    <Text style={s.chipGroupTitle}>Availability Types</Text>
+                  <View className="my-[12px]">
+                    <Text className="font-inter-medium text-[14px] text-[#1F2937]">Availability Types</Text>
                     <SelectionChips
                       options={AVAILABILITY}
                       selected={availTypes}
@@ -998,10 +973,10 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
                     keyboardType="numeric"
                   />
 
-                  <View style={s.toggleRow}>
-                    <View style={s.toggleTextWrap}>
-                      <Text style={s.toggleLabel}>Discoverable Profile</Text>
-                      <Text style={s.toggleSub}>
+                  <View className="flex-row items-center justify-between py-[14px] border-b-[1px] border-b-[#F2F5F5]">
+                    <View className="flex-1 mr-[8px]">
+                      <Text className="font-inter-medium text-[15px] text-[#1F2937]">Discoverable Profile</Text>
+                      <Text className="font-inter-regular text-[12px] text-[#6B7280] mt-[2px]">
                         Allow new patients to search and invite you
                       </Text>
                     </View>
@@ -1017,33 +992,30 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
             </View>
 
             {/* App language selector (matches reference design) */}
-            <Pressable style={s.langBar}>
-              <Text style={s.langIcon}>🌐</Text>
-              <Text style={s.langLabel}>App language: English</Text>
-              <Text style={s.langChevron}>›</Text>
+            <Pressable className="flex-row items-center bg-white rounded-[16px] border-[1px] border-[#E6EAEC] p-[16px] mb-[24px]" style={{"shadowColor":"#000","shadowOpacity":0.02,"shadowOffset":{"width":0,"height":2},"shadowRadius":4,"elevation":1}}>
+              <Text className="text-[18px] mr-[12px]">🌐</Text>
+              <Text className="flex-1 font-inter-regular text-[14px] text-[#1F2937]">App language: English</Text>
+              <Text className="text-[16px] text-[#9CA3AF]">›</Text>
             </Pressable>
 
             {submitError && (
-              <View style={s.errorBox}>
-                <Text style={s.errorText}>{submitError}</Text>
+              <View className="bg-[#FEF2F2] rounded-[12px] border-[1px] border-[#FECACA] p-[12px] mb-[16px]">
+                <Text className="font-inter-medium text-[13px] text-[#DC2626] text-center">{submitError}</Text>
               </View>
             )}
 
             {/* Pill next button (matches highlight style in bottom right) */}
-            <View style={s.ctaContainer}>
+            <View className="items-end mt-[8px]">
               <TouchableOpacity
                 onPress={handleNext}
                 disabled={submitting}
                 activeOpacity={0.88}
-                style={[
-                  s.pillBtn,
-                  submitting && s.pillBtnDisabled,
-                ]}
+                className="flex-row items-center bg-brand px-[22px] py-[13px] rounded-[26px]" style={[{"shadowColor":"#0E7A67","shadowOpacity":0.25,"shadowOffset":{"width":0,"height":4},"shadowRadius":10,"elevation":4}, submitting && {"backgroundColor":"#D6DDDD","shadowOpacity":0}]}
               >
                 {submitting ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={s.pillBtnText}>
+                  <Text className="font-inter-bold text-[14px] text-white">
                     {role === "CAREGIVER" && step === 2
                       ? "Next: professional info ›"
                       : "Next: complete setup ›"}
@@ -1058,364 +1030,3 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   );
 }
 
-// ─── Step Indicator Styles ────────────────────────────────────────────────────
-const si = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "center",
-    marginVertical: 20,
-    paddingHorizontal: 8,
-  },
-  item: { alignItems: "center", gap: 6, width: 72 },
-  circle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: C.borderMid,
-    backgroundColor: '#F9FAFB',
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  circleActive: {
-    borderColor: C.primary,
-    backgroundColor: C.primary,
-  },
-  circleDone: {
-    borderColor: C.primary,
-    backgroundColor: C.primary,
-  },
-  check: { fontFamily: F.bold, fontSize: 14, color: "#FFFFFF" },
-  num: { fontFamily: F.bold, fontSize: 14, color: C.textMuted },
-  numActive: { color: "#FFFFFF" },
-  numMuted: { color: C.textMuted },
-  label: {
-    fontFamily: F.regular,
-    fontSize: 10,
-    color: C.textMuted,
-    textAlign: "center",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
-  },
-  labelActive: { color: C.primary, fontFamily: F.semiBold },
-  labelDone: { color: C.primary },
-  dash: {
-    flex: 1,
-    height: 2,
-    backgroundColor: C.border,
-    marginTop: 17,
-    borderStyle: "dashed",
-    borderWidth: 1,
-    borderColor: C.borderMid,
-  },
-  dashDone: { borderColor: C.primary, backgroundColor: C.primary },
-});
-
-// ─── Underline Input Styles ──────────────────────────────────────────────────
-const ui = StyleSheet.create({
-  container: { marginBottom: 16 },
-  wrapper: { borderBottomWidth: 1.5, borderColor: C.borderMid, paddingVertical: 4 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  label: {
-    fontFamily: F.regular,
-    fontSize: 11,
-    color: C.textSecondary,
-    marginBottom: 2,
-    textTransform: "capitalize",
-  },
-  labelVisible: { opacity: 1 },
-  labelHidden: { opacity: 0 },
-  labelFocused: { color: C.primary },
-  labelError: { color: C.error },
-  input: {
-    flex: 1,
-    fontFamily: F.regular,
-    fontSize: 16,
-    color: C.textPrimary,
-    padding: 0,
-    minHeight: 32,
-  },
-  inputMultiline: {
-    minHeight: 64,
-    textAlignVertical: "top",
-  },
-  inputFocused: {
-    color: "#000000",
-  },
-  inputError: {},
-});
-
-// ─── Dropdown Picker Styles ──────────────────────────────────────────────────
-const dp = StyleSheet.create({
-  container: { marginBottom: 16 },
-  wrapper: { borderBottomWidth: 1.5, borderColor: C.borderMid, paddingVertical: 4 },
-  label: {
-    fontFamily: F.regular,
-    fontSize: 11,
-    color: C.textSecondary,
-    marginBottom: 2,
-    opacity: 0,
-  },
-  labelVisible: { opacity: 1 },
-  labelError: { color: C.error },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  valueText: { fontFamily: F.regular, fontSize: 16, color: C.textPrimary },
-  valuePlaceholder: { color: C.textMuted },
-  chevron: { fontSize: 11, color: C.textSecondary },
-  dropdown: {
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    marginTop: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 3,
-    maxHeight: 180,
-    overflow: "scroll",
-  },
-  item: { padding: 12, borderBottomWidth: 0.5, borderBottomColor: C.bg },
-  itemSelected: { backgroundColor: C.primaryLight },
-  itemText: { fontFamily: F.regular, fontSize: 14, color: C.textBody },
-  itemTextSelected: { color: C.primary, fontFamily: F.semiBold },
-});
-
-// ─── Chip Styles ─────────────────────────────────────────────────────────────
-const ch = StyleSheet.create({
-  container: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: C.borderMid,
-    backgroundColor: C.surface,
-  },
-  chipActive: {
-    borderColor: C.primary,
-    backgroundColor: C.primaryLight,
-  },
-  chipText: { fontFamily: F.regular, fontSize: 13, color: C.textSecondary },
-  chipTextActive: { color: C.primary, fontFamily: F.semiBold },
-});
-
-// ─── Stepper Styles ──────────────────────────────────────────────────────────
-const st = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: C.bg,
-  },
-  label: { fontFamily: F.regular, fontSize: 15, color: C.textBody },
-  controls: { flexDirection: "row", alignItems: "center", gap: 16 },
-  button: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: C.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonText: { fontSize: 18, fontFamily: F.bold, color: C.textSecondary },
-  value: { fontFamily: F.bold, fontSize: 16, color: C.textPrimary, minWidth: 20, textAlign: "center" },
-});
-
-// ─── Main Screen Styles ───────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.surface },
-  topBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    height: 48,
-  },
-  topBtn: { paddingVertical: 6, paddingHorizontal: 4 },
-  topBtnText: { fontFamily: F.medium, fontSize: 14, color: C.textSecondary },
-  logoutColor: { color: C.error },
-  topTitle: { fontFamily: F.bold, fontSize: 16, color: C.textPrimary },
-
-  scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-
-  // Avatar Picker styles matching reference image
-  avatarContainer: { alignItems: "center", marginVertical: 16 },
-  avatarTouchable: { position: "relative", width: 100, height: 100 },
-  avatarImage: { width: 100, height: 100, borderRadius: 50 },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: C.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitials: { fontFamily: F.bold, fontSize: 32, color: C.textMuted },
-  cameraBadge: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: C.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: C.surface,
-  },
-  cameraIcon: { fontSize: 14 },
-  avatarTip: {
-    fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textSecondary,
-    textAlign: "center",
-    maxWidth: 240,
-    marginTop: 12,
-    lineHeight: 16,
-  },
-
-  // Rounded Card containing fields
-  card: {
-    backgroundColor: C.surfaceAlt,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-
-  divider: { height: 1, backgroundColor: C.border, marginVertical: 20 },
-  sectionHeader: {
-    fontFamily: F.bold,
-    fontSize: 15,
-    color: C.textPrimary,
-    marginBottom: 16,
-  },
-
-  // Locate button styling
-  locDetectBtn: {
-    backgroundColor: C.primaryLight,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 8,
-  },
-  locDetectText: {
-    fontFamily: F.bold,
-    fontSize: 12,
-    color: C.primary,
-  },
-
-  // Checkbox field matching the reference image layout
-  checkboxRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 18,
-    gap: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: C.borderMid,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: C.surface,
-  },
-  checkboxChecked: {
-    borderColor: C.primary,
-    backgroundColor: C.primary,
-  },
-  checkmark: { color: C.surface, fontSize: 13, fontFamily: F.bold },
-  checkboxLabel: {
-    flex: 1,
-    fontFamily: F.regular,
-    fontSize: 12,
-    color: C.textBody,
-    lineHeight: 17,
-  },
-
-  // App language selector bar (matches reference design)
-  langBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: C.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.02,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  langIcon: { fontSize: 18, marginRight: 12 },
-  langLabel: { flex: 1, fontFamily: F.regular, fontSize: 14, color: C.textBody },
-  langChevron: { fontSize: 16, color: C.textMuted },
-
-  // Chip options group
-  chipGroup: { marginVertical: 12 },
-  chipGroupTitle: { fontFamily: F.medium, fontSize: 14, color: C.textBody },
-
-  // Switch Toggle Row
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: C.bg,
-  },
-  toggleTextWrap: { flex: 1, marginRight: 8 },
-  toggleLabel: { fontFamily: F.medium, fontSize: 15, color: C.textBody },
-  toggleSub: { fontFamily: F.regular, fontSize: 12, color: C.textSecondary, marginTop: 2 },
-
-  // Next pill button matching the reference styling (primary theme color)
-  ctaContainer: { alignItems: "flex-end", marginTop: 8 },
-  pillBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: C.primary,
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    borderRadius: 26,
-    shadowColor: C.primary,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  pillBtnDisabled: { backgroundColor: C.borderMid, shadowOpacity: 0 },
-  pillBtnPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
-  pillBtnText: {
-    fontFamily: F.bold,
-    fontSize: 14,
-    color: C.primaryText,
-  },
-
-  // Error Alert box
-  errorBox: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorText: { fontFamily: F.medium, fontSize: 13, color: C.error, textAlign: "center" },
-});

@@ -8,7 +8,6 @@ import {
   Image,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -17,8 +16,6 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
-import { C } from '../../../theme/colors';
-import { F } from '../../../theme/fonts';
 import type { OnboardingIntent } from '../../../types/navigation.types';
 
 interface Step1Props {
@@ -47,12 +44,12 @@ export const Step1AboutPatient: React.FC<Step1Props> = ({
   const isSelf = intent === 'RECEIVING_CARE';
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateValue, setDateValue] = useState<Date>(
-    dob ? new Date(dob) : new Date(1955, 0, 1)
+    dob ? new Date(`${dob}T12:00:00`) : new Date(1955, 0, 1)
   );
 
   const calculateAge = (dobString: string): number | null => {
     if (!dobString) return null;
-    const birthDate = new Date(dobString);
+    const birthDate = new Date(`${dobString}T12:00:00`);
     if (isNaN(birthDate.getTime())) return null;
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -69,7 +66,7 @@ export const Step1AboutPatient: React.FC<Step1Props> = ({
     }
     if (event.type === 'set' && selected) {
       setDateValue(selected);
-      const iso = selected.toISOString().split('T')[0];
+      const iso = `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}-${String(selected.getDate()).padStart(2, '0')}`;
       onUpdate({ dob: iso });
     }
   };
@@ -94,250 +91,110 @@ export const Step1AboutPatient: React.FC<Step1Props> = ({
     }
   };
 
+  const [nameFocused, setNameFocused] = useState(false);
   const age = calculateAge(dob);
   const isComplete = name.trim().length > 0 && dob.length > 0 && gender.length > 0;
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Let’s get to know you' : 'Tell us about your loved one'}
-      subtitle={
-        isSelf
-          ? 'We’ll personalize your daily companion experience with care and dignity.'
-          : 'We will configure friendly reminders and assistance tailored to their daily rhythm.'
-      }
+      title={isSelf ? 'Let’s get to know you' : 'About your loved one'}
       currentStep={1}
-      iconName="person"
+      iconName="person-outline"
+      backgroundVariant="mint"
       onBack={onBack}
       onNext={onNext}
       isNextDisabled={!isComplete}
     >
-      {/* Profile Photo Picker */}
-      <View style={s.photoSection}>
-        <Pressable onPress={pickPhoto} style={s.photoButton}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={s.photoPreview} />
-          ) : (
-            <View style={s.photoPlaceholder}>
-              <Ionicons name="camera-outline" size={28} color={C.primary} />
-              <Text style={s.photoText}>Add Photo</Text>
+      <View className="rounded-[20px] border border-care-border bg-white p-[16px]"
+        style={{ shadowColor: '#244A42', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 2 }}>
+        <Pressable onPress={pickPhoto} accessibilityRole="button"
+          accessibilityLabel={photoUri ? 'Change profile photo' : 'Add optional profile photo'}
+          className="mb-[16px] flex-row items-center gap-[12px] active:opacity-70">
+          <View className="relative h-[56px] w-[56px]">
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} className="h-[56px] w-[56px] rounded-full" />
+            ) : (
+              <View className="h-[56px] w-[56px] items-center justify-center rounded-full bg-brand-tint">
+                <Ionicons name="camera-outline" size={23} color="#0E7A67" />
+              </View>
+            )}
+            <View className="absolute bottom-0 right-0 h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-white bg-brand">
+              <Ionicons name="pencil" size={10} color="white" />
             </View>
-          )}
-          <View style={s.photoBadge}>
-            <Ionicons name="pencil" size={12} color="#FFFFFF" />
           </View>
+          <View className="flex-1">
+            <Text className="font-inter-semibold text-[14px] text-care-ink">{photoUri ? 'Change photo' : 'Add profile photo'}</Text>
+            <Text className="mt-[3px] font-inter-regular text-[12px] text-care-muted">Optional</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color="#52605D" />
         </Pressable>
-      </View>
 
-      {/* Name Input */}
-      <View style={s.fieldGroup}>
-        <Text style={s.fieldLabel}>
-          {isSelf ? 'Full Name *' : 'Their Full Name *'}
-        </Text>
-        <View style={s.inputContainer}>
-          <Ionicons name="person-outline" size={18} color="#9CA3AF" style={s.inputIcon} />
+        <View className="mb-[14px] h-px bg-care-border" />
+
+        <Text className="mb-[6px] font-inter-semibold text-[13px] text-care-ink">{isSelf ? 'Full name *' : 'Their full name *'}</Text>
+        <View className={`mb-[14px] min-h-[48px] flex-row items-center gap-[10px] rounded-[12px] border bg-care-canvas px-[12px] ${nameFocused ? 'border-brand' : 'border-care-border'}`}>
+          <Ionicons name="person-outline" size={18} color="#52605D" />
           <TextInput
-            style={s.input}
+            className="min-h-[48px] flex-1 font-inter-regular text-[14px] text-care-ink"
+            accessibilityLabel="Full name"
             placeholder={isSelf ? 'Enter your full name' : 'Enter their full name'}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor="#68766F"
             value={name}
             onChangeText={(t) => onUpdate({ name: t })}
+            onFocus={() => setNameFocused(true)}
+            onBlur={() => setNameFocused(false)}
             autoCapitalize="words"
           />
         </View>
-      </View>
 
-      {/* Date of Birth */}
-      <View style={s.fieldGroup}>
-        <View style={s.labelRow}>
-          <Text style={s.fieldLabel}>Date of Birth *</Text>
-          {age !== null && age >= 0 ? (
-            <View style={s.ageBadge}>
-              <Text style={s.ageBadgeText}>{age} years old</Text>
-            </View>
-          ) : null}
+        <View className="mb-[6px] flex-row items-center justify-between gap-[8px]">
+          <Text className="font-inter-semibold text-[13px] text-care-ink">Date of birth *</Text>
+          {age !== null && age >= 0 && (
+            <Text className="font-inter-medium text-[12px] text-brand-dark">{age} years old</Text>
+          )}
         </View>
-        <Pressable
-          style={s.datePickerBtn}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <Ionicons name="calendar-outline" size={18} color={C.primary} style={s.inputIcon} />
-          <Text style={[s.dateText, !dob && s.placeholderText]}>
-            {dob ? dob : 'Select date of birth'}
+        <Pressable onPress={() => setShowDatePicker(true)} accessibilityRole="button"
+          accessibilityLabel={`Date of birth, ${dob || 'not selected'}`}
+          className="min-h-[48px] flex-row items-center gap-[10px] rounded-[12px] border border-care-border bg-care-canvas px-[12px] active:opacity-70">
+          <Ionicons name="calendar-outline" size={18} color="#0E7A67" />
+          <Text className={`flex-1 font-inter-regular text-[14px] ${dob ? 'text-care-ink' : 'text-care-muted'}`}>
+            {dob ? new Date(`${dob}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Select date of birth'}
           </Text>
-          <Ionicons name="chevron-down" size={18} color="#9CA3AF" />
+          <Ionicons name="chevron-down" size={16} color="#52605D" />
         </Pressable>
-
         {showDatePicker && (
-          <DateTimePicker
-            value={dateValue}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            maximumDate={new Date()}
-            minimumDate={new Date(1910, 0, 1)}
-            onChange={handleDateChange}
-          />
-        )}
-      </View>
-
-      {/* Gender Selection */}
-      <View style={s.fieldGroup}>
-        <Text style={s.fieldLabel}>Gender *</Text>
-        <View style={s.genderRow}>
-          {GENDER_OPTIONS.map((g) => {
-            const isSelected = gender === g;
-            return (
-              <Pressable
-                key={g}
-                onPress={() => onUpdate({ gender: g })}
-                style={[s.genderPill, isSelected && s.genderPillSelected]}
-              >
-                <Text style={[s.genderPillText, isSelected && s.genderPillTextSelected]}>
-                  {g}
-                </Text>
+          <View>
+            <DateTimePicker value={dateValue} mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              maximumDate={new Date()} minimumDate={new Date(1910, 0, 1)}
+              onChange={handleDateChange} />
+            {Platform.OS === 'ios' && (
+              <Pressable onPress={() => setShowDatePicker(false)} accessibilityRole="button" className="min-h-[44px] items-end justify-center">
+                <Text className="font-inter-semibold text-brand">Done</Text>
               </Pressable>
-            );
-          })}
+            )}
+          </View>
+        )}
+
+        <Text className="mb-[8px] mt-[14px] font-inter-semibold text-[13px] text-care-ink">Gender *</Text>
+        <View className="gap-[8px]" accessibilityRole="radiogroup">
+          {[GENDER_OPTIONS.slice(0, 2), GENDER_OPTIONS.slice(2)].map((row, index) => (
+            <View key={index} className="flex-row gap-[8px]">
+              {row.map((g) => {
+                const selected = gender === g;
+                return (
+                  <Pressable key={g} onPress={() => onUpdate({ gender: g })}
+                    accessibilityRole="radio" accessibilityState={{ checked: selected }}
+                    className={`min-h-[44px] flex-1 flex-row items-center justify-center gap-[5px] rounded-[12px] border px-[6px] py-[8px] active:opacity-70 ${selected ? 'border-brand bg-care-selected' : 'border-care-border bg-white'}`}>
+                    {selected && <Ionicons name="checkmark" size={14} color="#0E7A67" />}
+                    <Text className={`shrink text-center font-inter-medium text-[13px] ${selected ? 'text-brand-dark' : 'text-care-ink'}`}>{g}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </View>
       </View>
     </OnboardingLayout>
   );
 };
-
-const s = StyleSheet.create({
-  photoSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  photoButton: {
-    position: 'relative',
-  },
-  photoPreview: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 2,
-    borderColor: '#0E7A67',
-  },
-  photoPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#FAF8F5',
-    borderWidth: 1.5,
-    borderColor: '#E5E0D8',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoText: {
-    fontFamily: F.medium,
-    fontSize: 11,
-    color: '#0E7A67',
-    marginTop: 2,
-  },
-  photoBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#0E7A67',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  fieldGroup: {
-    marginBottom: 18,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  fieldLabel: {
-    fontFamily: F.semiBold,
-    fontSize: 14,
-    color: '#161E1C',
-    marginBottom: 6,
-  },
-  ageBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    backgroundColor: '#E6F4F1',
-  },
-  ageBadgeText: {
-    fontFamily: F.semiBold,
-    fontSize: 11,
-    color: '#0A5D50',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 52,
-    borderWidth: 1.5,
-    borderColor: '#E5E0D8',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontFamily: F.regular,
-    fontSize: 15,
-    color: '#161E1C',
-  },
-  datePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 52,
-    borderWidth: 1.5,
-    borderColor: '#E5E0D8',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  dateText: {
-    flex: 1,
-    fontFamily: F.medium,
-    fontSize: 15,
-    color: '#161E1C',
-  },
-  placeholderText: {
-    color: '#9CA3AF',
-    fontFamily: F.regular,
-  },
-  genderRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  genderPill: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E0D8',
-  },
-  genderPillSelected: {
-    backgroundColor: '#0E7A67',
-    borderColor: '#0E7A67',
-    borderWidth: 1.5,
-  },
-  genderPillText: {
-    fontFamily: F.medium,
-    fontSize: 13,
-    color: '#161E1C',
-  },
-  genderPillTextSelected: {
-    color: '#FFFFFF',
-    fontFamily: F.bold,
-  },
-});

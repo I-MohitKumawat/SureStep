@@ -336,6 +336,7 @@ export type PatientProfile = {
   communication_preferences?: string[];
   other_conditions?: string[];
   onboarding_source?: 'SELF' | 'FAMILY';
+  takes_medication?: boolean | null;
   medications?: PatientMedicationItem[];
   known_triggers?: string[];
   comfort_items?: string[];
@@ -364,6 +365,7 @@ export type PatientOnboardingPayload = {
   communication_preferences?: string[];
   other_conditions?: string[];
   onboarding_source?: 'SELF' | 'FAMILY';
+  takes_medication?: boolean | null;
   medications?: PatientMedicationItem[];
   known_triggers?: string[];
   comfort_items?: string[];

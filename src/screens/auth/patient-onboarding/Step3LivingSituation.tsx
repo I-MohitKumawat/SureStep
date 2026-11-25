@@ -1,41 +1,72 @@
+
 /**
  * SureStep — src/screens/auth/patient-onboarding/Step3LivingSituation.tsx
  * Step 3: Location / City and Living arrangement.
  */
+
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  StyleSheet,
+  Pressable,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
-import { OptionCard } from '../../../components/onboarding/OptionCard';
-import { C } from '../../../theme/colors';
-import { F } from '../../../theme/fonts';
 import type { OnboardingIntent } from '../../../types/navigation.types';
 
 interface Step3Props {
   intent: OnboardingIntent;
   city: string;
   livingArrangement: string;
-  onUpdate: (fields: { city?: string; livingArrangement?: string }) => void;
+  onUpdate: (fields: {
+    city?: string;
+    livingArrangement?: string;
+  }) => void;
   onNext: () => void;
   onBack: () => void;
 }
 
 const LIVING_ARRANGEMENTS = [
-  { id: 'ALONE', title: 'Living Independently', desc: 'Solo household', icon: 'home-outline' as const },
-  { id: 'WITH_SPOUSE', title: 'With Spouse / Partner', desc: 'Living together at home', icon: 'heart-outline' as const },
-  { id: 'WITH_FAMILY', title: 'With Family / Children', desc: 'Multi-generational household', icon: 'people-outline' as const },
-  { id: 'WITH_CAREGIVER', title: 'With In-Home Caregiver', desc: 'Assisted daily by a care aide', icon: 'medkit-outline' as const },
-  { id: 'ASSISTED_LIVING', title: 'Senior Living Community', desc: 'Residential assisted community', icon: 'business-outline' as const },
-  { id: 'OTHER', title: 'Other Arrangement', desc: 'Custom living environment', icon: 'help-circle-outline' as const },
+  {
+    id: 'ALONE',
+    title: 'Living independently',
+    desc: 'Solo household',
+    icon: 'home-outline' as const,
+  },
+  {
+    id: 'WITH_SPOUSE',
+    title: 'With spouse / partner',
+    desc: 'Living together at home',
+    icon: 'heart-outline' as const,
+  },
+  {
+    id: 'WITH_FAMILY',
+    title: 'With family / children',
+    desc: 'Multi-generational household',
+    icon: 'people-outline' as const,
+  },
+  {
+    id: 'WITH_CAREGIVER',
+    title: 'With in-home caregiver',
+    desc: 'Assisted daily by a care aide',
+    icon: 'medkit-outline' as const,
+  },
+  {
+    id: 'ASSISTED_LIVING',
+    title: 'Senior living community',
+    desc: 'Residential assisted community',
+    icon: 'business-outline' as const,
+  },
+  {
+    id: 'OTHER',
+    title: 'Other arrangement',
+    desc: 'Custom living environment',
+    icon: 'help-circle-outline' as const,
+  },
 ];
 
 export const Step3LivingSituation: React.FC<Step3Props> = ({
@@ -47,12 +78,17 @@ export const Step3LivingSituation: React.FC<Step3Props> = ({
   onBack,
 }) => {
   const isSelf = intent === 'RECEIVING_CARE';
+
   const [detecting, setDetecting] = useState(false);
+  const [cityFocused, setCityFocused] = useState(false);
 
   const handleDetectLocation = async () => {
     setDetecting(true);
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } =
+        await Location.requestForegroundPermissionsAsync();
+
       if (status !== 'granted') {
         Alert.alert(
           'Location Permission',
@@ -60,156 +96,241 @@ export const Step3LivingSituation: React.FC<Step3Props> = ({
         );
         return;
       }
+
       const pos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+
       const reverse = await Location.reverseGeocodeAsync({
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
       });
-      if (reverse && reverse.length > 0) {
-        const item = reverse[0];
-        const cityName =
-          item.city || item.subregion || item.district || item.region || '';
-        if (cityName) {
-          onUpdate({ city: cityName });
-        } else {
-          Alert.alert('Notice', 'Could not determine city name. Please type manually.');
-        }
+
+      const item = reverse?.[0];
+
+      const cityName =
+        item?.city ||
+        item?.subregion ||
+        item?.district ||
+        item?.region ||
+        '';
+
+      if (cityName) {
+        onUpdate({ city: cityName });
+      } else {
+        Alert.alert(
+          'Location Notice',
+          'Could not determine city name. Please type manually.'
+        );
       }
     } catch (err) {
       console.warn('Location detection notice:', err);
-      Alert.alert('Location Notice', 'Could not detect location. Please type your city.');
+
+      Alert.alert(
+        'Location Notice',
+        'Could not detect location. Please type your city.'
+      );
     } finally {
       setDetecting(false);
     }
   };
 
-  const isComplete = city.trim().length > 0 && livingArrangement.length > 0;
+  const isComplete =
+    city.trim().length > 0 &&
+    livingArrangement.length > 0;
 
   return (
     <OnboardingLayout
-      title={isSelf ? 'Your Home & Living Setup' : 'Home & Living Setup'}
-      subtitle={
+      title={
         isSelf
-          ? 'Helps us tailor your safe boundaries and localize nearby care support.'
-          : 'Helps us set up home safety boundaries and emergency coverage.'
+          ? 'Your Home & Living Setup'
+          : 'Home & Living Setup'
       }
       currentStep={3}
-      iconName="home"
+      iconName="home-outline"
+      backgroundVariant="mint"
       onBack={onBack}
       onNext={onNext}
       isNextDisabled={!isComplete}
     >
-      {/* City / Area */}
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>City or Area *</Text>
-        <View style={s.inputRow}>
-          <View style={s.inputContainer}>
-            <Ionicons name="location-outline" size={18} color="#9CA3AF" style={s.inputIcon} />
+      <View
+        className="rounded-[20px] border border-care-border bg-white p-[16px]"
+        style={{
+          shadowColor: '#244A42',
+          shadowOpacity: 0.08,
+          shadowOffset: { width: 0, height: 3 },
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+        {/* City / Area */}
+
+        <Text className="mb-[6px] font-inter-semibold text-[13px] text-care-ink">
+          City or area *
+        </Text>
+
+        <View className="flex-row items-center gap-[8px]">
+          <View
+            className={`min-h-[48px] flex-1 flex-row items-center gap-[10px] rounded-[12px] border bg-care-canvas px-[12px] ${
+              cityFocused
+                ? 'border-brand'
+                : 'border-care-border'
+            }`}
+          >
+            <Ionicons
+              name="location-outline"
+              size={18}
+              color={cityFocused ? '#0E7A67' : '#52605D'}
+            />
+
             <TextInput
-              style={s.input}
-              placeholder="e.g., Bengaluru, Mumbai, Delhi"
-              placeholderTextColor="#9CA3AF"
+              className="min-h-[48px] flex-1 font-inter-regular text-[14px] text-care-ink"
+              accessibilityLabel="City or area"
+              placeholder="Enter city or area"
+              placeholderTextColor="#68766F"
               value={city}
-              onChangeText={(t) => onUpdate({ city: t })}
+              onChangeText={(text) => onUpdate({ city: text })}
+              onFocus={() => setCityFocused(true)}
+              onBlur={() => setCityFocused(false)}
               autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="done"
             />
           </View>
-          <TouchableOpacity
+
+          <Pressable
             onPress={handleDetectLocation}
             disabled={detecting}
-            activeOpacity={0.7}
-            style={s.detectBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Detect current location"
+            accessibilityState={{
+              disabled: detecting,
+              busy: detecting,
+            }}
+            className={`h-[50px] w-[50px] items-center justify-center rounded-[12px] border border-care-border bg-brand-tint active:opacity-70 ${
+              detecting ? 'opacity-60' : ''
+            }`}
           >
             {detecting ? (
-              <ActivityIndicator size="small" color="#0E7A67" />
+              <ActivityIndicator
+                size="small"
+                color="#0E7A67"
+              />
             ) : (
-              <Ionicons name="locate" size={20} color="#0E7A67" />
+              <Ionicons
+                name="locate-outline"
+                size={21}
+                color="#0E7A67"
+              />
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
-      </View>
 
-      {/* Living Arrangement */}
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Living Arrangement *</Text>
-        <Text style={s.sectionHint}>
-          {isSelf ? 'Who do you currently live with?' : 'Who lives at home with them?'}
+        <Text className="mt-[6px] font-inter-regular text-[12px] leading-[18px] text-care-muted">
+          {isSelf
+            ? 'Enter your city or use your current location.'
+            : 'Enter their city or use your current location if you are with them.'}
         </Text>
-        <View style={s.cardGroup}>
-          {LIVING_ARRANGEMENTS.map((arr) => (
-            <OptionCard
-              key={arr.id}
-              title={arr.title}
-              description={arr.desc}
-              icon={arr.icon}
-              selected={livingArrangement === arr.id}
-              onPress={() => onUpdate({ livingArrangement: arr.id })}
-            />
-          ))}
+
+        {/* Divider */}
+
+        <View className="my-[16px] h-px bg-care-border" />
+
+        {/* Living Arrangement */}
+
+        <Text className="mb-[4px] font-inter-semibold text-[13px] text-care-ink">
+          Living arrangement *
+        </Text>
+
+        <Text className="mb-[12px] font-inter-regular text-[12px] leading-[18px] text-care-muted">
+          {isSelf
+            ? 'Who do you currently live with?'
+            : 'Who lives at home with them?'}
+        </Text>
+
+        <View
+          className="gap-[8px]"
+          accessibilityRole="radiogroup"
+        >
+          {LIVING_ARRANGEMENTS.map((arrangement) => {
+            const selected =
+              livingArrangement === arrangement.id;
+
+            return (
+              <Pressable
+                key={arrangement.id}
+                onPress={() =>
+                  onUpdate({
+                    livingArrangement: arrangement.id,
+                  })
+                }
+                accessibilityRole="radio"
+                accessibilityLabel={arrangement.title}
+                accessibilityState={{ checked: selected }}
+                className={`min-h-[64px] flex-row items-center gap-[10px] rounded-[12px] border px-[10px] py-[10px] active:opacity-70 ${
+                  selected
+                    ? 'border-brand bg-care-selected'
+                    : 'border-care-border bg-white'
+                }`}
+              >
+                {/* Arrangement Icon */}
+
+                <View
+                  className={`h-[36px] w-[36px] items-center justify-center rounded-[10px] ${
+                    selected
+                      ? 'bg-brand-tint'
+                      : 'bg-care-canvas'
+                  }`}
+                >
+                  <Ionicons
+                    name={arrangement.icon}
+                    size={19}
+                    color={
+                      selected ? '#0E7A67' : '#52605D'
+                    }
+                  />
+                </View>
+
+                {/* Arrangement Details */}
+
+                <View className="flex-1">
+                  <Text
+                    className={`font-inter-medium text-[13px] ${
+                      selected
+                        ? 'text-brand-dark'
+                        : 'text-care-ink'
+                    }`}
+                  >
+                    {arrangement.title}
+                  </Text>
+
+                  <Text className="mt-[3px] font-inter-regular text-[11px] leading-[16px] text-care-muted">
+                    {arrangement.desc}
+                  </Text>
+                </View>
+
+                {/* Selection Indicator */}
+
+                <View
+                  className={`h-[20px] w-[20px] items-center justify-center rounded-full border ${
+                    selected
+                      ? 'border-brand bg-brand'
+                      : 'border-care-border bg-white'
+                  }`}
+                >
+                  {selected && (
+                    <Ionicons
+                      name="checkmark"
+                      size={13}
+                      color="#FFFFFF"
+                    />
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
     </OnboardingLayout>
   );
 };
-
-const s = StyleSheet.create({
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontFamily: F.semiBold,
-    fontSize: 15,
-    color: '#161E1C',
-    marginBottom: 4,
-  },
-  sectionHint: {
-    fontFamily: F.regular,
-    fontSize: 13,
-    color: '#52605D',
-    marginBottom: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 52,
-    borderWidth: 1.5,
-    borderColor: '#E5E0D8',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontFamily: F.regular,
-    fontSize: 15,
-    color: '#161E1C',
-  },
-  detectBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#E6F4F1',
-    borderWidth: 1.5,
-    borderColor: '#C2E8E0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detectBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  cardGroup: {
-    gap: 2,
-  },
-});
