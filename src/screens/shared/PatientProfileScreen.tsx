@@ -25,7 +25,7 @@ import { F } from '../../theme/fonts';
 import { getPatientProfile, updatePatientProfile } from '../../services/userService';
 import { getLatestAssessment, getAssessmentHistory, type AssessmentData } from '../../services/assessmentService';
 import { getCarePlan, type CarePlanData } from '../../services/carePlanService';
-import { getCareCircleForPatient } from '../../services/familyService';
+import { listCareCirclePeopleForPatient } from '../../services/careCircleService';
 
 export const PatientProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -84,10 +84,8 @@ export const PatientProfileScreen: React.FC = () => {
       setLatestAssessment(assessment);
 
       // 3. Fetch care circle
-      const circleRes = await getCareCircleForPatient(patientId).catch(() => null);
-      if (circleRes?.data?.data?.members) {
-        setCareCircle(circleRes.data.data.members);
-      }
+      const circleMembers = await listCareCirclePeopleForPatient(patientId).catch(() => []);
+      setCareCircle(circleMembers);
 
       // If role is CAREGIVER or FAMILY, fetch care plan and history
       if (userRole === 'CAREGIVER' || userRole === 'FAMILY') {

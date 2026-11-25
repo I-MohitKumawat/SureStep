@@ -19,39 +19,17 @@ import type { CaregiverStackParams } from '../../types/navigation.types';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
 import {
-  getCareCircleForPatient,
-  getInviteCodesForPatient,
-  generateInviteCode,
-  revokeInviteCode,
-  type CareCircleMember,
-} from '../../services/familyService';
+  resolveCircleIdForPatient,
+  listCircleMembers,
+  generateCircleInvite,
+  getActiveCircleInvite,
+  revokeActiveCircleInvite,
+  type CircleMember,
+} from '../../services/careCircleService';
+import { useAuth } from '../../context/AuthContext';
 import { getSocket } from '../../services/socketClient';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverCareCircleScreen'>;
-
-type RoleOption = {
-  value: 'GUARDIAN' | 'FAMILY_CLOSE' | 'FAMILY_EXTENDED';
-  label: string;
-  desc: string;
-};
-
-const ROLE_OPTIONS: RoleOption[] = [
-  {
-    value: 'GUARDIAN',
-    label: 'Guardian',
-    desc: 'Primary family members with full read/write controls.',
-  },
-  {
-    value: 'FAMILY_CLOSE',
-    label: 'Close Family',
-    desc: 'Trusted family with safety monitoring & routine viewing.',
-  },
-  {
-    value: 'FAMILY_EXTENDED',
-    label: 'Extended Family',
-    desc: 'Distant family with weekly/daily digest views only.',
-  },
-];
 
 // Generates a mock QR code grid based on invite code string
 const MockQrCode = ({ code }: { code: string }) => {
@@ -120,34 +98,54 @@ const MockQrCode = ({ code }: { code: string }) => {
 
 export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }) => {
   const { patientId, patientName } = route.params;
+  const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'members' | 'invites'>('members');
-  const [members, setMembers] = useState<CareCircleMember[]>([]);
-  const [inviteCodes, setInviteCodes] = useState<any[]>([]);
+  const [circleId, setCircleId] = useState<string | null>(null);
+  const [members, setMembers] = useState<CircleMember[]>([]);
+  const [invite, setInvite] = useState<{ code: string; expires_at: string } | null>(null);
+  const [canManageMembers, setCanManageMembers] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   // Modal states
   const [genModalVisible, setGenModalVisible] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'GUARDIAN' | 'FAMILY_CLOSE' | 'FAMILY_EXTENDED'>('FAMILY_CLOSE');
   const [newInvite, setNewInvite] = useState<{ code: string; expires_at: string } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [membersRes, invitesRes] = await Promise.all([
-        getCareCircleForPatient(patientId),
-        getInviteCodesForPatient(patientId),
-      ]);
-      setMembers(membersRes.data?.data?.members || []);
-      setInviteCodes(invitesRes.data?.data?.inviteCodes || []);
+      const resolvedCircleId = await resolveCircleIdForPatient(patientId);
+      setCircleId(resolvedCircleId);
+      if (!resolvedCircleId) {
+        setMembers([]);
+        setInvite(null);
+        setCanManageMembers(false);
+        return;
+      }
+
+      const memberRows = await listCircleMembers(resolvedCircleId);
+      setMembers(memberRows);
+
+      const myMembership = memberRows.find((member) => member.user_id === user?.id);
+      const canManage = !!(
+        myMembership?.is_owner ||
+        myMembership?.permissions?.includes('Manage Member Permissions')
+      );
+      setCanManageMembers(canManage);
+
+      if (canManage) {
+        setInvite(await getActiveCircleInvite(resolvedCircleId));
+      } else {
+        setInvite(null);
+      }
     } catch (err) {
       console.error('[CaregiverCareCircle] Failed to load data:', err);
       Alert.alert('Error', 'Failed to load Care Circle members.');
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, user?.id]);
 
   useEffect(() => {
     loadData();
@@ -170,15 +168,13 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
   }, [loadData]);
 
   const handleGenerate = async () => {
+    if (!circleId) return;
     setGenerating(true);
     try {
-      const res = await generateInviteCode(patientId, selectedRole);
-      const invite = res.data?.data?.invite;
-      if (invite) {
-        setNewInvite(invite);
-        // Refresh invites list in background
-        const invitesRes = await getInviteCodesForPatient(patientId);
-        setInviteCodes(invitesRes.data?.data?.inviteCodes || []);
+      const created = await generateCircleInvite(circleId);
+      if (created.code) {
+        setNewInvite(created);
+        setInvite(created);
       }
     } catch (err) {
       console.error('[CaregiverCareCircle] Generate failed:', err);
@@ -188,10 +184,11 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
     }
   };
 
-  const handleRevoke = async (code: string) => {
+  const handleRevoke = async () => {
+    if (!circleId) return;
     Alert.alert(
       'Revoke Invite Code',
-      `Are you sure you want to revoke code ${code}? It will immediately become inactive.`,
+      'Are you sure you want to revoke the active invite code? It will immediately become inactive.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -199,10 +196,9 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
           style: 'destructive',
           onPress: async () => {
             try {
-              await revokeInviteCode(code);
-              // Refresh invites list
-              const invitesRes = await getInviteCodesForPatient(patientId);
-              setInviteCodes(invitesRes.data?.data?.inviteCodes || []);
+              await revokeActiveCircleInvite(circleId);
+              setInvite(null);
+              setNewInvite(null);
               Alert.alert('Success', 'Invite code has been revoked.');
             } catch (err) {
               console.error('[CaregiverCareCircle] Revoke failed:', err);
@@ -271,32 +267,28 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
           {activeTab === 'members' ? (
             <>
               {members.length === 0 ? (
-                <Text style={styles.emptyText}>No family members linked to this patient yet.</Text>
+                <Text style={styles.emptyText}>No members linked to this Care Circle yet.</Text>
               ) : (
                 members.map((member) => (
                   <View key={member.id} style={styles.memberCard}>
                     <View style={styles.memberAvatar}>
                       <Text style={styles.memberAvatarText}>
-                        {(member.name || 'F')[0].toUpperCase()}
+                        {(member.name || 'M')[0].toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.memberInfo}>
                       <Text style={styles.memberName}>{member.name}</Text>
-                      <Text style={styles.memberRole}>{member.relationship_type.replace('_', ' ')}</Text>
+                      <Text style={styles.memberRole}>
+                        {member.is_owner
+                          ? 'Circle Owner'
+                          : member.role_in_circle === 'CAREGIVER'
+                            ? 'Professional Caregiver'
+                            : 'Circle Member'}
+                      </Text>
                     </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        member.status === 'CONFIRMED' ? styles.statusBadgeActive : styles.statusBadgePending,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusBadgeText,
-                          member.status === 'CONFIRMED' ? styles.statusBadgeTextActive : styles.statusBadgeTextPending,
-                        ]}
-                      >
-                        {member.status.toLowerCase()}
+                    <View style={[styles.statusBadge, styles.statusBadgeActive]}>
+                      <Text style={[styles.statusBadgeText, styles.statusBadgeTextActive]}>
+                        {member.is_owner ? 'owner' : member.role_in_circle.toLowerCase()}
                       </Text>
                     </View>
                   </View>
@@ -305,79 +297,58 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
             </>
           ) : (
             <>
-              {/* Generate Invite Button */}
-              <Pressable
-                style={styles.generateButton}
-                onPress={() => {
-                  setNewInvite(null);
-                  setGenModalVisible(true);
-                }}
-              >
-                <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.generateButtonText}>Generate Invite Code</Text>
-              </Pressable>
-
-              {inviteCodes.length === 0 ? (
-                <Text style={styles.emptyText}>No invite codes generated yet.</Text>
+              {!canManageMembers ? (
+                <Text style={styles.emptyText}>
+                  Only the Circle Owner or a member with Manage Member Permissions can invite people to this Care Circle.
+                </Text>
               ) : (
-                inviteCodes.map((code) => {
-                  const expired = isExpired(code.expires_at);
-                  const used = !!code.used_at;
-                  let statusText = 'Active';
-                  let statusStyle = styles.codeActive;
-                  let statusTextStyle = styles.codeTextActive;
+                <>
+                  {/* Generate Invite Button */}
+                  <Pressable
+                    style={styles.generateButton}
+                    onPress={() => {
+                      setNewInvite(null);
+                      setGenModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.generateButtonText}>Generate Invite Code</Text>
+                  </Pressable>
 
-                  if (used) {
-                    statusText = 'Used';
-                    statusStyle = styles.codeUsed;
-                    statusTextStyle = styles.codeTextUsed;
-                  } else if (expired) {
-                    statusText = 'Expired';
-                    statusStyle = styles.codeExpired;
-                    statusTextStyle = styles.codeTextExpired;
-                  }
-
-                  return (
-                    <View key={code.id} style={styles.codeCard}>
+                  {!invite ? (
+                    <Text style={styles.emptyText}>No active invite code.</Text>
+                  ) : (
+                    <View style={styles.codeCard}>
                       <View style={styles.codeHeader}>
-                        <Text style={styles.codeVal}>{code.code}</Text>
-                        <View style={[styles.codeBadge, statusStyle]}>
-                          <Text style={[styles.codeBadgeText, statusTextStyle]}>{statusText}</Text>
+                        <Text style={styles.codeVal}>{invite.code}</Text>
+                        <View style={[styles.codeBadge, isExpired(invite.expires_at) ? styles.codeExpired : styles.codeActive]}>
+                          <Text style={[styles.codeBadgeText, isExpired(invite.expires_at) ? styles.codeTextExpired : styles.codeTextActive]}>
+                            {isExpired(invite.expires_at) ? 'Expired' : 'Active'}
+                          </Text>
                         </View>
                       </View>
 
                       <View style={styles.codeDetails}>
                         <Text style={styles.detailText}>
-                          Role: <Text style={styles.detailVal}>{code.relationship_type.replace('_', ' ')}</Text>
-                        </Text>
-                        <Text style={styles.detailText}>
                           Expires:{' '}
                           <Text style={styles.detailVal}>
-                            {new Date(code.expires_at).toLocaleDateString()}
+                            {new Date(invite.expires_at).toLocaleDateString()}
                           </Text>
                         </Text>
-                        {used && (
-                          <Text style={styles.detailText}>
-                            Used:{' '}
-                            <Text style={styles.detailVal}>
-                              {new Date(code.used_at).toLocaleDateString()}
-                            </Text>
-                          </Text>
-                        )}
                       </View>
 
                       <View style={styles.codeActions}>
                         <Pressable
                           style={styles.iconButton}
-                          onPress={() => handleCopyCode(code.code)}
+                          onPress={() => handleCopyCode(invite.code)}
                         >
                           <Ionicons name="copy-outline" size={16} color="#4B5563" />
                           <Text style={styles.iconButtonText}>Copy</Text>
                         </Pressable>
-                        {!used && !expired && (
+                        {!isExpired(invite.expires_at) && (
                           <Pressable
                             style={[styles.iconButton, styles.revokeBtn]}
-                            onPress={() => handleRevoke(code.code)}
+                            onPress={handleRevoke}
                           >
                             <Ionicons name="trash-outline" size={16} color="#DC2626" />
                             <Text style={[styles.iconButtonText, styles.revokeText]}>Revoke</Text>
@@ -385,8 +356,8 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
                         )}
                       </View>
                     </View>
-                  );
-                })
+                  )}
+                </>
               )}
             </>
           )}
@@ -430,37 +401,9 @@ export const CaregiverCareCircleScreen: React.FC<Props> = ({ route, navigation }
               </View>
             ) : (
               <View style={styles.inviteFormContainer}>
-                <Text style={styles.formLabel}>Select Family Role:</Text>
-                {ROLE_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.value}
-                    style={[
-                      styles.roleSelectCard,
-                      selectedRole === opt.value && styles.roleSelectCardActive,
-                    ]}
-                    onPress={() => setSelectedRole(opt.value)}
-                  >
-                    <View style={styles.radioRow}>
-                      <View
-                        style={[
-                          styles.radioCircle,
-                          selectedRole === opt.value && styles.radioCircleActive,
-                        ]}
-                      >
-                        {selectedRole === opt.value && <View style={styles.radioDot} />}
-                      </View>
-                      <Text
-                        style={[
-                          styles.roleLabel,
-                          selectedRole === opt.value && styles.roleLabelActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </View>
-                    <Text style={styles.roleDesc}>{opt.desc}</Text>
-                  </Pressable>
-                ))}
+                <Text style={styles.formLabel}>
+                  Generate a 6-digit Care Circle invitation. The applicant requests to join and a member with Manage Member Permissions decides whether to accept.
+                </Text>
 
                 <Pressable
                   style={[styles.modalPrimaryBtn, generating && { opacity: 0.8 }]}

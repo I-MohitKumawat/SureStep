@@ -1,27 +1,27 @@
 /**
  * SureStep — src/context/CaregiverContext.tsx
  *
- * Exposes active/confirmed caregiver information to patient screens.
- * Uses relationshipService for Express API interaction.
+ * Exposes the Patient's canonical caregiver relationships to Patient screens.
+ * A caregiver appears only when a Care Circle relationship is ACTIVE or in its
+ * NOTICE_PERIOD and an active Patient assignment exists.
  */
 import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { CaregiverListing } from '../screens/patient/CaregiverSearchView';
-import { fetchConfirmedCaregiver, fetchMyCaregivers, confirmCaregiver, removeCaregiver } from '../services/relationshipService';
+import { fetchMyCaregivers } from '../services/relationshipService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type CaregiverContextValue = {
-  caregivers:            CaregiverListing[];
-  confirmedCaregiver:    CaregiverListing | null;
-  loading:               boolean;
-  setConfirmedCaregiver: (c: CaregiverListing | null, patientPhone: string, patientName?: string, targetCaregiverId?: string) => Promise<void>;
-  reloadCaregiver:       (patientPhone?: string, force?: boolean) => Promise<void>;
-  reloadCaregivers:      (force?: boolean) => Promise<void>;
+  caregivers:       CaregiverListing[];
+  confirmedCaregiver: CaregiverListing | null;
+  loading:          boolean;
+  reloadCaregiver:  (patientPhone?: string, force?: boolean) => Promise<void>;
+  reloadCaregivers: (force?: boolean) => Promise<void>;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-const CaregiverContext = createContext<CaregiverContextValue | undefined>(undefined);
+export const CaregiverContext = createContext<CaregiverContextValue | undefined>(undefined);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -32,9 +32,6 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
 
   const hasLoadedRef = React.useRef(false);
 
-  /**
-   * Sync context state with latest DB records (supports multiple caregivers).
-   */
   const reloadCaregivers = useCallback(
     async (force = false) => {
       if (hasLoadedRef.current && !force) {
@@ -57,67 +54,23 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
   );
 
   /**
-   * Backward-compatible sync with patientPhone argument.
+   * Backward-compatible signature for screens that still pass a Patient phone.
+   * Canonical relationships are resolved from the authenticated Patient.
    */
   const reloadCaregiver = useCallback(
-    async (patientPhone?: string, force = false) => {
+    async (_patientPhone?: string, force = false) => {
       setLoading(true);
       try {
         const team = await fetchMyCaregivers();
-        if (team.length > 0) {
-          setCaregivers(team);
-          setConfirmedCaregiverState(team[0]);
-          hasLoadedRef.current = true;
-        } else if (patientPhone) {
-          const single = await fetchConfirmedCaregiver(patientPhone);
-          setConfirmedCaregiverState(single);
-          setCaregivers(single ? [single] : []);
-        } else {
-          setCaregivers([]);
-          setConfirmedCaregiverState(null);
-        }
+        setCaregivers(team);
+        setConfirmedCaregiverState(team[0] || null);
+        hasLoadedRef.current = true;
       } catch (error) {
         console.warn('[CaregiverContext] reloadCaregiver failed:', error);
-        setConfirmedCaregiverState(null);
         setCaregivers([]);
+        setConfirmedCaregiverState(null);
       } finally {
         setLoading(false);
-      }
-    },
-    [],
-  );
-
-  /**
-   * Confirm or remove a caregiver link.
-   * Removing a caregiver requires a targetCaregiverId to prevent bulk deletion.
-   */
-  const setConfirmedCaregiver = useCallback(
-    async (c: CaregiverListing | null, patientPhone: string, patientName?: string, targetCaregiverId?: string) => {
-      if (!patientPhone) return;
-
-      const caregiverIdToRemove = targetCaregiverId || (c ? undefined : undefined);
-
-      // Optimistic update
-      const pendingItem = c ? { ...c, status: 'PENDING' } : null;
-      setConfirmedCaregiverState(pendingItem);
-      if (pendingItem) {
-        setCaregivers((prev) => [pendingItem, ...prev.filter((item) => item.id !== pendingItem.id)]);
-      }
-
-      try {
-        if (c) {
-          await confirmCaregiver(patientPhone, c, patientName);
-        } else if (caregiverIdToRemove) {
-          await removeCaregiver(patientPhone, caregiverIdToRemove);
-          setCaregivers((prev) => prev.filter((item) => item.id !== caregiverIdToRemove));
-        } else {
-          console.warn('[CaregiverContext] removeCaregiver requires an explicit targetCaregiverId; bulk removal prevented');
-        }
-      } catch (error) {
-        console.warn('[CaregiverContext] setConfirmedCaregiver failed, reverting state:', error);
-        // Revert optimistic update
-        setConfirmedCaregiverState(null);
-        setCaregivers((prev) => (c ? prev.filter((item) => item.id !== c.id) : prev));
       }
     },
     [],
@@ -128,11 +81,10 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
       caregivers,
       confirmedCaregiver,
       loading,
-      setConfirmedCaregiver,
       reloadCaregiver,
       reloadCaregivers,
     }),
-    [caregivers, confirmedCaregiver, loading, setConfirmedCaregiver, reloadCaregiver, reloadCaregivers],
+    [caregivers, confirmedCaregiver, loading, reloadCaregiver, reloadCaregivers],
   );
 
   return <CaregiverContext.Provider value={value}>{children}</CaregiverContext.Provider>;

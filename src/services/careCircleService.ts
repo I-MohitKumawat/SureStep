@@ -213,6 +213,67 @@ export async function listCircleMembers(circleId: string): Promise<CircleMember[
   }
 }
 
+export interface CaregiverAssignment {
+  assignment_id: string;
+  patient_id: string;
+  patient_name: string;
+  is_active: boolean;
+  assigned_at: string;
+}
+
+export interface CaregiverRelationship {
+  id: string;
+  circle_id: string;
+  caregiver_id: string;
+  caregiver_name: string;
+  caregiver_email?: string | null;
+  caregiver_phone?: string | null;
+  photo_url?: string | null;
+  status: 'ACTIVE' | 'NOTICE_PERIOD' | 'SUSPENDED' | 'TERMINATED';
+  created_at: string;
+  notice_started_at?: string | null;
+  notice_expires_at?: string | null;
+  ended_at?: string | null;
+  termination_reason?: string | null;
+  termination_notes?: string | null;
+  assignments: CaregiverAssignment[];
+}
+
+export async function listCircleCaregivers(circleId: string): Promise<CaregiverRelationship[]> {
+  try {
+    const res = await apiClient.get(`/care-circles/${circleId}/caregivers`);
+    const data = res.data?.data ?? res.data;
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[careCircleService] listCircleCaregivers error:', err);
+    return [];
+  }
+}
+
+export async function submitCaregiverNotice(
+  circleId: string,
+  relationshipId: string,
+  dto: { reason?: string; isSafetyException?: boolean },
+): Promise<CaregiverRelationship> {
+  const res = await apiClient.post(
+    `/care-circles/${circleId}/caregivers/${relationshipId}/notice`,
+    dto,
+  );
+  return res.data?.data ?? res.data;
+}
+
+export async function terminateCaregiverRelationship(
+  circleId: string,
+  relationshipId: string,
+  dto: { reason?: string; notes?: string },
+): Promise<CaregiverRelationship> {
+  const res = await apiClient.post(
+    `/care-circles/${circleId}/caregivers/${relationshipId}/terminate`,
+    dto,
+  );
+  return res.data?.data ?? res.data;
+}
+
 export async function removeCircleMember(circleId: string, memberId: string): Promise<void> {
   await apiClient.delete(`/care-circles/${circleId}/members/${memberId}`);
 }

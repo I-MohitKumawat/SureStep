@@ -72,9 +72,9 @@ export const PatientSafetyScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   // Check if there is an active emergency alert
-  const activeAlert = alerts.find(
-    (a) => a.status === 'TRIGGERED' || a.status === 'ACKNOWLEDGED' || a.status === 'RESPONDED'
-  );
+  // Responding does not resolve an alert; an incident is open until the Circle
+  // Owner resolves it.
+  const activeAlert = alerts.find((a) => a.status !== 'RESOLVED');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

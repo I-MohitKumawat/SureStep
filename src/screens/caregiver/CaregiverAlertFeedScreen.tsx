@@ -97,10 +97,9 @@ export const CaregiverAlertFeedScreen: React.FC<Props> = ({ navigation }) => {
   }, [load]);
 
   const handleRespond = async (alert: SafetyAlert) => {
-    if (!alert.circle_id) return;
     setRespondingId(alert.id);
     try {
-      await respondToAlert(alert.circle_id, alert.id);
+      await respondToAlert(alert.id);
       await load();
     } finally {
       setRespondingId(null);

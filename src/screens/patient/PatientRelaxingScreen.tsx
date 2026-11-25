@@ -610,9 +610,9 @@ export const PatientRelaxingScreen: React.FC<Props> = ({ navigation }) => {
           {(['Activity', 'Search'] as BottomTab[]).map((tab) => {
             const isActive = activeTab === tab;
             const IconComponent =
-              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED' ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
+              tab === 'Search' && confirmedCaregiver && (confirmedCaregiver.status === 'ACTIVE' || confirmedCaregiver.status === 'NOTICE_PERIOD') ? IconProfile : tab === 'Activity' ? IconActivity : IconSearch;
             const label =
-              tab === 'Search' && confirmedCaregiver && confirmedCaregiver.status === 'CONFIRMED'
+              tab === 'Search' && confirmedCaregiver && (confirmedCaregiver.status === 'ACTIVE' || confirmedCaregiver.status === 'NOTICE_PERIOD')
                 ? confirmedCaregiver.name.split(' ')[0]
                 : tab;
             return (

@@ -31,7 +31,7 @@ type PatientTrackingContextValue = {
   setZones: React.Dispatch<React.SetStateAction<GeofenceZone[]>>;
 };
 
-const PatientTrackingContext = createContext<PatientTrackingContextValue | undefined>(undefined);
+export const PatientTrackingContext = createContext<PatientTrackingContextValue | undefined>(undefined);
 
 export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { firebaseUser } = useAuth();

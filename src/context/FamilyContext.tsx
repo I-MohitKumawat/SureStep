@@ -42,7 +42,7 @@ interface FamilyContextValue {
   updateLocalPatientState: (patch: Partial<CirclePatient>) => void;
 }
 
-const FamilyContext = createContext<FamilyContextValue>({
+export const FamilyContext = createContext<FamilyContextValue>({
   circles: [],
   activeCircle: null,
   patients: [],

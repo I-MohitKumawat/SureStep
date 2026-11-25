@@ -26,20 +26,35 @@ import { useCaregiver } from '../../hooks/useCaregiver';
 import { usePatientCareMode } from '../../hooks/usePatientCareMode';
 import { formatDate } from '../../utils/dateUtils';
 import {
-  endCareRelationship,
-  fetchCareRelationshipHistory,
-  fetchPendingResignations,
-  acceptCaregiverResignation,
-  declineCaregiverResignation,
-  type CareRelationshipEndReason,
-  type CareRelationshipHistoryItem,
-  type CaregiverResignationRecord,
-  type CaregiverResignationReason,
-} from '../../services/relationshipService';
+  resolveCircleIdForPatient,
+  listCircleCaregivers,
+  listCircleMembers,
+  terminateCaregiverRelationship,
+  type CaregiverRelationship,
+} from '../../services/careCircleService';
 import type { CaregiverListing } from './CaregiverSearchView';
 import type { PatientStackParams } from '../../types/navigation.types';
 
 type NavigationProp = NativeStackNavigationProp<PatientStackParams>;
+type CareRelationshipEndReason =
+  | 'CARE_NO_LONGER_REQUIRED'
+  | 'FAMILY_TAKING_OVER'
+  | 'FOUND_DIFFERENT_CARE'
+  | 'CAREGIVER_NOT_A_GOOD_FIT'
+  | 'SCHEDULE_CHANGED'
+  | 'CAREGIVER_REQUESTED_END'
+  | 'OTHER';
+
+type CareHistoryItem = {
+  id: string;
+  relationship_id: string;
+  name: string;
+  photo_url: string | null;
+  professional_role: string;
+  ended_at: string | null;
+  end_reason: string | null;
+  end_notes: string | null;
+};
 
 const END_REASON_OPTIONS: { reason: CareRelationshipEndReason; label: string; desc: string }[] = [
   {
@@ -79,35 +94,17 @@ const END_REASON_OPTIONS: { reason: CareRelationshipEndReason; label: string; de
   },
 ];
 
-const RESIGNATION_REASON_LABELS: Record<CaregiverResignationReason, string> = {
-  PERSONAL_CIRCUMSTANCES: 'Personal Circumstances',
-  SCHEDULE_CONFLICT: 'Schedule Conflict',
-  OUTSIDE_SERVICE_AREA: 'Outside Service Area',
-  CARE_NEEDS_CHANGED: 'Care Needs Changed',
-  CAPACITY_CONSTRAINT: 'Capacity Constraint',
-  ROLE_NO_LONGER_SUITABLE: 'Role No Longer Suitable',
-  OTHER: 'Other Reason',
-};
-
 export const PatientCareTeamScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const isFocused = useIsFocused();
-  const { user, careContext } = useAuth();
+  const { user } = useAuth();
   const { caregivers, loading, reloadCaregivers } = useCaregiver();
 
-  // Care History state
-  const [careHistory, setCareHistory] = useState<CareRelationshipHistoryItem[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-
-  // Caregiver Resignations state
-  const [pendingResignations, setPendingResignations] = useState<CaregiverResignationRecord[]>([]);
-  const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
-  const [selectedResignationForReview, setSelectedResignationForReview] = useState<CaregiverResignationRecord | null>(null);
-  const [selectedCaregiverForReview, setSelectedCaregiverForReview] = useState<CaregiverListing | null>(null);
-  const [declineNotes, setDeclineNotes] = useState('');
-  const [showDeclineInput, setShowDeclineInput] = useState(false);
-  const [submittingResignationAction, setSubmittingResignationAction] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  // Canonical caregiver relationships for this Patient's Circle
+  const [careHistory, setCareHistory] = useState<CareHistoryItem[]>([]);
+  const [circleId, setCircleId] = useState<string | null>(null);
+  const [relationships, setRelationships] = useState<CaregiverRelationship[]>([]);
+  const [canManageCaregivers, setCanManageCaregivers] = useState(false);
 
   // End Care Modal state
   const [isEndModalVisible, setIsEndModalVisible] = useState(false);
@@ -121,121 +118,61 @@ export const PatientCareTeamScreen: React.FC = () => {
   const { isAssisted } = usePatientCareMode();
   const isFamilyManaged = isAssisted;
 
-  const loadHistory = useCallback(async () => {
+  const loadRelationshipData = useCallback(async () => {
+    if (!user?.id) return;
     try {
-      setLoadingHistory(true);
-      const history = await fetchCareRelationshipHistory();
-      setCareHistory(history);
-    } catch (err) {
-      console.warn('[PatientCareTeamScreen] Error loading care history:', err);
-    } finally {
-      setLoadingHistory(false);
-    }
-  }, []);
+      const resolvedCircleId = await resolveCircleIdForPatient(user.id);
+      setCircleId(resolvedCircleId);
+      if (!resolvedCircleId) {
+        setRelationships([]);
+        setCareHistory([]);
+        setCanManageCaregivers(false);
+        return;
+      }
 
-  const loadPendingResignations = useCallback(async () => {
-    try {
-      const list = await fetchPendingResignations();
-      setPendingResignations(list);
+      const [circleRelationships, members] = await Promise.all([
+        listCircleCaregivers(resolvedCircleId),
+        listCircleMembers(resolvedCircleId),
+      ]);
+      setRelationships(circleRelationships);
+
+      const me = members.find((m) => m.user_id === user.id);
+      setCanManageCaregivers(Boolean(
+        me && (me.is_owner || (me.permissions ?? []).includes('Manage Caregiver Relationships')),
+      ));
+
+      setCareHistory(
+        circleRelationships
+          .filter((rel) => rel.status === 'TERMINATED')
+          .map((rel) => ({
+            id: rel.id,
+            relationship_id: rel.id,
+            name: rel.caregiver_name,
+            photo_url: rel.photo_url ?? null,
+            professional_role: 'Professional Caregiver',
+            ended_at: rel.ended_at ?? null,
+            end_reason: rel.termination_reason ?? null,
+            end_notes: rel.termination_notes ?? null,
+          })),
+      );
     } catch (err) {
-      console.warn('[PatientCareTeamScreen] Error loading pending resignations:', err);
+      console.warn('[PatientCareTeamScreen] Error loading caregiver relationships:', err);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (isFocused) {
       void reloadCaregivers(true);
-      void loadHistory();
-      void loadPendingResignations();
+      void loadRelationshipData();
     }
-  }, [isFocused, reloadCaregivers, loadHistory, loadPendingResignations]);
+  }, [isFocused, reloadCaregivers, loadRelationshipData]);
 
   const onRefresh = useCallback(async () => {
     await Promise.all([
       reloadCaregivers(true),
-      loadHistory(),
-      loadPendingResignations(),
+      loadRelationshipData(),
     ]);
-  }, [reloadCaregivers, loadHistory, loadPendingResignations]);
-
-  const handleOpenReviewModal = (resignation: CaregiverResignationRecord, caregiver?: CaregiverListing) => {
-    setSelectedResignationForReview(resignation);
-    setSelectedCaregiverForReview(caregiver || caregivers.find(c => c.id === resignation.caregiver_id) || null);
-    setShowDeclineInput(false);
-    setDeclineNotes('');
-    setReviewError(null);
-    setIsReviewModalVisible(true);
-  };
-
-  const handleCloseReviewModal = () => {
-    if (submittingResignationAction) return;
-    setIsReviewModalVisible(false);
-    setSelectedResignationForReview(null);
-    setSelectedCaregiverForReview(null);
-    setShowDeclineInput(false);
-    setDeclineNotes('');
-    setReviewError(null);
-  };
-
-  const handleAcceptResignation = async () => {
-    if (!selectedResignationForReview) return;
-    try {
-      setSubmittingResignationAction(true);
-      setReviewError(null);
-      await acceptCaregiverResignation(selectedResignationForReview.relationship_id);
-      setIsReviewModalVisible(false);
-      setSelectedResignationForReview(null);
-      setSelectedCaregiverForReview(null);
-      await Promise.all([
-        reloadCaregivers(true),
-        loadHistory(),
-        loadPendingResignations(),
-      ]);
-      Alert.alert(
-        'Care Relationship Ended',
-        'You have accepted the caregiver\'s resignation. The relationship has ended, and caregiver access has been revoked.',
-        [{ text: 'OK' }]
-      );
-    } catch (error: any) {
-      console.error('[PatientCareTeamScreen] Failed to accept resignation:', error);
-      const msg = error?.response?.data?.message || 'Failed to accept resignation. Please try again.';
-      setReviewError(msg);
-    } finally {
-      setSubmittingResignationAction(false);
-    }
-  };
-
-  const handleDeclineResignation = async () => {
-    if (!selectedResignationForReview) return;
-    if (!showDeclineInput) {
-      setShowDeclineInput(true);
-      return;
-    }
-    try {
-      setSubmittingResignationAction(true);
-      await declineCaregiverResignation(
-        selectedResignationForReview.relationship_id,
-        declineNotes.trim() || undefined,
-      );
-      setIsReviewModalVisible(false);
-      setSelectedResignationForReview(null);
-      setSelectedCaregiverForReview(null);
-      setShowDeclineInput(false);
-      setDeclineNotes('');
-      await loadPendingResignations();
-      Alert.alert(
-        'Resignation Declined',
-        'The resignation request has been declined. The caregiver has been notified to continue scheduled care duties.',
-        [{ text: 'OK' }]
-      );
-    } catch (error: any) {
-      console.error('[PatientCareTeamScreen] Failed to decline resignation:', error);
-      const msg = error?.response?.data?.message || 'Failed to decline resignation. Please try again.';
-      setReviewError(msg);
-    } finally {
-      setSubmittingResignationAction(false);
-    }
-  };
+  }, [reloadCaregivers, loadRelationshipData]);
 
   const handleFindCare = () => {
     navigation.navigate('CareDiscoveryScreen');
@@ -246,6 +183,10 @@ export const PatientCareTeamScreen: React.FC = () => {
   };
 
   const handleOpenEndModal = (caregiver: CaregiverListing) => {
+    if (!canManageCaregivers || !circleId) {
+      Alert.alert('Not Permitted', 'Only the Circle Owner or a member with Manage Caregiver Relationships can end this arrangement.');
+      return;
+    }
     setSelectedCaregiverForEnd(caregiver);
     setSelectedReason('CARE_NO_LONGER_REQUIRED');
     setEndNotes('');
@@ -262,7 +203,7 @@ export const PatientCareTeamScreen: React.FC = () => {
   };
 
   const handleConfirmEndCare = async () => {
-    if (!selectedCaregiverForEnd) return;
+    if (!selectedCaregiverForEnd || !circleId) return;
     const relId = selectedCaregiverForEnd.relationshipId || selectedCaregiverForEnd.relationship_id;
     if (!relId) {
       setEndError('Relationship identifier not found for this caregiver.');
@@ -272,7 +213,7 @@ export const PatientCareTeamScreen: React.FC = () => {
     try {
       setSubmittingEnd(true);
       setEndError(null);
-      await endCareRelationship(relId, {
+      await terminateCaregiverRelationship(circleId, relId, {
         reason: selectedReason,
         notes: endNotes.trim() || undefined,
       });
@@ -280,10 +221,9 @@ export const PatientCareTeamScreen: React.FC = () => {
       setIsEndModalVisible(false);
       setSelectedCaregiverForEnd(null);
       setEndNotes('');
-      // Reload both active caregivers and history
       await Promise.all([
         reloadCaregivers(true),
-        loadHistory(),
+        loadRelationshipData(),
       ]);
       Alert.alert(
         'Care Relationship Ended',
@@ -298,6 +238,8 @@ export const PatientCareTeamScreen: React.FC = () => {
       setSubmittingEnd(false);
     }
   };
+
+  const noticeRelationships = relationships.filter((rel) => rel.status === 'NOTICE_PERIOD');
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
@@ -341,28 +283,25 @@ export const PatientCareTeamScreen: React.FC = () => {
           </Pressable>
         )}
 
-        {/* Pending Resignation Alert Banner */}
-        {pendingResignations.length > 0 && (
+        {/* Caregiver Departure Notice Banner */}
+        {noticeRelationships.length > 0 && (
           <View style={styles.resignationAlertBanner}>
             <View style={styles.resignationAlertLeft}>
               <View style={styles.resignationAlertIconWrap}>
-                <Ionicons name="alert-circle" size={22} color="#B45309" />
+                <Ionicons name="time" size={22} color="#B45309" />
               </View>
               <View style={{ marginLeft: 12, flex: 1 }}>
                 <Text style={styles.resignationAlertTitle}>
-                  {pendingResignations.length === 1 ? 'Caregiver Resignation Request' : `${pendingResignations.length} Resignation Requests`}
+                  {noticeRelationships.length === 1 ? 'Caregiver Departure Notice' : `${noticeRelationships.length} Caregiver Departure Notices`}
                 </Text>
                 <Text style={styles.resignationAlertSubtitle}>
-                  A caregiver has submitted a request to end care. Review the handover.
+                  Care access continues until the seven-day notice period ends
+                  {noticeRelationships[0]?.notice_expires_at
+                    ? ` on ${formatDate(noticeRelationships[0].notice_expires_at)}.`
+                    : '.'}
                 </Text>
               </View>
             </View>
-            <Pressable
-              style={({ pressed }) => [styles.resignationAlertBtn, pressed && { opacity: 0.8 }]}
-              onPress={() => handleOpenReviewModal(pendingResignations[0])}
-            >
-              <Text style={styles.resignationAlertBtnText}>Review</Text>
-            </Pressable>
           </View>
         )}
 
@@ -445,21 +384,24 @@ export const PatientCareTeamScreen: React.FC = () => {
             {caregivers.map((cg) => {
               const roleTitle = cg.professional_role || cg.specialty || 'Professional Caregiver';
               const isPending = cg.status === 'PENDING';
-              const matchingResignation = pendingResignations.find(
-                (r) => r.caregiver_id === cg.id ||
-                  (cg.relationshipId && r.relationship_id === cg.relationshipId) ||
-                  (cg.relationship_id && r.relationship_id === cg.relationship_id)
+              const noticeRelationship = relationships.find(
+                (r) => r.caregiver_id === cg.id && r.status === 'NOTICE_PERIOD',
               );
 
               return (
                 <View key={cg.id} style={styles.caregiverCard}>
-                  {matchingResignation && (
+                  {noticeRelationship && (
                     <View style={styles.resignationBadgeRow}>
                       <Ionicons name="time" size={13} color="#92400E" style={{ marginRight: 4 }} />
-                      <Text style={styles.resignationBadgeText}>Caregiver Requested to End Care</Text>
+                      <Text style={styles.resignationBadgeText}>
+                        Departure notice active
+                        {noticeRelationship.notice_expires_at
+                          ? ` — access ends ${formatDate(noticeRelationship.notice_expires_at)}`
+                          : ''}
+                      </Text>
                     </View>
                   )}
-                  {isPending && !matchingResignation && (
+                  {isPending && !noticeRelationship && (
                     <View style={styles.pendingBadgeRow}>
                       <Ionicons name="time-outline" size={13} color="#92400E" style={{ marginRight: 4 }} />
                       <Text style={styles.pendingBadgeText}>Request Pending Confirmation</Text>
@@ -503,32 +445,19 @@ export const PatientCareTeamScreen: React.FC = () => {
                   ) : null}
 
                   <View style={styles.cardActionsRow}>
-                    {matchingResignation ? (
+                    {!isPending && canManageCaregivers && Boolean(cg.relationshipId || cg.relationship_id) && (
                       <Pressable
-                        onPress={() => handleOpenReviewModal(matchingResignation, cg)}
+                        onPress={() => handleOpenEndModal(cg)}
                         style={({ pressed }) => [
-                          styles.reviewResignationBtn,
-                          pressed && { opacity: 0.8 },
+                          styles.endCareBtn,
+                          pressed && { opacity: 0.7 },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`End care with ${cg.name}`}
                       >
-                        <Ionicons name="alert-circle-outline" size={15} color="#B45309" style={{ marginRight: 4 }} />
-                        <Text style={styles.reviewResignationBtnText}>Review Request</Text>
+                        <Ionicons name="close-circle-outline" size={15} color="#DC2626" style={{ marginRight: 4 }} />
+                        <Text style={styles.endCareBtnText}>End Care</Text>
                       </Pressable>
-                    ) : (
-                      !isPending && Boolean(cg.relationshipId || cg.relationship_id) && (
-                        <Pressable
-                          onPress={() => handleOpenEndModal(cg)}
-                          style={({ pressed }) => [
-                            styles.endCareBtn,
-                            pressed && { opacity: 0.7 },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`End care with ${cg.name}`}
-                        >
-                          <Ionicons name="close-circle-outline" size={15} color="#DC2626" style={{ marginRight: 4 }} />
-                          <Text style={styles.endCareBtnText}>End Care</Text>
-                        </Pressable>
-                      )
                     )}
                     <Pressable
                       onPress={() => handleViewProfile(cg)}
@@ -752,141 +681,6 @@ export const PatientCareTeamScreen: React.FC = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* -- Review Resignation Modal ------------------------------------------- */}
-      <Modal
-        visible={isReviewModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseReviewModal}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={handleCloseReviewModal} />
-          <View style={styles.modalSheet}>
-            <View style={styles.modalDragHandle} />
-
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalIconWrapDestructive, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="document-text-outline" size={24} color="#B45309" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.modalTitle}>Caregiver Resignation</Text>
-                <Text style={styles.modalSubtitle}>
-                  Request from {selectedCaregiverForReview?.name || 'Caregiver'}
-                </Text>
-              </View>
-              <Pressable
-                onPress={handleCloseReviewModal}
-                disabled={submittingResignationAction}
-                hitSlop={8}
-                style={styles.modalCloseBtn}
-              >
-                <Ionicons name="close" size={22} color={C.textSecondary} />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              style={styles.modalScroll}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={[styles.modalWarningBox, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
-                <Ionicons name="information-circle-outline" size={16} color="#B45309" style={{ marginTop: 2 }} />
-                <Text style={[styles.modalWarningText, { color: '#78350F' }]}>
-                  The caregiver has requested to conclude this care arrangement. Accepting will end care and revoke their access to real-time data. You can decline if handover timing needs adjustment.
-                </Text>
-              </View>
-
-              {reviewError && (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={16} color="#DC2626" />
-                  <Text style={styles.errorBoxText}>{reviewError}</Text>
-                </View>
-              )}
-
-              {selectedResignationForReview && (
-                <View style={styles.resignationDetailsCard}>
-                  <Text style={styles.fieldLabel}>STATED REASON</Text>
-                  <Text style={styles.resignationReasonValue}>
-                    {RESIGNATION_REASON_LABELS[selectedResignationForReview.reason] || selectedResignationForReview.reason}
-                  </Text>
-
-                  {selectedResignationForReview.notes ? (
-                    <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border }}>
-                      <Text style={styles.fieldLabel}>CAREGIVER HANDOVER NOTES</Text>
-                      <Text style={styles.resignationNotesText}>
-                        "{selectedResignationForReview.notes}"
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border }}>
-                    <Text style={styles.fieldLabel}>DATE SUBMITTED</Text>
-                    <Text style={styles.resignationMetaText}>
-                      {formatDate(selectedResignationForReview.requested_at)}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {showDeclineInput && (
-                <View style={{ marginTop: 16 }}>
-                  <Text style={styles.fieldLabel}>Decline Reason / Handover Message (Optional)</Text>
-                  <View style={styles.textAreaContainer}>
-                    <TextInput
-                      style={styles.textArea}
-                      placeholder="Explain why resigning cannot proceed yet (e.g. need handover period)..."
-                      placeholderTextColor={C.textMuted || '#94A3B8'}
-                      value={declineNotes}
-                      onChangeText={setDeclineNotes}
-                      multiline
-                      numberOfLines={3}
-                      maxLength={500}
-                      editable={!submittingResignationAction}
-                    />
-                    <Text style={styles.charCountText}>{declineNotes.length}/500</Text>
-                  </View>
-                </View>
-              )}
-
-              <View style={[styles.modalActionsRow, { marginTop: 20 }]}>
-                <Pressable
-                  style={[
-                    styles.declineResignationBtn,
-                    submittingResignationAction && { opacity: 0.5 },
-                  ]}
-                  onPress={handleDeclineResignation}
-                  disabled={submittingResignationAction}
-                >
-                  <Text style={styles.declineResignationBtnText}>
-                    {showDeclineInput ? 'Confirm Decline' : 'Decline'}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={[
-                    styles.acceptResignationBtn,
-                    submittingResignationAction && { opacity: 0.6 },
-                  ]}
-                  onPress={handleAcceptResignation}
-                  disabled={submittingResignationAction}
-                >
-                  {submittingResignationAction ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark-circle" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.acceptResignationBtnText}>Accept End Care</Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </ScreenContainer>
   );
 };

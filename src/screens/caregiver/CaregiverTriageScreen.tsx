@@ -26,16 +26,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 // Navigation types migrated to src/types/navigation.types.ts
 import type { CaregiverStackParams } from '../../types/navigation.types';
-import {
-  subscribeToCaregiversLinks,
-  fetchPendingRequests,
-  respondToPatientRequest,
-} from '../../services/relationshipService';
-import {
-  getPendingFamilyRequests,
-  approveFamilyRequest,
-  rejectFamilyRequest,
-} from '../../services/familyService';
 import { getIncomingCareRequests } from '../../services/careRequestService';
 import { getCaregiverProfile } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
@@ -50,7 +40,8 @@ import {
 } from '../../assets/icons/NavIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { getSocket } from '../../services/socketClient';
-import { fetchCaregiverAlertFeed, type ApiAlert } from '../../services/geofenceService';
+import { listMySafetyAlerts, type SafetyAlert } from '../../services/safetyService';
+import { fetchOccurrences } from '../../services/routineService';
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverTriageScreen'>;
 type CaregiverTab = 'Home' | 'Alerts' | 'Settings';
@@ -205,7 +196,7 @@ const PatientCard = ({
   onLiveLocationPress,
 }: {
   patient: Patient;
-  activeAlert?: ApiAlert;
+  activeAlert?: SafetyAlert;
   onPress: () => void;
   onCallPress: () => void;
   onLiveLocationPress: () => void;
@@ -246,12 +237,8 @@ const PatientCard = ({
           <Text style={styles.alertBannerText}>
             {patient.sosActive
               ? 'SOS Emergency – Help Requested'
-              : activeAlert?.alert_type === 'ZONE_EXIT' || patient.safetyState === 'BREACH'
-              ? `Geofence Breach – Left ${patient.currentZoneName || 'Home'} Zone`
-              : activeAlert?.alert_type === 'STATIONARY_UNKNOWN'
-              ? 'Stationary Outside Safe Zone'
-              : activeAlert?.alert_type === 'APPROACHING_BOUNDARY'
-              ? `Approaching ${patient.currentZoneName || 'Home'} Zone Boundary`
+              : activeAlert?.alert_type === 'ZONE_BREACH' || patient.safetyState === 'BREACH'
+              ? `Geofence Breach – Left ${activeAlert?.zone_name || patient.currentZoneName || 'Home'} Zone`
               : 'Safety Alert Detected'}
           </Text>
         </View>
@@ -347,24 +334,9 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
   const [error,       setError]       = useState<string | null>(null);
   const [searchQuery,     setSearchQuery]     = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState<Array<{
-    patient_phone: string;
-    patient_name: string;
-    confirmed_at: string;
-  }>>([]);
-  const [pendingFamilyRequests, setPendingFamilyRequests] = useState<Array<{
-    id: string;
-    patient_user_id: string;
-    related_user_id: string;
-    relationship_type: string;
-    created_at: string;
-    family_name: string;
-    family_photo: string | null;
-    patient_name: string;
-  }>>([]);
   const [pendingInquiriesCount, setPendingInquiriesCount] = useState<number>(0);
   const [requestsLoading, setRequestsLoading] = useState(false);
-  const [alertsFeed,  setAlertsFeed]  = useState<ApiAlert[]>([]);
+  const [alertsFeed,  setAlertsFeed]  = useState<SafetyAlert[]>([]);
   const [caregiverProfile, setCaregiverProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState<boolean>(false);
 
@@ -378,8 +350,8 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
       const patientRows: any[] = data?.data?.patients ?? [];
       
       try {
-        const feedRes = await fetchCaregiverAlertFeed({ limit: 100 });
-        setAlertsFeed(feedRes.alerts ?? []);
+        const feed = await listMySafetyAlerts();
+        setAlertsFeed(feed);
       } catch (feedErr) {
         console.error('[CaregiverPatients] Error fetching alert feed:', feedErr);
       }
@@ -390,21 +362,20 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
       await Promise.all(
         patientRows.map(async (p: any) => {
           try {
-            const res = await apiClient.get(`/tasks/patient/${p.id}/today`);
-            const tasksList: any[] = res?.data?.data?.tasks ?? res?.data?.tasks ?? [];
-            const mappedTasks: RawTask[] = tasksList.map((t: any) => ({
-              id: t.id,
-              patient_id: t.patient_id,
-              title: t.title,
-              status: t.status,
-              completed_at: t.completed_at,
+            const occurrences = await fetchOccurrences(p.id);
+            const mappedTasks: RawTask[] = occurrences.map((o) => ({
+              id: o.id,
+              patient_id: o.patient_id,
+              title: o.title,
+              status: o.status.toLowerCase(),
+              completed_at: o.signed_off_at ?? o.completed_at ?? null,
             }));
-            
+
             allTasks.push(...mappedTasks);
 
-            const completedTasks = mappedTasks.filter((t) => t.status === 'done').length;
+            const completedTasks = mappedTasks.filter((t) => t.status === 'completed').length;
             const totalTasks = mappedTasks.length;
-            const hasMissed = mappedTasks.some((t) => t.status === 'missed');
+            const hasMissed = mappedTasks.some((t) => t.status === 'overdue');
             
             const lastActivity = computeLastActivity(mappedTasks);
             const statusLabel = deriveStatusLabel(completedTasks, totalTasks, hasMissed);
@@ -484,62 +455,18 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, []);
 
-  // ── Load pending requests ──────────────────────────────────────────────────────
-  const loadPendingRequests = useCallback(async (phone: string) => {
+  // ── Load pending Care Requests ────────────────────────────────────────────────
+  const loadPendingRequests = useCallback(async (_phone: string) => {
     setRequestsLoading(true);
     try {
-      console.log('[DEBUG] Loading pending requests for:', phone);
-      const requests = await fetchPendingRequests(phone);
-      console.log('[DEBUG] Pending requests found:', JSON.stringify(requests));
-      setPendingRequests(requests);
-
-      const famRes = await getPendingFamilyRequests();
-      setPendingFamilyRequests(famRes.data?.data?.requests || []);
-
-      try {
-        const canonicalRequests = await getIncomingCareRequests('PENDING');
-        setPendingInquiriesCount(canonicalRequests.length);
-      } catch (err) {
-        console.warn('[CaregiverTriage] Failed to load canonical pending care requests:', err);
-      }
-    } catch (e) {
-      console.error('[CaregiverPatients] loadPendingRequests error:', e);
+      const canonicalRequests = await getIncomingCareRequests('PENDING');
+      setPendingInquiriesCount(canonicalRequests.length);
+    } catch (err) {
+      console.warn('[CaregiverTriage] Failed to load canonical pending care requests:', err);
     } finally {
       setRequestsLoading(false);
     }
   }, []);
-
-  const handleRespond = useCallback(async (
-    patientPhone: string,
-    action: 'confirmed' | 'rejected',
-  ) => {
-    if (!caregiverPhone) return;
-    try {
-      await respondToPatientRequest(caregiverPhone, patientPhone, action);
-      void loadPendingRequests(caregiverPhone);
-      void loadPatients(caregiverPhone);
-    } catch (e) {
-      console.error('[CaregiverPatients] handleRespond error:', e);
-    }
-  }, [caregiverPhone, loadPendingRequests, loadPatients]);
-
-  const handleRespondFamily = useCallback(async (
-    requestId: string,
-    action: 'approve' | 'reject',
-  ) => {
-    if (!caregiverPhone) return;
-    try {
-      if (action === 'approve') {
-        await approveFamilyRequest(requestId);
-      } else {
-        await rejectFamilyRequest(requestId);
-      }
-      void loadPendingRequests(caregiverPhone);
-      void loadPatients(caregiverPhone);
-    } catch (e) {
-      console.error('[CaregiverPatients] handleRespondFamily error:', e);
-    }
-  }, [caregiverPhone, loadPendingRequests, loadPatients]);
 
   const loadCaregiverProfile = useCallback(async (userId: string) => {
     setProfileLoading(true);
@@ -566,15 +493,6 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
       }
     }, [caregiverPhone, user?.id, loadPatients, loadPendingRequests, loadCaregiverProfile])
   );
-  // ── Realtime subscription ────────────────────────────────────────────────────
-  React.useEffect(() => {
-    if (!caregiverPhone) return;
-    return subscribeToCaregiversLinks(caregiverPhone, () => {
-      void loadPatients(caregiverPhone);
-      void loadPendingRequests(caregiverPhone);
-    });
-  }, [caregiverPhone, loadPatients, loadPendingRequests]);
-
   const patientIds = useMemo(() => patients.map(p => p.id).join(','), [patients]);
 
   // ── WebSocket subscription per patient ─────────────────────────────────────────
@@ -622,9 +540,9 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
 
   // ── Total alert count for nav badge ───────────────────────────────────────────
   const totalAlertCount = useMemo(() => {
-    const activeAlerts = alertsFeed.filter(a => !a.acknowledged_at).length;
-    return activeAlerts + pendingRequests.length + pendingFamilyRequests.length + pendingInquiriesCount;
-  }, [alertsFeed, pendingRequests, pendingFamilyRequests, pendingInquiriesCount]);
+    const activeAlerts = alertsFeed.filter(a => a.status !== 'RESOLVED').length;
+    return activeAlerts + pendingInquiriesCount;
+  }, [alertsFeed, pendingInquiriesCount]);
 
   // ── Derived: filtered patient list ───────────────────────────────────────────
   const filteredPatients = useMemo(() => {
@@ -803,43 +721,6 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                 </Text>
               </View>
 
-              {/* Direct incoming patient requests if any */}
-              {pendingRequests.length > 0 && (
-                <View style={styles.pendingSection}>
-                  <View style={styles.pendingSectionHeader}>
-                    <Ionicons name="notifications" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                    <Text style={styles.pendingSectionTitle}>
-                      Direct Patient Requests ({pendingRequests.length})
-                    </Text>
-                  </View>
-                  {pendingRequests.map((req) => (
-                    <View key={req.patient_phone} style={requestStyles.card}>
-                      <View style={requestStyles.avatar}>
-                        <Text style={requestStyles.avatarInitial}>{req.patient_name[0]?.toUpperCase()}</Text>
-                      </View>
-                      <View style={requestStyles.info}>
-                        <Text style={requestStyles.name}>{req.patient_name}</Text>
-                        <Text style={requestStyles.sub}>Wants to add you as their caregiver</Text>
-                      </View>
-                      <View style={requestStyles.actions}>
-                        <Pressable
-                          style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
-                          onPress={() => handleRespond(req.patient_phone, 'confirmed')}
-                        >
-                          <Text style={requestStyles.acceptText}>Accept</Text>
-                        </Pressable>
-                        <Pressable
-                          style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
-                          onPress={() => handleRespond(req.patient_phone, 'rejected')}
-                        >
-                          <Text style={requestStyles.rejectText}>Reject</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-
               {/* Connecting with Patients section */}
               <Text style={styles.guidanceSectionHeading}>HOW TO CONNECT WITH PATIENTS</Text>
 
@@ -889,29 +770,7 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                 </Pressable>
               </View>
 
-              {/* Pathway 3: Direct Phone Linkage */}
-              <View style={styles.pathwayCard}>
-                <View style={styles.pathwayHeaderRow}>
-                  <View style={[styles.pathwayIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                    <Ionicons name="call" size={20} color="#2563EB" />
-                  </View>
-                  <View style={styles.pathwayTextWrap}>
-                    <Text style={styles.pathwayTitle}>Direct Patient / Family Link</Text>
-                    <Text style={styles.pathwayDesc}>
-                      Patients or family members can also add you directly by entering your registered phone number in their app.
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.phoneDisplayBox}>
-                  <Text style={styles.phoneDisplayLabel}>Your Registered Phone:</Text>
-                  <Text style={styles.phoneDisplayValue}>{caregiverPhone || user?.phone || '—'}</Text>
-                </View>
-                <Text style={styles.phoneDisplayNote}>
-                  Direct requests will appear immediately above for your review. Care does not begin until you accept.
-                </Text>
-              </View>
-
-              {/* Pathway 4: Family & Care Circle Guidance */}
+              {/* Pathway 3: Family & Care Circle Guidance */}
               <View style={styles.pathwayCard}>
                 <View style={styles.pathwayHeaderRow}>
                   <View style={[styles.pathwayIconWrap, { backgroundColor: '#F5F3FF' }]}>
@@ -920,55 +779,17 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                   <View style={styles.pathwayTextWrap}>
                     <Text style={styles.pathwayTitle}>Family & Care Circle</Text>
                     <Text style={styles.pathwayDesc}>
-                      Care Circles are patient-centered. Once care begins with a patient, you can generate 6-character family invitation codes and manage family roles (Guardian, Close Family, Extended) from their Care Circle.
+                      Care Circles are patient-centered. Once care begins, members with the Manage Member Permissions permission can invite family using a 6-digit Care Circle code. Role changes are managed through Circle permissions, not ad-hoc roles.
                     </Text>
                   </View>
                 </View>
-                {pendingFamilyRequests.length > 0 && (
-                  <View style={{ marginTop: 12 }}>
-                    <Text style={[styles.sectionLabel, { marginBottom: 6 }]}>PENDING FAMILY REQUESTS</Text>
-                    {pendingFamilyRequests.map((req) => (
-                      <View key={req.id} style={requestStyles.card}>
-                        <View style={requestStyles.avatar}>
-                          {req.family_photo ? (
-                            <Image source={{ uri: req.family_photo }} style={requestStyles.avatarImage} />
-                          ) : (
-                            <Text style={requestStyles.avatarInitial}>
-                              {(req.family_name || 'F')[0]?.toUpperCase()}
-                            </Text>
-                          )}
-                        </View>
-                        <View style={requestStyles.info}>
-                          <Text style={requestStyles.name}>{req.family_name}</Text>
-                          <Text style={requestStyles.sub}>
-                            Wants to join care circle of patient {req.patient_name}
-                          </Text>
-                        </View>
-                        <View style={requestStyles.actions}>
-                          <Pressable
-                            style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
-                            onPress={() => handleRespondFamily(req.id, 'approve')}
-                          >
-                            <Text style={requestStyles.acceptText}>Approve</Text>
-                          </Pressable>
-                          <Pressable
-                            style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
-                            onPress={() => handleRespondFamily(req.id, 'reject')}
-                          >
-                            <Text style={requestStyles.rejectText}>Reject</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
               </View>
             </View>
           )}
 
           {filteredPatients.map((patient) => {
             const activeAlert = alertsFeed.find(
-              (a) => a.patient_id === patient.id && !a.acknowledged_at,
+              (a) => a.patient_id === patient.id && a.status !== 'RESOLVED',
             );
             return (
               <PatientCard
@@ -1032,79 +853,8 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={18} color={C.textSecondary} style={{ marginLeft: 6 }} />
           </Pressable>
 
-          {/* ── Patient request section ────────────────────────────────────── */}
-          {pendingRequests.length > 0 && (
-            <>
-              <Text style={styles.sectionLabel}>PENDING REQUESTS</Text>
-              {pendingRequests.map((req) => (
-                <View key={req.patient_phone} style={requestStyles.card}>
-                  <View style={requestStyles.avatar}>
-                    <Text style={requestStyles.avatarInitial}>{req.patient_name[0]?.toUpperCase()}</Text>
-                  </View>
-                  <View style={requestStyles.info}>
-                    <Text style={requestStyles.name}>{req.patient_name}</Text>
-                    <Text style={requestStyles.sub}>Wants to add you as their caregiver</Text>
-                  </View>
-                  <View style={requestStyles.actions}>
-                    <Pressable
-                      style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
-                      onPress={() => handleRespond(req.patient_phone, 'confirmed')}
-                    >
-                      <Text style={requestStyles.acceptText}>Accept</Text>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
-                      onPress={() => handleRespond(req.patient_phone, 'rejected')}
-                    >
-                      <Text style={requestStyles.rejectText}>Reject</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-            </>
-          )}
-
-          {pendingFamilyRequests.length > 0 && (
-            <>
-              <Text style={[styles.sectionLabel, { marginTop: 12 }]}>PENDING FAMILY REQUESTS</Text>
-              {pendingFamilyRequests.map((req) => (
-                <View key={req.id} style={requestStyles.card}>
-                  <View style={requestStyles.avatar}>
-                    {req.family_photo ? (
-                      <Image source={{ uri: req.family_photo }} style={requestStyles.avatarImage} />
-                    ) : (
-                      <Text style={requestStyles.avatarInitial}>
-                        {(req.family_name || 'F')[0]?.toUpperCase()}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={requestStyles.info}>
-                    <Text style={requestStyles.name}>{req.family_name}</Text>
-                    <Text style={requestStyles.sub}>
-                      Wants to join care circle of patient {req.patient_name}
-                    </Text>
-                  </View>
-                  <View style={requestStyles.actions}>
-                    <Pressable
-                      style={({ pressed }) => [requestStyles.acceptBtn, pressed && { opacity: 0.8 }]}
-                      onPress={() => handleRespondFamily(req.id, 'approve')}
-                    >
-                      <Text style={requestStyles.acceptText}>Approve</Text>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [requestStyles.rejectBtn, pressed && { opacity: 0.8 }]}
-                      onPress={() => handleRespondFamily(req.id, 'reject')}
-                    >
-                      <Text style={requestStyles.rejectText}>Reject</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-            </>
-          )}
-
           {/* ── Level 3: Patient Alert Summary Cards ─────────────────────────────────── */}
-          <Text style={[styles.sectionLabel, { marginTop: pendingRequests.length > 0 ? 12 : 0 }]}>PATIENT SAFETY OVERVIEW</Text>
+          <Text style={[styles.sectionLabel, { marginTop: 0 }]}>PATIENT SAFETY OVERVIEW</Text>
 
           {loading && <ActivityIndicator color={C.primary} style={{ marginTop: 20 }} />}
           {!loading && patients.length === 0 && (
@@ -1133,20 +883,20 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
             // Build per-patient alert summaries sorted by risk
             const summaries = patients.map(p => {
               const pts = rawTasks.filter(t => t.patient_id === p.id);
-              const missed = pts.filter(t => t.status === 'missed');
-              const unsure = pts.filter(t => t.status === 'unsure');
+              const missed = pts.filter(t => t.status === 'overdue');
+              const followUp = pts.filter(t => t.status === 'ongoing');
               const hasMeds = pts.some(t =>
                 t.title.toLowerCase().includes('medic') ||
                 t.title.toLowerCase().includes('tablet') ||
                 t.title.toLowerCase().includes('pill')
               );
-              const totalAlerts = missed.length + unsure.length;
+              const totalAlerts = missed.length + followUp.length;
               const criticalCount = missed.length;
               const risk = computeRiskLevel(missed.length, hasMeds, 0);
-              return { patient: p, totalAlerts, criticalCount, unsureCount: unsure.length, risk };
+              return { patient: p, totalAlerts, criticalCount, followUpCount: followUp.length, risk };
             }).sort((a, b) => RISK_RANK[a.risk] - RISK_RANK[b.risk]);
 
-            return summaries.map(({ patient, totalAlerts, criticalCount, unsureCount, risk }) => {
+            return summaries.map(({ patient, totalAlerts, criticalCount, followUpCount, risk }) => {
               const riskC = RISK_COLORS[risk];
               return (
                 <Pressable
@@ -1183,13 +933,13 @@ export const CaregiverTriageScreen: React.FC<Props> = ({ navigation }) => {
                       {criticalCount > 0 && (
                         <View style={[l3Styles.countChip, l3Styles.countChipCrit]}>
                           <Text style={[l3Styles.countChipNum, { color: '#991B1B' }]}>{criticalCount}</Text>
-                          <Text style={[l3Styles.countChipLabel, { color: '#991B1B' }]}> Missed</Text>
+                          <Text style={[l3Styles.countChipLabel, { color: '#991B1B' }]}> Overdue</Text>
                         </View>
                       )}
-                      {unsureCount > 0 && (
+                      {followUpCount > 0 && (
                         <View style={[l3Styles.countChip, l3Styles.countChipWarn]}>
-                          <Text style={[l3Styles.countChipNum, { color: '#92400E' }]}>{unsureCount}</Text>
-                          <Text style={[l3Styles.countChipLabel, { color: '#92400E' }]}> Follow-up</Text>
+                          <Text style={[l3Styles.countChipNum, { color: '#92400E' }]}>{followUpCount}</Text>
+                          <Text style={[l3Styles.countChipLabel, { color: '#92400E' }]}> In progress</Text>
                         </View>
                       )}
                     </View>

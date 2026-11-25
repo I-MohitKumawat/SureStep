@@ -8,7 +8,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+// import MapView, { Circle, Marker } from 'react-native-maps';
+import { LeafletMapView } from '../../components/shared/LeafletMapView';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
@@ -176,47 +177,26 @@ export const CaregiverPatientLocationEditScreen: React.FC<Props> = ({ navigation
               />
             ) : (
               <MapErrorBoundary>
-                <MapView
+                <LeafletMapView
+                  center={patientCoords || (zones[0]?.center) || { latitude: 12.9716, longitude: 77.5946 }}
+                  zoom={15}
+                  zones={zones.map((z) => ({
+                    id: z.id,
+                    name: z.label,
+                    center: z.center,
+                    radius: z.radiusM,
+                    boundaryType: z.boundaryType,
+                  }))}
+                  members={[{
+                    id: 'patient-1',
+                    name: patientName || 'Margaret Davies',
+                    role: 'PATIENT',
+                    coords: patientCoords || (zones[0]?.center) || { latitude: 12.9716, longitude: 77.5946 },
+                    status: 'Patient in Safe Zone',
+                    subLabel: 'Patient',
+                  }]}
                   style={styles.map}
-                  showsUserLocation={false}
-                  showsCompass={false}
-                  showsMyLocationButton={false}
-                  region={getInitialRegion()}
-                  scrollEnabled={true}
-                  zoomEnabled={true}
-                  pitchEnabled={true}
-                  rotateEnabled={true}
-                >
-                  {zones.map(z => {
-                    const theme = getZoneTheme(z.label);
-                    return (
-                      <React.Fragment key={z.id}>
-                        <Circle
-                          center={z.center}
-                          radius={z.radiusM}
-                          fillColor={theme.circleFill}
-                          strokeColor={theme.circleStroke}
-                          strokeWidth={2}
-                        />
-                        <Marker coordinate={z.center} anchor={{ x: 0.5, y: 0.5 }}>
-                          <View style={styles.miniMarkerContainer}>
-                            <View style={[styles.miniMarker, { backgroundColor: theme.primary }]}>
-                              {theme.iconType === 'feather' && (
-                                <Feather name={theme.icon as any} size={10} color="#FFFFFF" />
-                              )}
-                              {theme.iconType === 'ionicons' && (
-                                <Ionicons name={theme.icon as any} size={10} color="#FFFFFF" />
-                              )}
-                              {theme.iconType === 'fontawesome' && (
-                                <FontAwesome5 name={theme.icon as any} size={10} color="#FFFFFF" />
-                              )}
-                            </View>
-                          </View>
-                        </Marker>
-                      </React.Fragment>
-                    );
-                  })}
-                </MapView>
+                />
               </MapErrorBoundary>
             )}
 
@@ -557,6 +537,21 @@ const styles = StyleSheet.create({
     fontFamily: F.medium,
     fontSize: 14,
     color: '#9CA3AF',
+  },
+
+  ownerNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  ownerNoteText: {
+    flex: 1,
+    fontFamily: F.regular,
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 17,
   },
 
   // Create Geofence Button

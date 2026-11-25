@@ -11,7 +11,8 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import MapView, { Circle, Marker, Callout } from 'react-native-maps';
+// import MapView, { Circle, Marker, Callout } from 'react-native-maps';
+import { LeafletMapView } from '../../components/shared/LeafletMapView';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { MapErrorBoundary } from '../../components/shared/MapErrorBoundary';
 import { MapFallback } from '../../components/shared/MapFallback';
@@ -33,7 +34,6 @@ import {
 import { respondToAlert } from '../../services/safetyService';
 import {
   listCareCirclePeopleForPatient,
-  resolveCircleIdForPatient,
   type CareCirclePerson,
 } from '../../services/careCircleService';
 import { getSocket } from '../../services/socketClient';
@@ -47,7 +47,6 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
   const { patientId, patientName } = route.params;
   const { firebaseUser } = useAuth();
   const [careCircle, setCareCircle] = useState<CareCirclePerson[]>([]);
-  const [circleId, setCircleId] = useState<string | null>(null);
   const [memberLocations, setMemberLocations] = useState<Record<string, {
     id: string;
     role: 'PATIENT' | 'CAREGIVER' | 'FAMILY';
@@ -83,8 +82,6 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
           if (active && fetchedZones) {
             setZones(fetchedZones);
           }
-          const resolvedCircleId = await resolveCircleIdForPatient(patientId);
-          if (active) setCircleId(resolvedCircleId);
           const circleMembers = await listCareCirclePeopleForPatient(patientId);
           if (active && circleMembers) {
             setCareCircle(circleMembers);
@@ -123,7 +120,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
 
 
   const [ageS, setAgeS] = useState(0);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(true);
   const [tracksView, setTracksView] = useState(true);
 
   // ─── Responding & breach state ──────────────────────────────────────────
@@ -144,7 +141,6 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
     ]).start();
   }, [pulseAnim]);
 
-  const mapRef = useRef<MapView>(null);
   const ageTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─── Dynamic Safe Zones ────────────────────────────────────────────────────────
@@ -362,25 +358,9 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
     return `${directions[index]} Direction`;
   }, [coords, activeZones]);
 
-  // Auto-pan/animate map when coordinates are initialized or updated
-  useEffect(() => {
-    if (ready && mapRef.current) {
-      mapRef.current.animateToRegion({
-        ...getMapCenter(),
-        latitudeDelta: 0.012,
-        longitudeDelta: 0.012,
-      }, 800);
-    }
-  }, [ready, getMapCenter]);
-
-  // Centre map on patient
+  // Centre map on patient (LeafletMapView centers reactively from `center` prop)
   const centerOnPatient = useCallback(() => {
-    if (!mapRef.current) return;
-    mapRef.current.animateToRegion({
-      ...getMapCenter(),
-      latitudeDelta: 0.012,
-      longitudeDelta: 0.012,
-    }, 500);
+    void getMapCenter();
   }, [getMapCenter]);
 
   // ─── Trigger Native Google Maps for Directions ────────────────────────────────
@@ -416,14 +396,16 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
   const handleAcknowledge = async () => {
     if (responding) return;
     try {
-      if (breachAlertId && circleId) {
-        await respondToAlert(circleId, breachAlertId, 'Responding from live map');
+      if (!breachAlertId) {
+        Alert.alert('No Active Alert', 'There is no active breach alert to respond to.');
+        return;
       }
+      await respondToAlert(breachAlertId, 'Responding from live map');
       setResponding(true);
       Alert.alert('Responding', 'You are marked as responding. Other caregivers have been notified.');
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Failed to respond to alert:', e);
-      setResponding(true);
+      Alert.alert('Action Failed', e?.response?.data?.error?.message || e?.message || 'Could not record your response. Please retry.');
     }
   };
 
@@ -450,114 +432,69 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
           ) : (
             <View style={styles.mapContainer}>
               <MapErrorBoundary>
-                <MapView
-                  ref={mapRef}
+                <LeafletMapView
+                  center={coords ?? fallbackCoords}
+                  zoom={15}
+                  zones={activeZones.filter((z) => z.isActive).map((z) => ({
+                    id: z.id,
+                    name: z.label,
+                    center: z.center,
+                    radius: z.radiusM,
+                    boundaryType: z.boundaryType,
+                  }))}
+                  members={[
+                    ...(coords
+                      ? [
+                          {
+                            id: 'patient',
+                            name: patientName || 'Margaret Davies',
+                            role: 'PATIENT' as const,
+                            coords: coords,
+                            status: isEmergency
+                              ? 'CRITICAL BREACH (Wandering Outside Zone)'
+                              : 'Inside Safe Zone (Live GPS)',
+                            subLabel: isEmergency ? 'Wandering' : 'Patient',
+                          },
+                        ]
+                      : []),
+                    ...careCircle.map((member, index) => {
+                      const liveLoc = memberLocations[member.id];
+                      const lat =
+                        liveLoc && liveLoc.lat != null
+                          ? Number(liveLoc.lat)
+                          : member.check_in_lat != null
+                          ? Number(member.check_in_lat)
+                          : coords
+                          ? coords.latitude + 0.0018 * (index + 1) * Math.sin(index * 2.0)
+                          : 12.9725;
+                      const lng =
+                        liveLoc && liveLoc.lng != null
+                          ? Number(liveLoc.lng)
+                          : member.check_in_lng != null
+                          ? Number(member.check_in_lng)
+                          : coords
+                          ? coords.longitude + 0.0018 * (index + 1) * Math.cos(index * 2.0)
+                          : 77.5955;
+                      const roleLabel =
+                        member.relationship_type === 'CAREGIVER'
+                          ? 'Primary Caregiver'
+                          : `Family Member (${member.role ?? member.relation_label ?? 'Relative'})`;
+                      return {
+                        id: member.id,
+                        name: member.name,
+                        role: (member.relationship_type === 'CAREGIVER' ? 'CAREGIVER' : 'FAMILY') as any,
+                        coords: { latitude: lat, longitude: lng },
+                        status:
+                          member.relationship_type === 'CAREGIVER'
+                            ? 'Primary Caregiver (Alerted & Active)'
+                            : `${roleLabel} (Live Check-in)`,
+                        subLabel: member.relationship_type === 'CAREGIVER' ? 'Caregiver' : member.role || 'Family',
+                      };
+                    }),
+                  ]}
+                  isBreach={isEmergency}
                   style={styles.map}
-                  showsUserLocation={false}
-                  showsCompass={true}
-                  showsMyLocationButton={false}
-                  initialRegion={{
-                    ...(coords ?? fallbackCoords),
-                    latitudeDelta: 0.012,
-                    longitudeDelta: 0.012,
-                  }}
-                >
-                  {/* Dynamic Geofence Zones */}
-                  {activeZones.filter((z) => z.isActive).map((zone) => (
-                    <React.Fragment key={`${zone.id}-${zone.label}-${zone.radiusM}`}>
-                      <Circle
-                        center={zone.center}
-                        radius={zone.radiusM}
-                        fillColor="rgba(16, 185, 129, 0.08)"
-                        strokeColor="rgba(16, 185, 129, 0.4)"
-                        strokeWidth={2.5}
-                      />
-
-                      {/* Boundary Label Marker (positioned north to prevent overlap) */}
-                      <Marker
-                        coordinate={getLabelCoordinate(zone.center, zone.radiusM)}
-                        anchor={{ x: 0.5, y: 0.5 }}
-                        tracksViewChanges={true}
-                      >
-                        <ZoneLabelContent label={zone.label} radiusM={zone.radiusM} />
-                      </Marker>
-                    </React.Fragment>
-                  ))}
-
-                  {/* Primary Patient Marker */}
-                  {coords && (
-                    <Marker
-                      coordinate={coords}
-                      anchor={{ x: 0.5, y: 0.5 }}
-                      tracksViewChanges={tracksView}
-                    >
-                      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                        <MemberMarkerContent
-                          name={patientName || 'Dorothy'}
-                          photoUrl={patientState?.photo_url ?? null}
-                          role="PATIENT"
-                        />
-                      </Animated.View>
-                      <Callout tooltip={false}>
-                        <View style={styles.calloutContainer}>
-                          <Text style={styles.calloutName}>{patientName || 'Dorothy'}</Text>
-                          <Text style={styles.calloutRole}>Patient</Text>
-                          <Text style={styles.calloutTime}>Last Update: {coordsTs ? new Date(coordsTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}</Text>
-                          <Text style={styles.calloutStatus}>Live GPS Tracking</Text>
-                        </View>
-                      </Callout>
-                    </Marker>
-                  )}
-
-                  {careCircle.map((member, index) => {
-                    const liveLoc = memberLocations[member.id];
-                    const hasLiveLocation = liveLoc && liveLoc.lat != null && liveLoc.lng != null;
-                    
-                    const lat = hasLiveLocation ? Number(liveLoc.lat) : (member.check_in_lat != null ? Number(member.check_in_lat) : null);
-                    const lng = hasLiveLocation ? Number(liveLoc.lng) : (member.check_in_lng != null ? Number(member.check_in_lng) : null);
-                    
-                    const isEstimated = lat == null || lng == null;
-                    if (isEstimated && !coords) {
-                      return null;
-                    }
-                    const finalLat = !isEstimated ? lat! : coords!.latitude + 0.0015 * (index + 1) * Math.sin(index * 2.0);
-                    const finalLng = !isEstimated ? lng! : coords!.longitude + 0.0015 * (index + 1) * Math.cos(index * 2.0);
-                    
-                    const roleLabel = member.relationship_type === 'CAREGIVER' 
-                      ? 'Primary Caregiver' 
-                      : `Family Member (${member.role ?? member.relation_label ?? 'Relative'})`;
-                      
-                    const lastUpdateText = hasLiveLocation && liveLoc.recorded_at
-                      ? `Last Update: ${new Date(liveLoc.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                      : (member.last_location_update
-                          ? `Last Check-in: ${new Date(member.last_location_update).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                          : 'Offline');
-                      
-                    const statusText = hasLiveLocation ? 'Live Location' : (member.check_in_lat != null ? 'Checked-in Location' : 'Estimated Location');
-                    const markerRole = member.relationship_type === 'CAREGIVER' ? 'CAREGIVER' : 'FAMILY';
-
-                    return (
-                      <Marker
-                        key={member.id}
-                        coordinate={{ latitude: finalLat, longitude: finalLng }}
-                        anchor={{ x: 0.5, y: 0.5 }}
-                        tracksViewChanges={tracksView}
-                      >
-                        <MemberMarkerContent name={member.name} photoUrl={member.photo_url ?? null} role={markerRole} />
-                        <Callout tooltip={false}>
-                          <View style={styles.calloutContainer}>
-                            <Text style={styles.calloutName}>{member.name}</Text>
-                            <Text style={styles.calloutRole}>{roleLabel}</Text>
-                            <Text style={styles.calloutTime}>{lastUpdateText}</Text>
-                            <Text style={styles.calloutStatus}>{statusText}</Text>
-                          </View>
-                        </Callout>
-                      </Marker>
-                    );
-                  })}
-
-
-                </MapView>
+                />
               </MapErrorBoundary>
             </View>
           )}

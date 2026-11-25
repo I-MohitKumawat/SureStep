@@ -72,26 +72,8 @@ export const FamilyCareScreen: React.FC = () => {
     }, [loadCareTeam])
   );
 
-  // Searching/browsing caregivers is independent of Care Circles.
-  // Posting care needs on behalf of a circle requires Owner or Search/Request Caregivers permission if in a circle.
-  const canPostCareNeed = !activeCircle || isOwner || hasPermission('Search/Request Caregivers');
-
   const handleFindCaregiver = () => {
     navigation.navigate('CareDiscoveryScreen', {
-      targetPatientId: activePatient?.id,
-      targetPatientName: activePatient?.name,
-    });
-  };
-
-  const handlePostCareNeed = () => {
-    if (!canPostCareNeed) {
-      Alert.alert(
-        'Permission Required',
-        'You do not have permission to post care needs in this Care Circle. Please contact the Circle Owner.'
-      );
-      return;
-    }
-    navigation.navigate('PostCareNeedScreen', {
       targetPatientId: activePatient?.id,
       targetPatientName: activePatient?.name,
     });
@@ -155,28 +137,6 @@ export const FamilyCareScreen: React.FC = () => {
           >
             <Text style={styles.primaryActionBtnText}>Find a Caregiver</Text>
             <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Path 2: Post What You Need */}
-        <View style={styles.actionCard}>
-          <View style={styles.actionCardHeader}>
-            <View style={styles.actionIconWrap}>
-              <Ionicons name="megaphone-outline" size={22} color="#0E7A67" />
-            </View>
-            <View style={styles.actionTextWrap}>
-              <Text style={styles.actionCardTitle}>Post What You Need</Text>
-              <Text style={styles.actionCardSub}>Describe the care schedule and let qualified caregivers reach out.</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.secondaryActionBtn, !canPostCareNeed && styles.disabledBtn]}
-            onPress={handlePostCareNeed}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.secondaryActionBtnText}>Post a Care Need</Text>
-            <Ionicons name="arrow-forward" size={18} color="#0E7A67" />
           </TouchableOpacity>
         </View>
 

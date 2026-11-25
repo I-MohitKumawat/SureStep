@@ -91,13 +91,6 @@ export const PatientCareScreen: React.FC = () => {
     });
   };
 
-  const handlePostWhatYouNeed = () => {
-    navigation.navigate('PostCareNeedScreen' as any, {
-      targetPatientId: user?.id,
-      targetPatientName: user?.name,
-    });
-  };
-
   const handleViewInquiries = () => {
     navigation.navigate('CareRequestsListScreen' as any, {
       initialTab: 'ACTIVE',
@@ -188,36 +181,7 @@ export const PatientCareScreen: React.FC = () => {
                 </Pressable>
               </View>
 
-              {/* Path 2: Post What You Need */}
-              <View style={[styles.card, { backgroundColor: isDark ? '#1C2422' : '#FFFFFF' }]}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.iconCircleTeal}>
-                    <Ionicons name="document-text-outline" size={28} color={C.primary} />
-                  </View>
-                  <View style={styles.cardHeaderTexts}>
-                    <Text style={[styles.cardHeading, { color: isDark ? '#F5F7F6' : '#161E1C' }]}>
-                      Post What You Need
-                    </Text>
-                    <Text style={[styles.cardText, { color: isDark ? '#9EABA7' : '#52605D' }]}>
-                      Tell caregivers what kind of help you're looking for
-                    </Text>
-                  </View>
-                </View>
-
-                <Pressable
-                  onPress={handlePostWhatYouNeed}
-                  accessibilityRole="button"
-                  accessibilityLabel="Post a Care Need"
-                  style={({ pressed }) => [
-                    styles.secondaryOutlineBtn,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                >
-                  <Text style={styles.secondaryOutlineBtnText}>Post a Care Need</Text>
-                </Pressable>
-              </View>
-
-              {/* Path 3: My Requests Section */}
+              {/* Path 2: My Requests Section */}
               <View style={styles.myRequestsSection}>
                 <Text style={[styles.subSectionTitle, { color: isDark ? '#F5F7F6' : '#161E1C' }]}>
                   My Requests

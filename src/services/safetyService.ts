@@ -134,35 +134,18 @@ export async function listPatientSafetyAlerts(
 }
 
 export async function respondToAlert(
-  circleId: string,
   alertId: string,
   notes?: string
 ): Promise<any> {
-  const res = await apiClient.post(
-    `/care-circles/${circleId}/alerts/${alertId}/respond`,
-    { notes }
-  );
+  const res = await apiClient.post(`/alerts/${alertId}/respond`, { notes });
   return res.data?.data ?? res.data;
 }
 
 export async function resolveAlert(
-  circleId: string,
   alertId: string,
   notes?: string
 ): Promise<any> {
-  const res = await apiClient.post(
-    `/care-circles/${circleId}/alerts/${alertId}/resolve`,
-    { notes }
-  );
-  return res.data?.data ?? res.data;
-}
-
-export async function triggerPatientSOS(
-  patientId: string,
-  lat?: number,
-  lng?: number
-): Promise<any> {
-  const res = await apiClient.post(`/notifications/sos/patient/${patientId}`, { lat, lng });
+  const res = await apiClient.post(`/alerts/${alertId}/resolve`, { notes });
   return res.data?.data ?? res.data;
 }
 

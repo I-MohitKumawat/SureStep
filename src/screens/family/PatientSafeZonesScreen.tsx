@@ -15,7 +15,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+// import MapView, { Circle, Marker } from 'react-native-maps';
+import { LeafletMapView } from '../../components/shared/LeafletMapView';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -246,48 +247,26 @@ export const PatientSafeZonesScreen: React.FC<Props> = ({ navigation, route }) =
               />
             ) : (
               <MapErrorBoundary>
-                <MapView
+                <LeafletMapView
+                  center={patientCoords || getInitialRegion()}
+                  zoom={15}
+                  zones={zones.map((z) => ({
+                    id: z.id,
+                    name: z.name,
+                    center: { latitude: z.center_lat, longitude: z.center_lng },
+                    radius: z.radius_meters,
+                    boundaryType: (z.boundary_type as any) ?? 'soft',
+                  }))}
+                  members={[{
+                    id: 'patient-1',
+                    name: patientName,
+                    role: 'PATIENT',
+                    coords: patientCoords || getInitialRegion(),
+                    status: 'Monitored in Safe Zone',
+                    subLabel: 'Patient',
+                  }]}
                   style={styles.map}
-                  showsUserLocation={false}
-                  showsCompass={false}
-                  showsMyLocationButton={false}
-                  region={getInitialRegion()}
-                  scrollEnabled={true}
-                  zoomEnabled={true}
-                  pitchEnabled={true}
-                  rotateEnabled={true}
-                >
-                  {zones.map((z) => {
-                    const theme = getZoneTheme(z.name);
-                    const center = { latitude: z.center_lat, longitude: z.center_lng };
-                    return (
-                      <React.Fragment key={z.id}>
-                        <Circle
-                          center={center}
-                          radius={z.radius_meters}
-                          fillColor={theme.circleFill}
-                          strokeColor={theme.circleStroke}
-                          strokeWidth={2}
-                        />
-                        <Marker coordinate={center} anchor={{ x: 0.5, y: 0.5 }}>
-                          <View style={styles.miniMarkerContainer}>
-                            <View style={[styles.miniMarker, { backgroundColor: theme.primary }]}>
-                              {theme.iconType === 'feather' && (
-                                <Feather name={theme.icon as any} size={10} color="#FFFFFF" />
-                              )}
-                              {theme.iconType === 'ionicons' && (
-                                <Ionicons name={theme.icon as any} size={10} color="#FFFFFF" />
-                              )}
-                              {theme.iconType === 'fontawesome' && (
-                                <FontAwesome5 name={theme.icon as any} size={9} color="#FFFFFF" />
-                              )}
-                            </View>
-                          </View>
-                        </Marker>
-                      </React.Fragment>
-                    );
-                  })}
-                </MapView>
+                />
               </MapErrorBoundary>
             )}
 

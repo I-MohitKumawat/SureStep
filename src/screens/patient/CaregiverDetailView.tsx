@@ -69,10 +69,8 @@ export const CaregiverDetailView: React.FC<Props> = ({
   const radius = caregiver.serviceRadiusKm ?? caregiver.service_radius_km ?? 10;
 
   const isLinked =
-    linkStatus === 'CONFIRMED' ||
-    linkStatus === 'ACCEPTED' ||
-    linkStatus === 'MEETING_COMPLETED' ||
-    linkStatus === 'ACTIVE_CARE';
+    linkStatus === 'ACTIVE' ||
+    linkStatus === 'NOTICE_PERIOD';
 
   const isPending = linkStatus === 'PENDING' || linkStatus === 'REQUESTED';
 

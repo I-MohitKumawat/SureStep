@@ -15,20 +15,14 @@ import { CaregiverPatientDetailScreen }   from '../screens/caregiver/CaregiverPa
 import { CaregiverAssessmentScreen }      from '../screens/caregiver/CaregiverAssessmentScreen';
 import { CaregiverPatientMapScreen }      from '../screens/caregiver/CaregiverPatientMapScreen';
 import { CaregiverPatientLocationEditScreen } from '../screens/caregiver/CaregiverPatientLocationEditScreen';
-import { CaregiverPatientRoutinesScreen } from '../screens/caregiver/CaregiverPatientRoutinesScreen';
+import { SharedPatientRoutinesScreen }    from '../screens/shared/SharedPatientRoutinesScreen';
 import { CaregiverPatientAlertsScreen }   from '../screens/caregiver/CaregiverPatientAlertsScreen';
-import { CaregiverPatientShiftsScreen }   from '../screens/caregiver/CaregiverPatientShiftsScreen';
-import { CaregiverGeofenceEditorScreen }  from '../screens/caregiver/CaregiverGeofenceEditorScreen';
-import { CaregiverShiftHandoverScreen }   from '../screens/caregiver/CaregiverShiftHandoverScreen';
 import { CaregiverAssessmentViewScreen }  from '../screens/caregiver/CaregiverAssessmentViewScreen';
 import { CaregiverAlertFeedScreen }       from '../screens/caregiver/CaregiverAlertFeedScreen';
-import { CaregiverCalendarScreen }        from '../screens/caregiver/CaregiverCalendarScreen';
-import { CaregiverMessagesScreen }        from '../screens/caregiver/CaregiverMessagesScreen';
-import { CaregiverWellbeingScreen }       from '../screens/caregiver/CaregiverWellbeingScreen';
 import { CaregiverProfileEditScreen }     from '../screens/caregiver/CaregiverProfileEditScreen';
 import { CaregiverSettingsScreen }        from '../screens/caregiver/CaregiverSettingsScreen';
 import { CaregiverCareCircleScreen }      from '../screens/caregiver/CaregiverCareCircleScreen';
-import { JoinCareCircleScreen }           from '../screens/family/JoinCareCircleScreen';
+import { JoinCareCircleScreen }           from '../screens/shared/JoinCareCircleScreen';
 import { CareRequestDetailScreen }        from '../screens/shared/CareRequestDetailScreen';
 import { CareRequestsListScreen }         from '../screens/shared/CareRequestsListScreen';
 import { NotificationHistoryScreen }      from '../screens/shared/NotificationHistoryScreen';
@@ -48,15 +42,9 @@ const CaregiverStack: React.FC = () => (
     <Stack.Screen name="CaregiverAssessmentViewScreen"  component={CaregiverAssessmentViewScreen} />
     <Stack.Screen name="CaregiverPatientMapScreen"      component={CaregiverPatientMapScreen} />
     <Stack.Screen name="CaregiverPatientLocationEditScreen" component={CaregiverPatientLocationEditScreen} />
-    <Stack.Screen name="CaregiverPatientRoutinesScreen" component={CaregiverPatientRoutinesScreen} />
+    <Stack.Screen name="CaregiverPatientRoutinesScreen" component={SharedPatientRoutinesScreen} />
     <Stack.Screen name="CaregiverPatientAlertsScreen"   component={CaregiverPatientAlertsScreen} />
-    <Stack.Screen name="CaregiverPatientShiftsScreen"   component={CaregiverPatientShiftsScreen} />
-    <Stack.Screen name="CaregiverGeofenceEditorScreen"  component={CaregiverGeofenceEditorScreen} />
-    <Stack.Screen name="CaregiverShiftHandoverScreen"   component={CaregiverShiftHandoverScreen} options={{ animation: 'slide_from_bottom' }} />
     <Stack.Screen name="CaregiverAlertFeedScreen"       component={CaregiverAlertFeedScreen} />
-    <Stack.Screen name="CaregiverCalendarScreen"        component={CaregiverCalendarScreen} />
-    <Stack.Screen name="CaregiverMessagesScreen"        component={CaregiverMessagesScreen} />
-    <Stack.Screen name="CaregiverWellbeingScreen"       component={CaregiverWellbeingScreen} />
     <Stack.Screen name="CaregiverProfileEditScreen"     component={CaregiverProfileEditScreen} />
     <Stack.Screen name="CaregiverSettingsScreen"        component={CaregiverSettingsScreen} />
     <Stack.Screen name="CaregiverCareCircleScreen"      component={CaregiverCareCircleScreen} />

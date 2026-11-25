@@ -34,11 +34,11 @@ import { PatientSafetyScreen } from '../screens/family/PatientSafetyScreen';
 import { PatientSafeZonesScreen } from '../screens/family/PatientSafeZonesScreen';
 import { PatientSafeZoneEditorScreen } from '../screens/family/PatientSafeZoneEditorScreen';
 import { PatientMemoriesScreen } from '../screens/family/PatientMemoriesScreen';
-import { PatientMemoryViewerScreen } from '../screens/patient/PatientMemoryViewerScreen';
+import { PatientMemoryViewerScreen } from '../screens/shared/PatientMemoryViewerScreen';
 
 // Circle Management Sub-Flow
 import { CreateCareCircleScreen } from '../screens/family/CreateCareCircleScreen';
-import { JoinCareCircleScreen } from '../screens/family/JoinCareCircleScreen';
+import { JoinCareCircleScreen } from '../screens/shared/JoinCareCircleScreen';
 import { CareCircleManageScreen } from '../screens/family/CareCircleManageScreen';
 import { CareCircleInviteScreen } from '../screens/family/CareCircleInviteScreen';
 import { CareCirclePermissionsScreen } from '../screens/family/CareCirclePermissionsScreen';
@@ -56,8 +56,6 @@ import { CaregiverProfileScreen } from '../screens/patient/CaregiverProfileScree
 import { CareRequestScreen } from '../screens/patient/CareRequestScreen';
 import { CareRequestDetailScreen } from '../screens/shared/CareRequestDetailScreen';
 import { CareRequestsListScreen } from '../screens/shared/CareRequestsListScreen';
-import { PostCareNeedScreen } from '../screens/patient/PostCareNeedScreen';
-import { CareNeedResponsesScreen } from '../screens/patient/CareNeedResponsesScreen';
 
 // Notifications
 import { NotificationHistoryScreen } from '../screens/shared/NotificationHistoryScreen';
@@ -135,16 +133,11 @@ const FamilyStack: React.FC = () => {
       <Stack.Screen name="CareRequestScreen" component={CareRequestScreen} />
       <Stack.Screen name="CareRequestDetailScreen" component={CareRequestDetailScreen} />
       <Stack.Screen name="CareRequestsListScreen" component={CareRequestsListScreen} />
-      <Stack.Screen name="PostCareNeedScreen" component={PostCareNeedScreen} />
-      <Stack.Screen name="CareNeedResponsesScreen" component={CareNeedResponsesScreen} />
 
       {/* Notifications */}
       <Stack.Screen name="NotificationHistoryScreen" component={NotificationHistoryScreen} />
       <Stack.Screen name="NotificationSettingsScreen" component={NotificationSettingsScreen} />
       <Stack.Screen name="NotificationTestScreen" component={NotificationTestScreen} />
-
-      {/* Legacy Compatibility Aliases */}
-      <Stack.Screen name="FamilyLinkPatientScreen" component={JoinCareCircleScreen as any} />
     </Stack.Navigator>
   );
 };

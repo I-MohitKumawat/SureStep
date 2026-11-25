@@ -1,8 +1,4 @@
-/**
- * Root entry file for the SureStep React Native app.
- *
- * Background task registration MUST happen before the app mounts —
- * expo-task-manager requires the task to be defined at module-load time.
- */
-import './app/utils/locationTask';
-import './app/index.tsx';
+import registerRootComponent from 'expo/src/launch/registerRootComponent';
+import App from './App';
+
+registerRootComponent(App);

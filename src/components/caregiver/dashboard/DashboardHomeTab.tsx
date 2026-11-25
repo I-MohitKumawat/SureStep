@@ -52,16 +52,12 @@ type Props = {
   onRefreshLocation?: () => Promise<void>;
   relationshipStatus?: string | null;
   carePlan?: any | null;
-  onNavigateAssessment?: () => void;
   onNavigateAssessmentView?: () => void;
-  onCompleteMeeting?: () => Promise<void>;
   onNavigateCareCircle?: () => void;
   familyCount?: number;
   assignedCaregiver?: string;
-  resignation?: any;
+  noticeExpiresAt?: string | null;
   onRequestEndCare?: () => void;
-  onViewResignation?: () => void;
-  onWithdrawResignation?: () => void;
 };
 
 const CAPSULE_HEIGHT = 84;
@@ -79,9 +75,9 @@ export const DashboardHomeTab: React.FC<Props> = ({
   onNavigateManage, onNavigateGeofenceMap,
   patientAge, patientPhoto,
   patientState, onRefreshLocation,
-  relationshipStatus, carePlan, onNavigateAssessment, onNavigateAssessmentView, onCompleteMeeting, onNavigateCareCircle,
+  relationshipStatus, carePlan, onNavigateAssessmentView, onNavigateCareCircle,
   familyCount = 0, assignedCaregiver = '—',
-  resignation, onRequestEndCare, onViewResignation, onWithdrawResignation,
+  noticeExpiresAt, onRequestEndCare,
 }) => {
   const [activeFilter, setActiveFilter] = useState<'missed' | 'pending' | 'completed' | null>(null);
 
@@ -301,99 +297,49 @@ export const DashboardHomeTab: React.FC<Props> = ({
         </LinearGradient>
       </Pressable>
 
-      {/* ── Onboarding / Care Plan Card ───────────────────────────── */}
-      {relationshipStatus && (
+      {/* ── Care Plan Card ────────────────────────────────────────── */}
+      {relationshipStatus && carePlan && (
         <View style={localStyles.carePlanCard}>
-          {relationshipStatus === 'ACCEPTED' && (
-            <View style={localStyles.cardInner}>
-              <View style={localStyles.badgeRow}>
-                <View style={[localStyles.badge, { backgroundColor: '#DBEAFE', flexDirection: 'row', alignItems: 'center' }]}>
-                  <Feather name="users" size={12} color="#1E40AF" style={{ marginRight: 6 }} />
-                  <Text style={[localStyles.badgeText, { color: '#1E40AF' }]}>MEETING PENDING</Text>
-                </View>
+          <View style={localStyles.cardInner}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="check-circle" size={16} color="#065F46" style={{ marginRight: 6 }} />
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#065F46' }}>Care Plan</Text>
               </View>
-              <Text style={localStyles.cardTitle}>Meet {patientName} In Person</Text>
-              <Text style={localStyles.cardDesc}>
-                Before completing the patient safety assessment, meet in person to establish familiarity and verify basic setup.
+              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.textMuted }}>
+                {carePlan.updated_at ? relativeTime(carePlan.updated_at) : 'Active'}
               </Text>
-              <Pressable 
-                style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={onCompleteMeeting}
-              >
-                <Text style={localStyles.primaryBtnText}>Mark Meeting Completed</Text>
-              </Pressable>
             </View>
-          )}
+            <Text style={localStyles.cardTitle}>Care Plan & Goals</Text>
+            <Text style={localStyles.careGoalsText} numberOfLines={2}>
+              {carePlan.care_goals || 'No specific goals set.'}
+            </Text>
 
-          {(relationshipStatus === 'MEETING_COMPLETED' || relationshipStatus === 'ASSESSMENT_PENDING') && (
-            <View style={localStyles.cardInner}>
-              <View style={localStyles.badgeRow}>
-                <View style={[localStyles.badge, { backgroundColor: '#FEE2E2', flexDirection: 'row', alignItems: 'center' }]}>
-                  <Feather name="clipboard" size={12} color="#991B1B" style={{ marginRight: 6 }} />
-                  <Text style={[localStyles.badgeText, { color: '#991B1B' }]}>ASSESSMENT REQUIRED</Text>
+            <View style={localStyles.riskRow}>
+              {carePlan.risk_profile?.fall_risk && (
+                <View style={[localStyles.riskBadge, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
+                  <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Fall: {carePlan.risk_profile.fall_risk}</Text>
                 </View>
-              </View>
-              <Text style={localStyles.cardTitle}>Structured Patient Assessment</Text>
-              <Text style={localStyles.cardDesc}>
-                Complete the cognitive, safety, and mobility baseline assessment to configure geofences and routines.
-              </Text>
-              <Pressable 
-                style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={onNavigateAssessment}
-              >
-                <Text style={localStyles.primaryBtnText}>Start Assessment Wizard</Text>
-              </Pressable>
-              <Pressable 
-                style={({ pressed }) => [localStyles.secondaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={onNavigateCareCircle}
-              >
-                <Text style={localStyles.secondaryBtnText}>Manage Care Circle & Invites</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {relationshipStatus === 'ACTIVE_CARE' && carePlan && (
-            <View style={localStyles.cardInner}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="check-circle" size={16} color="#065F46" style={{ marginRight: 6 }} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#065F46' }}>Assessment Complete</Text>
+              )}
+              {carePlan.risk_profile?.wandering_risk && (
+                <View style={[localStyles.riskBadge, carePlan.risk_profile.wandering_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.wandering_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
+                  <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.wandering_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.wandering_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Wandering: {carePlan.risk_profile.wandering_risk}</Text>
                 </View>
-                <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.textMuted }}>
-                  {carePlan.updated_at ? relativeTime(carePlan.updated_at) : 'Active'}
-                </Text>
-              </View>
-              <Text style={localStyles.cardTitle}>Care Plan & Goals</Text>
-              <Text style={localStyles.careGoalsText} numberOfLines={2}>
-                {carePlan.care_goals || 'No specific goals set.'}
-              </Text>
-
-              <View style={localStyles.riskRow}>
-                {carePlan.risk_profile?.fall_risk && (
-                  <View style={[localStyles.riskBadge, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
-                    <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.fall_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.fall_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Fall: {carePlan.risk_profile.fall_risk}</Text>
-                  </View>
-                )}
-                {carePlan.risk_profile?.wandering_risk && (
-                  <View style={[localStyles.riskBadge, carePlan.risk_profile.wandering_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.wandering_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
-                    <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.wandering_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.wandering_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Wandering: {carePlan.risk_profile.wandering_risk}</Text>
-                  </View>
-                )}
-                {carePlan.risk_profile?.medication_adherence_risk && (
-                  <View style={[localStyles.riskBadge, carePlan.risk_profile.medication_adherence_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.medication_adherence_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
-                    <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.medication_adherence_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.medication_adherence_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Med: {carePlan.risk_profile.medication_adherence_risk}</Text>
-                  </View>
-                )}
-              </View>
-
-              <Pressable 
-                style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 4 }]}
-                onPress={onNavigateAssessmentView}
-              >
-                <Text style={localStyles.primaryBtnText}>View Detailed Care Plan</Text>
-              </Pressable>
+              )}
+              {carePlan.risk_profile?.medication_adherence_risk && (
+                <View style={[localStyles.riskBadge, carePlan.risk_profile.medication_adherence_risk === 'High' ? localStyles.riskHigh : carePlan.risk_profile.medication_adherence_risk === 'Medium' ? localStyles.riskMedium : localStyles.riskLow]}>
+                  <Text style={[localStyles.riskBadgeText, carePlan.risk_profile.medication_adherence_risk === 'High' ? localStyles.riskHighText : carePlan.risk_profile.medication_adherence_risk === 'Medium' ? localStyles.riskMediumText : localStyles.riskLowText]}>Med: {carePlan.risk_profile.medication_adherence_risk}</Text>
+                </View>
+              )}
             </View>
-          )}
+
+            <Pressable
+              style={({ pressed }) => [localStyles.primaryBtn, pressed && { opacity: 0.85 }, { marginTop: 4 }]}
+              onPress={onNavigateAssessmentView}
+            >
+              <Text style={localStyles.primaryBtnText}>View Detailed Care Plan</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -533,59 +479,36 @@ export const DashboardHomeTab: React.FC<Props> = ({
         </View>
       )}
 
-      {/* Care Arrangement & Resignation Section */}
-      {relationshipStatus && relationshipStatus !== 'ENDED' && (
+      {/* Care Arrangement & Departure Notice */}
+      {relationshipStatus && relationshipStatus !== 'TERMINATED' && (
         <View style={localStyles.careArrangementCard}>
           <View style={localStyles.careArrangementTop}>
             <View style={localStyles.careArrangementLeft}>
               <View style={[
                 localStyles.statusIconWrap,
-                resignation?.status === 'PENDING' ? localStyles.statusIconWrapAmber : localStyles.statusIconWrapTeal,
+                relationshipStatus === 'NOTICE_PERIOD' ? localStyles.statusIconWrapAmber : localStyles.statusIconWrapTeal,
               ]}>
                 <Ionicons
-                  name={resignation?.status === 'PENDING' ? 'time-outline' : 'shield-checkmark-outline'}
+                  name={relationshipStatus === 'NOTICE_PERIOD' ? 'time-outline' : 'shield-checkmark-outline'}
                   size={20}
-                  color={resignation?.status === 'PENDING' ? '#B45309' : C.primary}
+                  color={relationshipStatus === 'NOTICE_PERIOD' ? '#B45309' : C.primary}
                 />
               </View>
               <View style={{ marginLeft: 12, flex: 1 }}>
                 <Text style={localStyles.careArrangementTitle}>
-                  {resignation?.status === 'PENDING' ? 'End-Care Request Pending' : 'Care Arrangement'}
+                  {relationshipStatus === 'NOTICE_PERIOD' ? 'Departure Notice Active' : 'Care Arrangement'}
                 </Text>
                 <Text style={localStyles.careArrangementDesc}>
-                  {resignation?.status === 'PENDING'
-                    ? `You requested to end care (${(resignation.reason || '').replace(/_/g, ' ').toLowerCase()}). Pending patient review.`
+                  {relationshipStatus === 'NOTICE_PERIOD'
+                    ? `Your relationship remains active until ${noticeExpiresAt ? new Date(noticeExpiresAt).toLocaleDateString([], { dateStyle: 'medium' }) : 'the notice period ends'}.`
                     : `Active care relationship with ${patientName}`}
                 </Text>
               </View>
             </View>
           </View>
 
-          <View style={localStyles.careArrangementActions}>
-            {resignation?.status === 'PENDING' ? (
-              <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
-                <Pressable
-                  style={({ pressed }) => [
-                    localStyles.btnSecondary,
-                    { flex: 1 },
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={onViewResignation}
-                >
-                  <Text style={localStyles.btnSecondaryText}>View Request</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    localStyles.btnDangerOutline,
-                    { flex: 1 },
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={onWithdrawResignation}
-                >
-                  <Text style={localStyles.btnDangerOutlineText}>Withdraw</Text>
-                </Pressable>
-              </View>
-            ) : (
+          {relationshipStatus === 'ACTIVE' && (
+            <View style={localStyles.careArrangementActions}>
               <Pressable
                 style={({ pressed }) => [
                   localStyles.requestEndCareBtn,
@@ -594,10 +517,10 @@ export const DashboardHomeTab: React.FC<Props> = ({
                 onPress={onRequestEndCare}
               >
                 <Ionicons name="exit-outline" size={16} color="#B45309" style={{ marginRight: 6 }} />
-                <Text style={localStyles.requestEndCareBtnText}>Request to End Care</Text>
+                <Text style={localStyles.requestEndCareBtnText}>Submit Departure Notice</Text>
               </Pressable>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       )}
 

@@ -16,8 +16,9 @@ import { registerDeviceToken } from './geofenceService';
 /**
  * Request permission and register the FCM token with the backend.
  * Safe to call multiple times — backend does an upsert.
+ * Returns true if an FCM token was successfully registered.
  */
-export async function bootstrapFcmToken(): Promise<void> {
+export async function bootstrapFcmToken(): Promise<boolean> {
   try {
     // iOS requires explicit permission request
     const authStatus = await messaging().requestPermission();
@@ -27,20 +28,22 @@ export async function bootstrapFcmToken(): Promise<void> {
 
     if (!authorized) {
       console.log('[FCM] Notification permission denied — skipping token registration');
-      return;
+      return false;
     }
 
     const token = await messaging().getToken();
     if (!token) {
       console.warn('[FCM] No FCM token available');
-      return;
+      return false;
     }
 
     const deviceType = Platform.OS === 'ios' ? 'PHONE_IOS' : 'PHONE_ANDROID';
     await registerDeviceToken(token, deviceType);
     console.log('[FCM] Token registered successfully');
+    return true;
   } catch (err) {
     // Non-fatal — app works without push notifications
     console.warn('[FCM] Failed to register device token:', err);
+    return false;
   }
 }

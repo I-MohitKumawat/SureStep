@@ -1,1 +1,0 @@
-export { HeelRaisesExercise } from './ChairMarchExercise';

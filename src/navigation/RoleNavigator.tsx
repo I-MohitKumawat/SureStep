@@ -13,7 +13,6 @@ import { AuthNavigator }      from './AuthNavigator';
 import { PatientNavigator }   from './PatientNavigator';
 import { CaregiverNavigator } from './CaregiverNavigator';
 import { FamilyNavigator }    from './FamilyNavigator';
-import { DoctorNavigator }    from './DoctorNavigator';
 import { C } from '../theme/colors';
 import { F } from '../theme/fonts';
 
@@ -124,7 +123,6 @@ export const RoleNavigator: React.FC = () => {
     case 'PATIENT':   return <PatientNavigator />;
     case 'CAREGIVER': return <CaregiverNavigator />;
     case 'FAMILY':    return <FamilyNavigator />;
-    case 'DOCTOR':    return <DoctorNavigator />;
     default:          return <AuthNavigator />;
   }
 };

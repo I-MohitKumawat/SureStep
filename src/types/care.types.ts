@@ -351,7 +351,6 @@ export interface CareRequest {
   declineReason: CaregiverDeclineReason | null;
   withdrawReason: RequesterWithdrawReason | null;
   responseNotes: string | null;
-  resultingRelationshipId: string | null;
   createdAt: string;
   updatedAt: string;
   respondedAt: string | null;

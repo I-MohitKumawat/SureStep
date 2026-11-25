@@ -15,7 +15,6 @@ import {
   resolveAlert as resolveAlertApi,
   type SafetyAlert,
 } from '../services/safetyService';
-import { resolveCircleIdForPatient } from '../services/careCircleService';
 
 export type AlertSeverity = 'URGENT' | 'WARNING' | 'INFO';
 export type AlertProgressStatus = 'new' | 'acknowledged' | 'responding' | 'resolved';
@@ -51,7 +50,7 @@ type AlertContextValue = {
   fetchPatientAlerts: (patientId: string) => Promise<void>;
 };
 
-const AlertContext = createContext<AlertContextValue | null>(null);
+export const AlertContext = createContext<AlertContextValue | null>(null);
 
 const formatTimestamp = (dateStr: string) => {
   try {
@@ -127,18 +126,14 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
   const respondToAlert = useCallback(async (alertId: string) => {
     const alert = alerts.find(a => a.id === alertId);
     if (!alert) throw new Error('Alert not found');
-    const circleId = alert.circleId || await resolveCircleIdForPatient(alert.patientId);
-    if (!circleId) throw new Error('No active Care Circle for this alert');
-    await respondToAlertApi(circleId, alertId);
+    await respondToAlertApi(alertId);
     await fetchPatientAlerts(alert.patientId);
   }, [alerts, fetchPatientAlerts]);
 
   const resolveAlert = useCallback(async (alertId: string) => {
     const alert = alerts.find(a => a.id === alertId);
     if (!alert) throw new Error('Alert not found');
-    const circleId = alert.circleId || await resolveCircleIdForPatient(alert.patientId);
-    if (!circleId) throw new Error('No active Care Circle for this alert');
-    await resolveAlertApi(circleId, alertId);
+    await resolveAlertApi(alertId);
     await fetchPatientAlerts(alert.patientId);
   }, [alerts, fetchPatientAlerts]);
 

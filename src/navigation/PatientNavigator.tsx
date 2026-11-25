@@ -12,7 +12,6 @@ import { TaskProvider }         from '../context/TaskContext';
 import { VoiceProvider }        from '../context/VoiceContext';
 import { CognitionProvider }    from '../context/CognitionContext';
 import { FamiliarityProvider }  from '../context/FamiliarityContext';
-import { CaregiverProvider }    from '../context/CaregiverContext';
 
 
 import { PatientHomeScreen }       from '../screens/patient/PatientHomeScreen';
@@ -23,14 +22,12 @@ import { PatientActivitiesScreen } from '../screens/patient/PatientActivitiesScr
 import { CareDiscoveryScreen }     from '../screens/patient/CareDiscoveryScreen';
 import { CaregiverProfileScreen }  from '../screens/patient/CaregiverProfileScreen';
 import { CareRequestScreen }       from '../screens/patient/CareRequestScreen';
-import { PostCareNeedScreen }       from '../screens/patient/PostCareNeedScreen';
-import { CareNeedResponsesScreen }   from '../screens/patient/CareNeedResponsesScreen';
 import { CareRequestDetailScreen } from '../screens/shared/CareRequestDetailScreen';
 import { CareRequestsListScreen }  from '../screens/shared/CareRequestsListScreen';
 import { PatientBottomBar }        from '../components/shared/PatientBottomBar';
 import { PatientPersonDetailScreen } from '../screens/patient/PatientPersonDetailScreen';
 import { PatientMemoriesScreen }     from '../screens/patient/PatientMemoriesScreen';
-import { PatientMemoryViewerScreen } from '../screens/patient/PatientMemoryViewerScreen';
+import { PatientMemoryViewerScreen } from '../screens/shared/PatientMemoryViewerScreen';
 import { PatientLanguageScreen }     from '../screens/patient/PatientLanguageScreen';
 import { PatientConnectFamilyScreen } from '../screens/patient/PatientConnectFamilyScreen';
 import { PatientLocationScreen }      from '../screens/patient/PatientLocationScreen';
@@ -50,8 +47,8 @@ import { NotificationSettingsScreen } from '../screens/shared/NotificationSettin
 import { NotificationTestScreen }     from '../screens/shared/NotificationTestScreen';
 import { PatientProfileScreen }    from '../screens/shared/PatientProfileScreen';
 
-import { CaregiverPatientRoutinesScreen } from '../screens/caregiver/CaregiverPatientRoutinesScreen';
-import { CaregiverRoutineEditorScreen } from '../screens/caregiver/CaregiverRoutineEditorScreen';
+import { SharedPatientRoutinesScreen } from '../screens/shared/SharedPatientRoutinesScreen';
+import { PatientSelfRoutineEditorScreen } from '../screens/patient/PatientSelfRoutineEditorScreen';
 import { usePatientCareMode } from '../hooks/usePatientCareMode';
 
 const Stack = createNativeStackNavigator<PatientStackParams>();
@@ -83,13 +80,11 @@ const PatientStack: React.FC = () => {
       {/* Routine management & Caregiver discovery routes strictly reserved for Self-managed Patients */}
       {isSelfManaged && (
         <>
-          <Stack.Screen name="PatientRoutinesScreen"         component={CaregiverPatientRoutinesScreen as any} />
-          <Stack.Screen name="CaregiverRoutineEditorScreen" component={CaregiverRoutineEditorScreen as any} />
+          <Stack.Screen name="PatientRoutinesScreen"          component={SharedPatientRoutinesScreen as any} />
+          <Stack.Screen name="PatientSelfRoutineEditorScreen" component={PatientSelfRoutineEditorScreen as any} />
           <Stack.Screen name="CareDiscoveryScreen"           component={CareDiscoveryScreen} />
           <Stack.Screen name="CaregiverProfileScreen"        component={CaregiverProfileScreen} />
           <Stack.Screen name="CareRequestScreen"             component={CareRequestScreen} />
-          <Stack.Screen name="PostCareNeedScreen"          component={PostCareNeedScreen} />
-          <Stack.Screen name="CareNeedResponsesScreen"      component={CareNeedResponsesScreen} />
           <Stack.Screen name="CareRequestDetailScreen"       component={CareRequestDetailScreen} />
           <Stack.Screen name="CareRequestsListScreen"        component={CareRequestsListScreen} />
           <Stack.Screen name="PatientCareTeamScreen"         component={PatientCareTeamScreen} />
@@ -127,9 +122,7 @@ export const PatientNavigator: React.FC = () => (
     <CognitionProvider>
       <VoiceProvider>
         <TaskProvider>
-          <CaregiverProvider>
-            <PatientStack />
-          </CaregiverProvider>
+          <PatientStack />
         </TaskProvider>
       </VoiceProvider>
     </CognitionProvider>

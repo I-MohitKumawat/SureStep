@@ -16,7 +16,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+// import MapView, { Circle, Marker } from 'react-native-maps';
+import { LeafletMapView } from '../../components/shared/LeafletMapView';
 import * as Location from 'expo-location';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -91,7 +92,6 @@ export const PatientSafeZoneEditorScreen: React.FC<Props> = ({ navigation, route
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
-  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     if (existingZone?.center) {
@@ -107,11 +107,6 @@ export const PatientSafeZoneEditorScreen: React.FC<Props> = ({ navigation, route
         if (active && telemetry?.latitude && telemetry?.longitude) {
           const ptCoords: Coords = { latitude: telemetry.latitude, longitude: telemetry.longitude };
           setCenter(ptCoords);
-          mapRef.current?.animateToRegion({
-            ...ptCoords,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          });
           return;
         }
 
@@ -121,11 +116,6 @@ export const PatientSafeZoneEditorScreen: React.FC<Props> = ({ navigation, route
           if (active) {
             const userCoords: Coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setCenter(userCoords);
-            mapRef.current?.animateToRegion({
-              ...userCoords,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            });
           }
         }
       } catch (err) {
@@ -271,37 +261,21 @@ export const PatientSafeZoneEditorScreen: React.FC<Props> = ({ navigation, route
             />
           ) : (
             <MapErrorBoundary>
-              <MapView
-                ref={mapRef}
+              <LeafletMapView
+                center={center}
+                zoom={15}
+                zones={[{
+                  id: 'editing-zone',
+                  name: label || 'Safe Zone',
+                  center: center,
+                  radius: radiusM,
+                  boundaryType: boundaryType,
+                  color: currentColor,
+                }]}
+                draggablePin={true}
+                onLocationChange={(coords) => setCenter(coords)}
                 style={styles.map}
-                initialRegion={{
-                  ...center,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                onPress={(e) => {
-                  const coords = e.nativeEvent.coordinate;
-                  setCenter({ latitude: coords.latitude, longitude: coords.longitude });
-                }}
-              >
-                <Circle
-                  center={center}
-                  radius={radiusM}
-                  fillColor={`${currentColor}1A`}
-                  strokeColor={currentColor}
-                  strokeWidth={2}
-                />
-                <Marker
-                  coordinate={center}
-                  draggable
-                  onDragEnd={(e) => setCenter(e.nativeEvent.coordinate)}
-                  anchor={{ x: 0.5, y: 1 }}
-                >
-                  <View style={[styles.pinMarker, { backgroundColor: currentColor }]}>
-                    <Feather name="map-pin" size={16} color="#FFFFFF" />
-                  </View>
-                </Marker>
-              </MapView>
+              />
             </MapErrorBoundary>
           )}
 

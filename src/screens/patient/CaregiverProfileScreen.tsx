@@ -84,7 +84,7 @@ export const CaregiverProfileScreen: React.FC<Props> = ({ route, navigation }) =
   // Determine current relationship status if any
   const matchedCaregiver = caregiverId ? caregivers.find((c) => c.id === caregiverId) : null;
   const linkStatus = matchedCaregiver
-    ? matchedCaregiver.status || 'CONFIRMED'
+    ? matchedCaregiver.status || null
     : caregiver?.status || null;
 
   const handleBack = () => {

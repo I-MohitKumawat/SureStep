@@ -4,8 +4,8 @@
  * Aligns with "Safety Alert_ Left Safe Zone.png".
  *
  * Backend endpoints:
- *   POST /notifications/alerts/:id/respond (I'm Responding)
- *   POST /notifications/alerts/:id/resolve (Circle Owner Only)
+ *   POST /alerts/:alertId/respond (I'm Responding)
+ *   POST /alerts/:alertId/resolve (Circle Owner Only)
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {

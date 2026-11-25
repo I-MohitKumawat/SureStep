@@ -46,14 +46,12 @@ export type PatientStackParams = {
   PatientMemoriesScreen:     { personId?: string; personName?: string } | undefined;
   PatientMemoryViewerScreen: { memory: MemoryItem; memories?: MemoryItem[]; initialIndex?: number };
   PatientRoutinesScreen:   { patientId?: string; patientName?: string; mode?: 'edit' | 'create'; routine?: any } | undefined;
-  CaregiverRoutineEditorScreen?: { patientId: string; patientName: string; mode: 'create' | 'edit'; routine?: any };
+  PatientSelfRoutineEditorScreen: { patientId: string; patientName: string; mode: 'create' | 'edit'; routine?: any };
   CareDiscoveryScreen:     { targetPatientId?: string; targetPatientName?: string } | undefined;
   CaregiverProfileScreen:  { caregiver?: CaregiverListing; caregiverId?: string; targetPatientId?: string; targetPatientName?: string };
   CareRequestScreen:       { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
   CareRequestDetailScreen: { requestId: string; onUpdated?: () => void };
   CareRequestsListScreen:  { initialTab?: 'PENDING' | 'ALL' | 'ACTIVE' | 'PAST'; targetPatientId?: string; targetPatientName?: string } | undefined;
-  PostCareNeedScreen:      { targetPatientId?: string; targetPatientName?: string } | undefined;
-  CareNeedResponsesScreen: { needId?: string; targetPatientId?: string; targetPatientName?: string } | undefined;
   PatientCareTeamScreen:   undefined;
   PatientGamesScreen:      undefined;
   PatientStoriesScreen:    undefined;
@@ -87,25 +85,7 @@ export type CaregiverStackParams = {
   CaregiverPatientLocationEditScreen: { patientId: string; patientName?: string };
   CaregiverPatientRoutinesScreen: { patientId: string; patientName: string };
   CaregiverPatientAlertsScreen:   { patientId: string; patientName: string };
-  CaregiverPatientShiftsScreen:   { patientId: string };
-  CaregiverRoutineEditorScreen:   { patientId: string; patientName: string; mode: 'create' | 'edit'; routine?: any };
-  CaregiverGeofenceEditorScreen:  {
-    patientId:    string;
-    patientName:  string;
-    existingZone?: {
-      id:       string;
-      label:    string;
-      center:   { latitude: number; longitude: number };
-      radiusM:  number;
-      boundaryType?: 'soft' | 'hard';
-    } | null;
-    initialCenter?: { latitude: number; longitude: number };
-  };
-  CaregiverShiftHandoverScreen:   { shiftId: string };
   CaregiverAlertFeedScreen:       undefined;
-  CaregiverCalendarScreen:        undefined;
-  CaregiverMessagesScreen:        { patientId: string };
-  CaregiverWellbeingScreen:       undefined;
   CaregiverProfileEditScreen:     undefined;
   CaregiverSettingsScreen:        undefined;
   CaregiverCareCircleScreen:      { patientId: string; patientName: string };
@@ -170,26 +150,10 @@ export type FamilyStackParams = {
   CareRequestScreen:           { caregiver: CaregiverListing; targetPatientId?: string; targetPatientName?: string };
   CareRequestDetailScreen:     { requestId: string; onUpdated?: () => void };
   CareRequestsListScreen:      { initialTab?: 'PENDING' | 'ALL' | 'ACTIVE' | 'PAST'; targetPatientId?: string; targetPatientName?: string } | undefined;
-  PostCareNeedScreen:          { targetPatientId?: string; targetPatientName?: string } | undefined;
-  CareNeedResponsesScreen:     { needId?: string; targetPatientId?: string; targetPatientName?: string } | undefined;
 
   // Shared Notifications & Profile
   NotificationHistoryScreen:   undefined;
   NotificationSettingsScreen:  undefined;
   NotificationTestScreen:      undefined;
   PatientProfileScreen:        { patientId: string };
-
-  // Legacy compat aliases
-  FamilyLinkPatientScreen?:    undefined;
-  FamilyFeedScreen?:           undefined;
-  FamilyMapScreen?:            { patientId?: string };
-  FamilyStoriesScreen?:        { patientId: string };
-  FamilyMessagesScreen?:       { patientId?: string };
-};
-
-// ─── Doctor Stack ─────────────────────────────────────────────────────────────
-export type DoctorStackParams = {
-  DoctorPatientListScreen:       undefined;
-  DoctorCognitiveReportScreen:   { patientId: string };
-  DoctorAssessmentDetailScreen:  { assessmentId: string };
 };

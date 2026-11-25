@@ -66,13 +66,12 @@ type AuthContextValue = {
   login:                (user: AuthUser, careCtx?: CareContext, role?: UserRoleType) => void;
   logout:               () => void;
   setStatus:            (s: AuthStatus) => void;
-  loginDevMode:         (role: UserRoleType) => Promise<void>;
   updateUser:           (patch: Partial<AuthUser>) => void;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -152,8 +151,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log('[AUTH] Status transition -> authenticated');
       setStatus('authenticated');
-      void bootstrapFcmToken();
-      void bootstrapExpoPushToken();
+      void (async () => {
+        const fcmRegistered = await bootstrapFcmToken();
+        if (!fcmRegistered) {
+          await bootstrapExpoPushToken();
+        }
+      })();
 
       if (resolvedUser.role === 'PATIENT') {
         void (async () => {
@@ -288,61 +291,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const loginDevMode = useCallback(async (role: UserRoleType) => {
-    setStatus('loading');
-    const mockToken = `mock-dev-${role.toLowerCase()}-token`;
-    
-    // Set token resolver
-    const resolver = () => Promise.resolve(mockToken);
-    setFirebaseTokenResolver(resolver);
-    setSocketTokenResolver(resolver);
-
-    try {
-      // Call backend to auto-provision / login the mock user
-      const response = await getMe();
-      const resData = (response.data as any)?.data || response.data;
-      const dbUser = resData?.user || resData;
-      const resActiveRole = resData?.activeRole || role;
-      const resCareContext = resData?.careContext || null;
-
-      setFirebaseUser({
-        uid: dbUser?.firebase_uid || `mock-dev-${role.toLowerCase()}-uid`,
-        phoneNumber: dbUser?.phone || (role === 'PATIENT' ? '+919999999999' : '+918888888888'),
-      } as any);
-
-      setUser({
-        id:                  dbUser?.id || '',
-        phone:               dbUser?.phone || '',
-        name:                dbUser?.name || '',
-        role:                resActiveRole as UserRoleType,
-        photo_url:           dbUser?.photo_url || undefined,
-        preferred_language:  dbUser?.preferred_language || undefined,
-        city:                dbUser?.city || undefined,
-        date_of_birth:       dbUser?.date_of_birth || undefined,
-        gender:              dbUser?.gender || undefined,
-      });
-      setCareContext(resCareContext);
-      setActiveRole(resActiveRole);
-      setNetworkError(false);
-      connectSocket(mockToken);
-      setStatus('authenticated');
-    } catch (err: any) {
-      console.warn('[AuthContext] loginDevMode getMe failed, setting local mock state:', err?.message);
-      // Fallback
-      setUser({
-        id: `mock-dev-${role.toLowerCase()}-id`,
-        phone: role === 'PATIENT' ? '+919999999999' : '+918888888888',
-        name: `Demo ${role.charAt(0) + role.slice(1).toLowerCase()}`,
-        role,
-      });
-      setCareContext(null);
-      setActiveRole(role);
-      setNetworkError(false);
-      connectSocket(mockToken);
-      setStatus('authenticated');
-    }
-  }, []);
-
   const updateUser = useCallback((patch: Partial<AuthUser>) => {
     setUser((prev) => {
       if (!prev) return null;
@@ -428,7 +376,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       login,
       logout,
       setStatus,
-      loginDevMode,
       updateUser,
     }),
     [
@@ -444,7 +391,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       refreshUser,
       login,
       logout,
-      loginDevMode,
       updateUser,
     ],
   );
