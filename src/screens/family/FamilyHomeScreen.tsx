@@ -49,25 +49,34 @@ export const FamilyHomeScreen: React.FC = () => {
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
   const [todayOccurrences, setTodayOccurrences] = useState<RoutineOccurrence[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [alertsAvailable, setAlertsAvailable] = useState(false);
+  const [routinesAvailable, setRoutinesAvailable] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
     if (!activeCircle && !activePatient) return;
     setLoadingData(true);
     try {
-      const promises: Promise<any>[] = [];
-      if (activeCircle) {
-        promises.push(listCircleSafetyAlerts(activeCircle.id, 'TRIGGERED').catch(() => []));
-      }
-      if (activePatient) {
-        promises.push(fetchTodayOccurrences(activePatient.id).catch(() => []));
+      const [alertsResult, occurrencesResult] = await Promise.all([
+        activeCircle
+          ? listCircleSafetyAlerts(activeCircle.id)
+              .then((rows) => ({ ok: true as const, rows }))
+              .catch(() => ({ ok: false as const, rows: [] as SafetyAlert[] }))
+          : Promise.resolve({ ok: true as const, rows: [] as SafetyAlert[] }),
+        activePatient
+          ? fetchTodayOccurrences(activePatient.id)
+              .then((rows) => ({ ok: true as const, rows }))
+              .catch(() => ({ ok: false as const, rows: [] as RoutineOccurrence[] }))
+          : Promise.resolve({ ok: true as const, rows: [] as RoutineOccurrence[] }),
+      ]);
+
+      setAlertsAvailable(alertsResult.ok);
+      if (alertsResult.ok) {
+        setAlerts(alertsResult.rows);
       }
 
-      const results = await Promise.all(promises);
-      if (activeCircle && results[0]) {
-        setAlerts(results[0] as SafetyAlert[]);
-      }
-      if (activePatient && results[1]) {
-        setTodayOccurrences(results[1] as RoutineOccurrence[]);
+      setRoutinesAvailable(occurrencesResult.ok);
+      if (occurrencesResult.ok) {
+        setTodayOccurrences(occurrencesResult.rows);
       }
     } finally {
       setLoadingData(false);
@@ -101,13 +110,14 @@ export const FamilyHomeScreen: React.FC = () => {
 
   const userName = user?.name ? user.name.split(' ')[0] : 'there';
 
-  // Attention items computation
+  // Attention items computation (unresolved safety incidents stay urgent until RESOLVED by Circle Owner)
   const activeEmergencyAlert = alerts.find(
-    (a) => a.status === 'TRIGGERED' && (a.alert_type === 'SOS_MANUAL' || a.alert_type === 'ZONE_BREACH')
+    (a) => a.status !== 'RESOLVED' && (a.alert_type === 'SOS_MANUAL' || a.alert_type === 'ZONE_BREACH')
   );
 
   const overdueRoutine = todayOccurrences.find((o) => o.status === 'OVERDUE');
 
+  const statusUnavailable = Boolean(activeCircle && !loadingData && (!alertsAvailable || (activePatient && !routinesAvailable)));
   const hasAttentionItems = Boolean(activeEmergencyAlert || overdueRoutine);
 
   return (
@@ -241,12 +251,16 @@ export const FamilyHomeScreen: React.FC = () => {
                   </View>
                   <View style={styles.alertTextWrap}>
                     <Text style={styles.alertTitleRed}>
-                      {activeEmergencyAlert.patient_name || 'Patient'} left the Safe Zone
+                      {activeEmergencyAlert.alert_type === 'SOS_MANUAL'
+                        ? `${activeEmergencyAlert.patient_name || 'Patient'} triggered Emergency SOS`
+                        : `${activeEmergencyAlert.patient_name || 'Patient'} left the Safe Zone`}
                     </Text>
                     <Text style={styles.alertSubRed}>
-                      {activeEmergencyAlert.zone_name
-                        ? `Near ${activeEmergencyAlert.zone_name}`
-                        : 'Outside registered safe boundary'}
+                      {activeEmergencyAlert.alert_type === 'SOS_MANUAL'
+                        ? 'Immediate assistance requested'
+                        : activeEmergencyAlert.zone_name
+                          ? `Outside ${activeEmergencyAlert.zone_name}`
+                          : 'Outside registered safe boundary'}
                     </Text>
                   </View>
                   <Feather name="chevron-right" size={20} color="#9CA3AF" />
@@ -276,7 +290,19 @@ export const FamilyHomeScreen: React.FC = () => {
                 </Pressable>
               ) : null}
 
-              {!hasAttentionItems ? (
+              {!hasAttentionItems && statusUnavailable ? (
+                <View style={styles.allClearCard}>
+                  <View style={styles.allClearIconWrap}>
+                    <Ionicons name="information-circle-outline" size={22} color="#B45309" />
+                  </View>
+                  <View style={styles.alertTextWrap}>
+                    <Text style={styles.allClearTitle}>Safety status unavailable</Text>
+                    <Text style={styles.allClearSub}>
+                      Could not verify latest alerts or routines. Pull down to refresh.
+                    </Text>
+                  </View>
+                </View>
+              ) : !hasAttentionItems ? (
                 <View style={styles.allClearCard}>
                   <View style={styles.allClearIconWrap}>
                     <Ionicons name="checkmark-circle" size={22} color="#10B981" />
@@ -284,7 +310,7 @@ export const FamilyHomeScreen: React.FC = () => {
                   <View style={styles.alertTextWrap}>
                     <Text style={styles.allClearTitle}>Everything is on track</Text>
                     <Text style={styles.allClearSub}>
-                      Routines and safety boundaries are normal right now.
+                      No active safety alerts or overdue routines reported right now.
                     </Text>
                   </View>
                 </View>
@@ -306,7 +332,14 @@ export const FamilyHomeScreen: React.FC = () => {
 
               {patients.map((p) => {
                 const isSelected = p.id === activePatient?.id;
-                const statusLabel = p.safety_state === 'SAFE' ? 'At home' : 'Active';
+                const statusLabel =
+                  p.safety_state === 'CRITICAL'
+                    ? 'SOS Active'
+                    : p.safety_state === 'BREACH'
+                      ? 'Alert active'
+                      : p.safety_state === 'APPROACHING'
+                        ? 'Near boundary'
+                        : 'Connected';
                 return (
                   <Pressable
                     key={p.id}

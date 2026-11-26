@@ -78,9 +78,23 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const activePatientIdRef = useRef<string | null>(null);
   const activeCircleIdRef = useRef<string | null>(null);
+  const refreshSeqRef = useRef(0);
+
+  const clearFamilyState = useCallback(() => {
+    setCircles([]);
+    setActiveCircle(null);
+    setPatients([]);
+    setActivePatient(null);
+    setCareCircle([]);
+    setProfile(null);
+    activeCircleIdRef.current = null;
+    activePatientIdRef.current = null;
+  }, []);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const seq = ++refreshSeqRef.current;
+    if (!user?.id) {
+      clearFamilyState();
       setIsLoading(false);
       return;
     }
@@ -88,12 +102,14 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       // 1. Fetch user profile
       const profRes = await getFamilyProfile().catch(() => null);
+      if (seq !== refreshSeqRef.current) return;
       if (profRes?.data?.data?.profile) {
         setProfile(profRes.data.data.profile);
       }
 
       // 2. Fetch Circles for the user
       const userCircles = await listMyCareCircles();
+      if (seq !== refreshSeqRef.current) return;
       setCircles(userCircles);
 
       const targetCircleId = activeCircleIdRef.current ?? activeCircle?.id;
@@ -108,6 +124,7 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           listCircleMembers(currentCircle.id),
           listCirclePatients(currentCircle.id),
         ]);
+        if (seq !== refreshSeqRef.current) return;
 
         const resolvedMembers: CircleMember[] =
           fetchedMembers.length > 0
@@ -133,12 +150,18 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActivePatient(null);
         activePatientIdRef.current = null;
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (seq !== refreshSeqRef.current) return;
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        clearFamilyState();
+      }
       console.warn('[FamilyContext] refresh error:', err);
     } finally {
-      setIsLoading(false);
+      if (seq === refreshSeqRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [user?.id]);
+  }, [user?.id, clearFamilyState]);
 
   const setActivePatientId = useCallback(
     (patientId: string) => {
@@ -219,6 +242,8 @@ export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       'circle:member_removed',
       'circle:member_left',
       'circle:ownership_transferred',
+      'circle:terminated',
+      'relationship:change',
     ];
 
     circleEvents.forEach((event) => socket.on(event, handleCircleChange));

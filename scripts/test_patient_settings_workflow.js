@@ -188,15 +188,27 @@ const languageScreenPath = path.resolve(__dirname, '../src/screens/patient/Patie
 assert.ok(fs.existsSync(languageScreenPath), 'PatientLanguageScreen.tsx must exist');
 const languageScreenSource = fs.readFileSync(languageScreenPath, 'utf8');
 
-test('5.1: PatientLanguageScreen supports English and Indian regional languages without flags/emojis', () => {
-  assert.ok(languageScreenSource.includes("'English'"));
-  assert.ok(languageScreenSource.includes("'Hindi'"));
-  assert.ok(languageScreenSource.includes("'Kannada'"));
-  assert.ok(languageScreenSource.includes("'Tamil'"));
-  assert.ok(languageScreenSource.includes("'Telugu'"));
-  assert.ok(languageScreenSource.includes("'Malayalam'"));
+const languageConfigPath = path.resolve(__dirname, '../src/constants/languages.ts');
+assert.ok(fs.existsSync(languageConfigPath), 'src/constants/languages.ts must exist');
+const languageConfigSource = fs.readFileSync(languageConfigPath, 'utf8');
+
+test('5.1: PatientLanguageScreen supports English and Indian regional languages via shared config without flags/emojis', () => {
+  assert.ok(languageScreenSource.includes('CORE_SUPPORTED_LANGUAGES'));
+  assert.ok(languageConfigSource.includes("'en'"));
+  assert.ok(languageConfigSource.includes("'hi'"));
+  assert.ok(languageConfigSource.includes("'kn'"));
+  assert.ok(languageConfigSource.includes("'ta'"));
+  assert.ok(languageConfigSource.includes("'te'"));
+  assert.ok(languageConfigSource.includes("'ml'"));
+  assert.ok(languageConfigSource.includes("'English'"));
+  assert.ok(languageConfigSource.includes("'Hindi'"));
+  assert.ok(languageConfigSource.includes("'Kannada'"));
+  assert.ok(languageConfigSource.includes("'Tamil'"));
+  assert.ok(languageConfigSource.includes("'Telugu'"));
+  assert.ok(languageConfigSource.includes("'Malayalam'"));
   // Ensure no emoji flag characters
   assert.doesNotMatch(languageScreenSource, /[\uD83C][\uDDE6-\uDDFF]/, 'Must not contain flag emojis');
+  assert.doesNotMatch(languageConfigSource, /[\uD83C][\uDDE6-\uDDFF]/, 'Must not contain flag emojis');
 });
 
 test('5.2: Language selection persists preference via updateMe and calls refreshUser()', () => {

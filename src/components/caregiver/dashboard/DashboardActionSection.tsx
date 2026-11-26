@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, Linking, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { styles } from './dashboardStyles';
+import { normalizeCallablePhone } from '../../../utils/caregiverDashboardUtils';
 
 interface DashboardActionSectionProps {
   patientName: string;
@@ -14,31 +15,41 @@ export const DashboardActionSection: React.FC<DashboardActionSectionProps> = ({
   patientPhone,
   onNavigateGeofenceMap,
 }) => {
+  const sanitizedPhone = normalizeCallablePhone(patientPhone);
+  const hasValidPhone = sanitizedPhone !== null;
+
   const handleCall = async () => {
-    const url = `tel:${patientPhone}`;
+    if (!sanitizedPhone) {
+      Alert.alert(
+        'Phone Unavailable',
+        `No valid phone number is available for ${patientName}.`
+      );
+      return;
+    }
+
+    const url = `tel:${sanitizedPhone}`;
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
       } else {
         Alert.alert(
-          'Call Patient',
-          `Calling ${patientName} (${patientPhone}). tel: scheme not supported on this device. (Future VoIP call integration placeholder)`
+          'Dialer Unavailable',
+          `Phone dialer is not available on this device. Patient number: ${sanitizedPhone}.`
         );
       }
     } catch (error) {
       console.warn('Failed to call patient:', error);
-      Alert.alert(
-        'Call Patient',
-        `Calling ${patientName} (${patientPhone}). (Future VoIP call integration placeholder)`
-      );
+      Alert.alert('Unable to Call', 'Could not open the phone dialer.');
     }
   };
 
   const handleEmergency = () => {
     Alert.alert(
-      'Emergency Action',
-      'Emergency response flow is not implemented yet. (Placeholder)'
+      'Emergency Assistance',
+      hasValidPhone
+        ? `Contact ${patientName} (${sanitizedPhone}) immediately or call local emergency services if there is an active emergency.`
+        : 'Call local emergency services immediately if there is an active emergency, and coordinate with the Care Circle.'
     );
   };
 
@@ -62,6 +73,7 @@ export const DashboardActionSection: React.FC<DashboardActionSectionProps> = ({
         style={({ pressed }) => [
           styles.bottomActionBtn,
           styles.bottomActionBtnGray,
+          !hasValidPhone && { opacity: 0.5 },
           pressed && { opacity: 0.85 },
         ]}
         onPress={handleCall}

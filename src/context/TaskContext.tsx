@@ -149,18 +149,31 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const tasksRef = useRef<Task[]>([]);
   const lastFetchedRef = useRef<Record<string, number>>({});
   const inFlightRef = useRef<Record<string, Promise<void>>>({});
+  const sessionSeqRef = useRef(0);
 
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, status, user } = useAuth();
+  const authUserId = status === 'authenticated' ? user?.id : undefined;
 
   useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  // Canonical occurrence updates (emitted by the routine sign-off service).
+  // Clear all cached patient routine occurrences immediately when user signs out or switches accounts
+  useEffect(() => {
+    sessionSeqRef.current++;
+    tasksRef.current = [];
+    lastFetchedRef.current = {};
+    inFlightRef.current = {};
+    setTasks([]);
+    setLoading(false);
+  }, [authUserId]);
+
+  // Canonical occurrence updates & access-revocation clearing
   useEffect(() => {
     const socket = getSocket();
-    if (!socket || !firebaseUser) return;
+    if (!socket || !firebaseUser || !authUserId) return;
 
+    const sessionSeq = sessionSeqRef.current;
     const refreshPatient = (data: any) => {
       const patientId = data?.patientId ?? data?.patient_id;
       if (!patientId) return;
@@ -168,26 +181,52 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       void (async () => {
         try {
           const rows = await fetchOccurrences(patientId);
+          if (sessionSeq !== sessionSeqRef.current) return;
           const mapped = rows.map(mapOccurrenceToTask);
           setTasks((prev) => [...prev.filter((t) => t.patientId !== patientId), ...mapped]);
           lastFetchedRef.current[patientId] = Date.now();
-        } catch {
-          // Next focus/refresh will reconcile.
+        } catch (err: any) {
+          if (sessionSeq !== sessionSeqRef.current) return;
+          const httpStatus = err?.response?.status;
+          if (httpStatus === 401 || httpStatus === 403) {
+            setTasks((prev) => prev.filter((t) => t.patientId !== patientId));
+            delete lastFetchedRef.current[`${patientId}:today`];
+          }
         }
       })();
     };
 
+    const handleAccessRevoked = (data: any) => {
+      const revokedPatientId = data?.patientId ?? data?.patient_id;
+      lastFetchedRef.current = {};
+      if (revokedPatientId) {
+        setTasks((prev) => prev.filter((t) => t.patientId !== revokedPatientId));
+      } else {
+        sessionSeqRef.current++;
+        setTasks([]);
+      }
+    };
+
     socket.on('routine:occurrence:updated', refreshPatient);
     socket.on('routine:occurrence:created', refreshPatient);
+    socket.on('relationship:change', handleAccessRevoked);
+    socket.on('circle:member_removed', handleAccessRevoked);
+    socket.on('circle:member_left', handleAccessRevoked);
+    socket.on('circle:terminated', handleAccessRevoked);
 
     return () => {
       socket.off('routine:occurrence:updated', refreshPatient);
       socket.off('routine:occurrence:created', refreshPatient);
+      socket.off('relationship:change', handleAccessRevoked);
+      socket.off('circle:member_removed', handleAccessRevoked);
+      socket.off('circle:member_left', handleAccessRevoked);
+      socket.off('circle:terminated', handleAccessRevoked);
     };
-  }, [firebaseUser]);
+  }, [firebaseUser, authUserId]);
 
   const loadTasksForPatient = useCallback(
     async (patientId: string, forceRefresh = false, date?: string) => {
+      if (!authUserId) return;
       const socket = getSocket();
       if (socket) socket.emit('join:patient', patientId);
 
@@ -203,17 +242,27 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         return inFlightRef.current[cacheKey];
       }
 
+      const expectedSession = sessionSeqRef.current;
       const promise = (async () => {
         setLoading(true);
         try {
           const rows = await fetchOccurrences(patientId, date);
+          if (expectedSession !== sessionSeqRef.current) return;
           const mapped = rows.map(mapOccurrenceToTask);
           setTasks((prev) => [...prev.filter((t) => t.patientId !== patientId), ...mapped]);
           lastFetchedRef.current[cacheKey] = Date.now();
-        } catch (e) {
+        } catch (e: any) {
+          if (expectedSession !== sessionSeqRef.current) return;
+          const httpStatus = e?.response?.status;
+          if (httpStatus === 401 || httpStatus === 403) {
+            setTasks((prev) => prev.filter((t) => t.patientId !== patientId));
+            delete lastFetchedRef.current[cacheKey];
+          }
           console.warn('[TaskContext] loadTasksForPatient failed:', e);
         } finally {
-          setLoading(false);
+          if (expectedSession === sessionSeqRef.current) {
+            setLoading(false);
+          }
           delete inFlightRef.current[cacheKey];
         }
       })();
@@ -221,7 +270,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       inFlightRef.current[cacheKey] = promise;
       return promise;
     },
-    []
+    [authUserId]
   );
 
   const updateTaskStatus = useCallback(async (taskId: string, status: TaskStatus) => {

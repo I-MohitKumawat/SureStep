@@ -43,6 +43,7 @@ import { DashboardManageTab }  from '../../components/caregiver/dashboard/Dashbo
 import { F } from '../../theme/fonts';
 import { C } from '../../theme/colors';
 import { getPatientProfile } from '../../services/userService';
+import { getLanguageDisplayName } from '../../constants/languages';
 import { useAuth } from '../../context/AuthContext';
 import { usePatientTracking } from '../../context/PatientTrackingContext';
 import { useAlerts } from '../../context/AlertContext';
@@ -89,7 +90,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientDetailScreen'>;
 type CaregiverTab = 'Home' | 'Alerts' | 'Manage';
-type PatientDetails = { fullName: string; dob: string; gender: string; city: string; language: string; photoUrl?: string | null };
+type PatientDetails = { fullName: string; phone?: string | null; dob: string; gender: string; city: string; language: string; photoUrl?: string | null };
 
 const TAB_ICON_COMPONENTS: Record<CaregiverTab, React.FC<{ active: boolean }>> = {
   Home:   ({ active }) => <IconDashboard size={24} color={active ? C.primary : C.textMuted} strokeWidth={active ? 2.2 : 1.8} />,
@@ -263,6 +264,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
     coordsTs,
     zones,
     patientState,
+    accuracyM,
     refreshLocation,
     refreshing,
   } = usePatientTracking();
@@ -271,7 +273,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   const unackedAlerts = getUnackedCountForPatient(patientId);
   const hasRealLocation = !!patientCoords;
   const hasRealZones = zones.length > 0;
-  const batteryLevel = patientState?.battery_pct ?? 82;
+  const batteryLevel = patientState?.battery_pct ?? null;
 
   useEffect(() => {
     setActivePatientId(patientId);
@@ -289,18 +291,19 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
           const p = data.data;
           setPatientDetails({
             fullName: p.user?.name || p.name || patientName,
+            phone: p.user?.phone || p.phone || null,
             dob: p.user?.date_of_birth || p.date_of_birth || '—',
             gender: p.user?.gender || p.gender || '—',
             city: p.user?.city || p.city || '—',
-            language: p.user?.preferred_language === 'hi' ? 'Hindi' : 'English',
+            language: getLanguageDisplayName(p.user?.preferred_language || p.preferred_language),
             photoUrl: p.user?.photo_url || p.photo_url || null,
           });
         } else {
-          setPatientDetails({ fullName: patientName, dob: '—', gender: '—', city: '—', language: 'English', photoUrl: null });
+          setPatientDetails({ fullName: patientName, phone: null, dob: '—', gender: '—', city: '—', language: 'English', photoUrl: null });
         }
       } catch (err) {
         console.warn('Failed to load patient profile:', err);
-        setPatientDetails({ fullName: patientName, dob: '—', gender: '—', city: '—', language: 'English', photoUrl: null });
+        setPatientDetails({ fullName: patientName, phone: null, dob: '—', gender: '—', city: '—', language: 'English', photoUrl: null });
       }
     };
     void loadProfile();
@@ -322,7 +325,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
   }, [patientDetails?.dob, patientName]);
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const batteryColor  = batteryLevel >= 50 ? C.safeText : batteryLevel >= 20 ? '#D97706' : C.error;
+  const batteryColor  = batteryLevel == null ? C.textMuted : batteryLevel >= 50 ? C.safeText : batteryLevel >= 20 ? '#D97706' : C.error;
   const capsuleScrollY = useRef(new Animated.Value(0)).current;
 
   const routineItems = useMemo(() => {
@@ -420,15 +423,23 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
 
   const nonRoutineAlerts = useMemo(() => {
     const out: Array<{ id: string; type: string; emoji: string; title: string; message: string; severity: 'critical' | 'high' | 'medium' | 'low' }> = [];
-    if (batteryLevel < 20) out.push({ id: 'battery-low', type: 'battery_critical', emoji: '🔋', title: 'Critical Battery', message: `Device battery at ${batteryLevel}%`, severity: 'high' });
-    if (patientCoords && zones.length > 0) {
+    if (batteryLevel !== null && batteryLevel < 20) {
+      out.push({ id: 'battery-low', type: 'battery_critical', emoji: '🔋', title: 'Critical Battery', message: `Device battery at ${batteryLevel}%`, severity: 'high' });
+    }
+    const deltaMs = Date.now() - coordsTs;
+    const isFreshLocation =
+      coordsTs > 0 &&
+      deltaMs >= -60_000 &&
+      deltaMs <= 5 * 60 * 1000 &&
+      (accuracyM == null || accuracyM <= 50);
+    if (isFreshLocation && patientCoords && zones.length > 0) {
       const breach = checkBreach(patientCoords, zones);
       if (breach.status === 'breach') out.push({ id: 'geo-outside', type: 'geofence_breach', emoji: '📍', title: 'Outside safe zone', message: `${Math.round(breach.distanceM)}m beyond boundary`, severity: 'high' });
       else if (breach.status === 'approaching') out.push({ id: 'geo-approaching', type: 'geofence_approaching', emoji: '🚶', title: 'Approaching zone boundary', message: `${Math.round(breach.marginM)}m from edge`, severity: 'medium' });
     }
-    if (unackedAlerts > 0) out.push({ id: 'geo-unacked', type: 'geofence_unacked', emoji: '🔔', title: 'Unacknowledged alerts', message: `${unackedAlerts} alert${unackedAlerts > 1 ? 's' : ''} waiting`, severity: 'medium' });
+    if (unackedAlerts > 0) out.push({ id: 'geo-unacked', type: 'geofence_unacked', emoji: '🔔', title: 'Unresolved alerts', message: `${unackedAlerts} alert${unackedAlerts > 1 ? 's' : ''} active`, severity: 'medium' });
     return out.sort((a, b) => ['critical','high','medium','low'].indexOf(a.severity) - ['critical','high','medium','low'].indexOf(b.severity));
-  }, [batteryLevel, patientCoords, zones, unackedAlerts]);
+  }, [batteryLevel, coordsTs, accuracyM, patientCoords, zones, unackedAlerts]);
 
   return (
     <ScreenContainer edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
@@ -458,7 +469,7 @@ export const CaregiverPatientDetailScreen: React.FC<Props> = ({ navigation, rout
         ) : (
           <DashboardHomeTab
             patientName={patientName}
-            patientPhone={patientId}
+            patientPhone={patientDetails?.phone || ''}
             batteryLevel={batteryLevel}
             batteryColor={batteryColor}
             patientCoords={patientCoords}

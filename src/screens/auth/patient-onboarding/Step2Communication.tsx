@@ -8,6 +8,11 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
+import {
+  CORE_SUPPORTED_LANGUAGES,
+  getLanguageDisplayName,
+  resolveLanguageCode,
+} from '../../../constants/languages';
 import type { OnboardingIntent } from '../../../types/navigation.types';
 
 interface Step2Props {
@@ -23,15 +28,6 @@ interface Step2Props {
   onNext: () => void;
   onBack: () => void;
 }
-
-const PRIMARY_LANGUAGES = [
-  { code: 'English', label: 'English', sub: 'English' },
-  { code: 'Hindi', label: 'हिंदी', sub: 'Hindi' },
-  { code: 'Kannada', label: 'ಕನ್ನಡ', sub: 'Kannada' },
-  { code: 'Tamil', label: 'தமிழ்', sub: 'Tamil' },
-  { code: 'Telugu', label: 'తెలుగు', sub: 'Telugu' },
-  { code: 'Malayalam', label: 'മലയാളം', sub: 'Malayalam' },
-];
 
 const ADDITIONAL_LANG_OPTIONS = [
   'English',
@@ -84,11 +80,12 @@ export const Step2Communication: React.FC<Step2Props> = ({
 }) => {
   const isSelf = intent === 'RECEIVING_CARE';
 
-  const selectPrimaryLanguage = (language: string) => {
+  const selectPrimaryLanguage = (languageCode: string) => {
+    const primaryDisplayName = getLanguageDisplayName(languageCode);
     onUpdate({
-      primaryLanguage: language,
+      primaryLanguage: resolveLanguageCode(languageCode),
       additionalLanguages: additionalLanguages.filter(
-        (item) => item !== language
+        (item) => item !== languageCode && item !== primaryDisplayName
       ),
     });
   };
@@ -146,9 +143,9 @@ export const Step2Communication: React.FC<Step2Props> = ({
           accessibilityRole="radiogroup"
         >
           {[
-            PRIMARY_LANGUAGES.slice(0, 2),
-            PRIMARY_LANGUAGES.slice(2, 4),
-            PRIMARY_LANGUAGES.slice(4, 6),
+            CORE_SUPPORTED_LANGUAGES.slice(0, 2),
+            CORE_SUPPORTED_LANGUAGES.slice(2, 4),
+            CORE_SUPPORTED_LANGUAGES.slice(4, 6),
           ].map((row, index) => (
             <View
               key={index}
@@ -156,7 +153,7 @@ export const Step2Communication: React.FC<Step2Props> = ({
             >
               {row.map((language) => {
                 const selected =
-                  primaryLanguage === language.code;
+                  resolveLanguageCode(primaryLanguage) === language.code;
 
                 return (
                   <Pressable
@@ -165,7 +162,7 @@ export const Step2Communication: React.FC<Step2Props> = ({
                       selectPrimaryLanguage(language.code)
                     }
                     accessibilityRole="radio"
-                    accessibilityLabel={language.code}
+                    accessibilityLabel={language.name}
                     accessibilityState={{ checked: selected }}
                     className={`min-h-[64px] flex-1 flex-row items-center gap-[6px] rounded-[12px] border px-[12px] py-[10px] active:opacity-70 ${
                       selected
@@ -181,11 +178,11 @@ export const Step2Communication: React.FC<Step2Props> = ({
                             : 'text-care-ink'
                         }`}
                       >
-                        {language.label}
+                        {language.nativeName}
                       </Text>
 
                       <Text className="mt-[3px] font-inter-regular text-[11px] text-care-muted">
-                        {language.sub}
+                        {language.name}
                       </Text>
                     </View>
 
@@ -219,7 +216,9 @@ export const Step2Communication: React.FC<Step2Props> = ({
 
         <View className="flex-row flex-wrap gap-[8px]">
           {ADDITIONAL_LANG_OPTIONS.filter(
-            (language) => language !== primaryLanguage
+            (language) =>
+              language !== primaryLanguage &&
+              language !== getLanguageDisplayName(primaryLanguage)
           ).map((language) => {
             const selected =
               additionalLanguages.includes(language);

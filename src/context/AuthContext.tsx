@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import type { UserRoleType } from '../types/enums';
 import type { CareContext } from '../types/api.types';
+import { resolveLanguageCode } from '../constants/languages';
 import { setFirebaseTokenResolver, clearFirebaseTokenResolver } from '../services/apiClient';
 import { connectSocket, disconnectSocket, setSocketTokenResolver } from '../services/socketClient';
 import { getMe } from '../services/userService';
@@ -130,7 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         name:                dbUser.name || '',
         role:                (resActiveRole && resActiveRole !== 'NEW_USER' ? resActiveRole : dbUser.role || 'PATIENT') as UserRoleType,
         photo_url:           dbUser.photo_url || undefined,
-        preferred_language:  dbUser.preferred_language || undefined,
+        preferred_language:  resolveLanguageCode(dbUser.preferred_language),
         city:                dbUser.city || undefined,
         date_of_birth:       dbUser.date_of_birth || undefined,
         gender:              dbUser.gender || undefined,

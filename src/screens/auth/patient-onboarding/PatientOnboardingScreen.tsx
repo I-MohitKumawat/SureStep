@@ -17,6 +17,7 @@ import {
   uploadProfilePhoto,
 } from '../../../services/userService';
 
+import { DEFAULT_LANGUAGE_CODE, resolveLanguageCode } from '../../../constants/languages';
 import type { AuthStackParams } from '../../../types/navigation.types';
 import type { PatientMedicationItem } from '../../../types/api.types';
 
@@ -87,7 +88,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({
     dob: '',
     gender: '',
     photoUri: undefined,
-    primaryLanguage: 'English',
+    primaryLanguage: DEFAULT_LANGUAGE_CODE,
     additionalLanguages: [],
     communicationPreferences: ['simple_text'],
     city: '',
@@ -229,12 +230,13 @@ export const PatientOnboardingScreen: React.FC<Props> = ({
         intent
       );
 
+      const preferredLanguage = resolveLanguageCode(state.primaryLanguage);
+
       const provRes = await provisionUser({
         name: state.name.trim(),
         role: 'PATIENT',
         phone: phone || undefined,
-        preferred_language:
-          state.primaryLanguage === 'Hindi' ? 'hi' : 'en',
+        preferred_language: preferredLanguage,
       });
 
       const provisionedUser = provRes.data?.data?.user;
@@ -269,8 +271,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({
         date_of_birth: state.dob || undefined,
         gender: state.gender || undefined,
         city: state.city.trim() || undefined,
-        preferred_language:
-          state.primaryLanguage === 'Hindi' ? 'hi' : 'en',
+        preferred_language: preferredLanguage,
         photo_url: remotePhotoUrl || undefined,
       });
 
@@ -334,6 +335,7 @@ export const PatientOnboardingScreen: React.FC<Props> = ({
           phone: provisionedUser.phone || phone,
           name: state.name.trim(),
           role: 'PATIENT',
+          preferred_language: preferredLanguage,
           photo_url: remotePhotoUrl || undefined,
         },
         undefined,

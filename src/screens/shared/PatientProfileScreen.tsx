@@ -26,6 +26,7 @@ import { getPatientProfile, updatePatientProfile } from '../../services/userServ
 import { getLatestAssessment, getAssessmentHistory, type AssessmentData } from '../../services/assessmentService';
 import { getCarePlan, type CarePlanData } from '../../services/carePlanService';
 import { listCareCirclePeopleForPatient } from '../../services/careCircleService';
+import { getLanguageDisplayName } from '../../constants/languages';
 
 export const PatientProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -164,7 +165,6 @@ export const PatientProfileScreen: React.FC = () => {
         name: editName.trim(),
         date_of_birth: editDob.trim() || undefined,
         gender: editGender.trim() || undefined,
-        preferred_language: editLanguage.trim() || undefined,
         city: editCity.trim() || undefined,
         living_arrangement: editLiving.trim() || undefined,
         emergency_contact_name: editEmergName.trim() || undefined,
@@ -203,7 +203,11 @@ export const PatientProfileScreen: React.FC = () => {
   const displayDob = patientProfile?.date_of_birth || '—';
   const displayGender = patientProfile?.gender || '—';
   const displayCity = patientProfile?.city || '—';
-  const displayLanguage = patientProfile?.preferred_language || latestAssessment?.patient_basics?.primary_language || 'English';
+  const displayLanguage = getLanguageDisplayName(
+    patientProfile?.preferred_language ||
+      latestAssessment?.patient_basics?.primary_language ||
+      user?.preferred_language
+  );
   const displayAddress = latestAssessment?.patient_basics?.address || '—';
   const displayLiving = latestAssessment?.patient_basics?.living_arrangement || '—';
   const displayMobility = latestAssessment?.mobility || '—';

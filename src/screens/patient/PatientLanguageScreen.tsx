@@ -19,34 +19,24 @@ import { useTheme } from '../../theme/ThemeContext';
 import { F } from '../../theme/fonts';
 import { C } from '../../theme/colors';
 import { updateMe } from '../../services/userService';
+import {
+  CORE_SUPPORTED_LANGUAGES,
+  resolveLanguageCode,
+  type LanguageOption,
+} from '../../constants/languages';
 import type { PatientStackParams } from '../../types/navigation.types';
 import { HomeHeader } from '../../components/patient/home/HomeHeader';
 
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientLanguageScreen'>;
 
-interface LanguageOption {
-  code: string;
-  name: string;
-  nativeName?: string;
-}
-
-const SUPPORTED_LANGUAGES: LanguageOption[] = [
-  { code: 'English', name: 'English' },
-  { code: 'Hindi', name: 'Hindi', nativeName: 'हिंदी' },
-  { code: 'Kannada', name: 'Kannada', nativeName: 'ಕನ್ನಡ' },
-  { code: 'Tamil', name: 'Tamil', nativeName: 'தமிழ்' },
-  { code: 'Telugu', name: 'Telugu', nativeName: 'తెలుగు' },
-  { code: 'Malayalam', name: 'Malayalam', nativeName: 'മലയാളം' },
-];
-
 export const PatientLanguageScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { mode } = useTheme();
-  const { user, refreshUser } = useAuth();
+  const { user, updateUser, refreshUser } = useAuth();
   const isDark = mode === 'dark';
 
   const patientId = user?.id || null;
-  const currentLang = user?.preferred_language || (user as any)?.language || 'English';
+  const currentLang = resolveLanguageCode(user?.preferred_language || (user as any)?.language);
 
   const [selectedCode, setSelectedCode] = useState<string>(currentLang);
   const [saving, setSaving] = useState(false);
@@ -58,6 +48,7 @@ export const PatientLanguageScreen: React.FC<Props> = ({ navigation }) => {
     setSaving(true);
     try {
       await updateMe({ preferred_language: lang.code });
+      updateUser({ preferred_language: lang.code });
       if (refreshUser) {
         await refreshUser();
       }
@@ -123,9 +114,9 @@ export const PatientLanguageScreen: React.FC<Props> = ({ navigation }) => {
             },
           ]}
         >
-          {SUPPORTED_LANGUAGES.map((lang, index) => {
-            const isSelected = selectedCode.toLowerCase() === lang.code.toLowerCase();
-            const isLast = index === SUPPORTED_LANGUAGES.length - 1;
+          {CORE_SUPPORTED_LANGUAGES.map((lang, index) => {
+            const isSelected = resolveLanguageCode(selectedCode) === lang.code;
+            const isLast = index === CORE_SUPPORTED_LANGUAGES.length - 1;
 
             return (
               <React.Fragment key={lang.code}>
@@ -148,7 +139,7 @@ export const PatientLanguageScreen: React.FC<Props> = ({ navigation }) => {
                     >
                       {lang.name}
                     </Text>
-                    {lang.nativeName ? (
+                    {lang.nativeName && lang.nativeName !== lang.name ? (
                       <Text
                         style={[
                           styles.langNative,

@@ -1,36 +1,220 @@
+
 /**
  * SureStep — src/screens/auth/caregiver-onboarding/Step8PricingBio.tsx
- * Caregiver Onboarding Step 8: Rates, Professional Bio & Discoverability.
+ * Caregiver Onboarding Step 8: Pricing, bio and profile visibility.
  */
-import React from 'react';
+
+import React, { useState } from 'react';
+
 import {
-  StyleSheet,
+  Keyboard,
   Switch,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
-import { C } from '../../../theme/colors';
-import { F } from '../../../theme/fonts';
 
 interface Step8Props {
   hourlyRate: string;
   dailyRate: string;
   bio: string;
   isDiscoverable: boolean;
+
   onUpdate: (fields: {
     hourlyRate?: string;
     dailyRate?: string;
     bio?: string;
     isDiscoverable?: boolean;
   }) => void;
+
   onNext: () => void;
   onBack: () => void;
 }
 
-export const Step8PricingBio: React.FC<Step8Props> = ({
+const MAX_BIO_LENGTH = 500;
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+/* Validate optional monetary values */
+
+const isValidRate = (value: string): boolean => {
+  const trimmed = value.trim();
+
+  // Empty pricing is allowed.
+  if (!trimmed) return true;
+
+  // Allow positive numbers with up to two decimal places.
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+    return false;
+  }
+
+  const amount = Number(trimmed);
+
+  return (
+    Number.isFinite(amount) &&
+    amount > 0
+  );
+};
+
+/* Reusable section heading */
+
+interface SectionHeadingProps {
+  title: string;
+  icon: IconName;
+  optional?: boolean;
+}
+
+const SectionHeading: React.FC<
+  SectionHeadingProps
+> = ({
+  title,
+  icon,
+  optional = false,
+}) => (
+  <View className="mb-[12px] flex-row items-center gap-[10px]">
+
+    <View className="h-[38px] w-[38px] items-center justify-center rounded-[10px] bg-[#E1F2F4]">
+
+      <Ionicons
+        name={icon}
+        size={21}
+        color="#256C78"
+      />
+
+    </View>
+
+    <Text className="flex-1 font-inter-semibold text-[14px] leading-[20px] text-care-ink">
+      {title}
+    </Text>
+
+    {optional && (
+      <Text className="font-inter-regular text-[12px] text-care-muted">
+        Optional
+      </Text>
+    )}
+
+  </View>
+);
+
+/* Reusable pricing input */
+
+interface RateFieldProps {
+  label: string;
+  unit: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+const RateField: React.FC<
+  RateFieldProps
+> = ({
+  label,
+  unit,
+  placeholder,
+  value,
+  onChange,
+}) => {
+
+  const [focused, setFocused] =
+    useState(false);
+
+  const invalid =
+    !isValidRate(value);
+
+  const handleChange = (
+    text: string
+  ) => {
+
+    // Permit intermediate decimal input,
+    // while rejecting multiple decimal points
+    // and non-numeric characters.
+
+    if (/^\d*(\.\d{0,2})?$/.test(text)) {
+      onChange(text);
+    }
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+
+    // Normalize a valid trailing decimal.
+    // For example, "250." becomes "250".
+
+    if (/^\d+\.$/.test(value)) {
+      onChange(value.slice(0, -1));
+    }
+
+    // Normalize amounts such as ".50" to "0.50".
+
+    else if (/^\.\d{1,2}$/.test(value)) {
+      onChange(`0${value}`);
+    }
+  };
+
+  return (
+    <View className="flex-1">
+
+      <Text className="mb-[6px] font-inter-medium text-[13px] text-care-ink">
+        {label}
+      </Text>
+
+      <View
+        className={`min-h-[52px] flex-row items-center gap-[8px] rounded-[12px] border bg-care-canvas px-[12px] ${
+          invalid && !focused
+            ? 'border-red-400'
+            : focused
+              ? 'border-brand'
+              : 'border-care-border'
+        }`}
+      >
+
+        <Text className="font-inter-semibold text-[18px] text-brand">
+          ₹
+        </Text>
+
+        <TextInput
+          className="min-h-[52px] flex-1 font-inter-medium text-[16px] text-care-ink"
+          accessibilityLabel={label}
+          placeholder={placeholder}
+          placeholderTextColor="#68766F"
+          keyboardType="decimal-pad"
+          value={value}
+          onChangeText={handleChange}
+          onFocus={() => setFocused(true)}
+          onBlur={handleBlur}
+          maxLength={12}
+          returnKeyType="done"
+        />
+
+      </View>
+
+      <Text className="mt-[6px] font-inter-regular text-[11px] text-care-muted">
+        {unit}
+      </Text>
+
+      {invalid && !focused && (
+        <Text
+          accessibilityLiveRegion="polite"
+          className="mt-[4px] font-inter-regular text-[11px] leading-[16px] text-red-600"
+        >
+          Enter a valid positive amount.
+        </Text>
+      )}
+
+    </View>
+  );
+};
+
+/* Main onboarding screen */
+
+export const Step8PricingBio: React.FC<
+  Step8Props
+> = ({
   hourlyRate,
   dailyRate,
   bio,
@@ -39,225 +223,293 @@ export const Step8PricingBio: React.FC<Step8Props> = ({
   onNext,
   onBack,
 }) => {
+
+  const [bioFocused, setBioFocused] =
+    useState(false);
+
+  const { width, fontScale } =
+    useWindowDimensions();
+
+  const singleColumn =
+    width < 360 || fontScale > 1.3;
+
+  /* Validation */
+
+  const areRatesValid =
+    isValidRate(hourlyRate) &&
+    isValidRate(dailyRate);
+
+  const isBioValid =
+    bio.length <= MAX_BIO_LENGTH;
+
+  const isComplete =
+    areRatesValid && isBioValid;
+
+  /* Continue to review */
+
+  const handleContinue = () => {
+    if (!isComplete) return;
+
+    Keyboard.dismiss();
+    onNext();
+  };
+
   return (
     <OnboardingLayout
-      title="Pricing, Bio & Privacy"
-      subtitle="Share your standard rates, a brief introduction, and choose your profile discoverability."
+      title="Your profile preferences"
+      subtitle="Personalize your professional profile."
       currentStep={8}
       totalSteps={9}
-      iconName="cash-outline"
+      iconName="person-circle-outline"
+      backgroundVariant="ocean"
+      layoutVariant="minimal"
       onBack={onBack}
-      onNext={onNext}
+      onNext={handleContinue}
+      isNextDisabled={!isComplete}
     >
-      {/* 1. Rates Section */}
-      <View style={s.section}>
-        <Text style={s.sectionTitle}>Expected Rates (INR)</Text>
-        <Text style={s.sectionSubtitle}>
-          Optional. You can leave these blank and discuss rates directly with families.
-        </Text>
 
-        <View style={s.ratesRow}>
-          <View style={s.rateField}>
-            <Text style={s.rateLabel}>Hourly Rate (₹/hr)</Text>
-            <View style={s.inputContainer}>
-              <Text style={s.currencyPrefix}>₹</Text>
-              <TextInput
-                style={s.rateInput}
-                placeholder="e.g., 250"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-                value={hourlyRate}
-                onChangeText={(t) => onUpdate({ hourlyRate: t.replace(/[^0-9.]/g, '') })}
-              />
-            </View>
-          </View>
+      {/* Main white container */}
 
-          <View style={s.rateField}>
-            <Text style={s.rateLabel}>Daily Rate (₹/day)</Text>
-            <View style={s.inputContainer}>
-              <Text style={s.currencyPrefix}>₹</Text>
-              <TextInput
-                style={s.rateInput}
-                placeholder="e.g., 1800"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-                value={dailyRate}
-                onChangeText={(t) => onUpdate({ dailyRate: t.replace(/[^0-9.]/g, '') })}
-              />
-            </View>
-          </View>
+      <View
+        className="rounded-[20px] border border-care-border bg-white p-[16px]"
+        style={{
+          shadowColor: '#254D51',
+          shadowOpacity: 0.08,
+          shadowOffset: {
+            width: 0,
+            height: 3,
+          },
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+
+        {/* 1. Expected rates */}
+
+        <SectionHeading
+          title="Expected rates"
+          icon="wallet-outline"
+          optional
+        />
+
+        <View
+          className={`gap-[10px] ${
+            singleColumn
+              ? 'flex-col'
+              : 'flex-row items-start'
+          }`}
+        >
+
+          {/* Hourly pricing */}
+
+          <RateField
+            label="Hourly rate"
+            unit="Per hour"
+            placeholder="250"
+            value={hourlyRate}
+            onChange={(value) =>
+              onUpdate({
+                hourlyRate: value,
+              })
+            }
+          />
+
+          {/* Daily pricing */}
+
+          <RateField
+            label="Daily rate"
+            unit="Per day"
+            placeholder="1800"
+            value={dailyRate}
+            onChange={(value) =>
+              onUpdate({
+                dailyRate: value,
+              })
+            }
+          />
+
         </View>
-      </View>
 
-      {/* 2. Professional Bio */}
-      <View style={s.section}>
-        <View style={s.titleRow}>
-          <Text style={s.sectionTitle}>About You & Care Philosophy</Text>
-          <Text style={s.counter}>{bio.trim().length} chars</Text>
+        <View className="mt-[12px] flex-row items-start gap-[7px]">
+
+          <Ionicons
+            name="information-circle-outline"
+            size={17}
+            color="#256C78"
+          />
+
+          <Text className="flex-1 font-inter-regular text-[12px] leading-[18px] text-care-muted">
+            Leave blank to discuss pricing
+            directly with families.
+          </Text>
+
         </View>
-        <Text style={s.sectionSubtitle}>
-          Introduce yourself to families. Describe your experience, patience, and approach to dementia care:
-        </Text>
+
+        <View className="my-[18px] h-px bg-care-border" />
+
+        {/* 2. Professional bio */}
+
+        <SectionHeading
+          title="Professional bio"
+          icon="document-text-outline"
+          optional
+        />
+
         <TextInput
-          style={s.bioInput}
-          placeholder="e.g., I have 4 years of experience assisting seniors with memory loss. I focus on gentle, patient communication and maintaining daily routines that preserve dignity..."
-          placeholderTextColor="#9CA3AF"
+          className={`min-h-[120px] rounded-[12px] border bg-care-canvas px-[12px] py-[12px] font-inter-regular text-[13px] leading-[20px] text-care-ink ${
+            !isBioValid
+              ? 'border-red-400'
+              : bioFocused
+                ? 'border-brand'
+                : 'border-care-border'
+          }`}
+          accessibilityLabel="Professional bio"
+          placeholder="Tell families about your experience and approach to care."
+          placeholderTextColor="#68766F"
           multiline
-          numberOfLines={4}
+          numberOfLines={5}
+          textAlignVertical="top"
           value={bio}
-          onChangeText={(t) => onUpdate({ bio: t })}
+          onChangeText={(value) =>
+            onUpdate({
+              bio: value,
+            })
+          }
+          onFocus={() =>
+            setBioFocused(true)
+          }
+          onBlur={() =>
+            setBioFocused(false)
+          }
+          maxLength={MAX_BIO_LENGTH}
+          autoCapitalize="sentences"
         />
+
+        {/* Character counter */}
+
+        <View className="mt-[6px] flex-row items-center justify-end">
+
+          <Text
+            className={`font-inter-medium text-[11px] ${
+              !isBioValid
+                ? 'text-red-600'
+                : bio.length >= MAX_BIO_LENGTH
+                  ? 'text-brand-dark'
+                  : 'text-care-muted'
+            }`}
+          >
+            {bio.length}/{MAX_BIO_LENGTH}
+          </Text>
+
+        </View>
+
+        <View className="my-[18px] h-px bg-care-border" />
+
+        {/* 3. Profile visibility */}
+
+        <SectionHeading
+          title="Profile visibility"
+          icon="shield-checkmark-outline"
+        />
+
+        <View
+          className={`rounded-[12px] border p-[12px] ${
+            isDiscoverable
+              ? 'border-brand bg-care-selected'
+              : 'border-care-border bg-care-canvas'
+          }`}
+        >
+
+          <View className="flex-row items-center gap-[10px]">
+
+            {/* Privacy status icon */}
+
+            <View
+              className={`h-[42px] w-[42px] items-center justify-center rounded-[12px] ${
+                isDiscoverable
+                  ? 'bg-[#CDECE0]'
+                  : 'bg-[#E1F2F4]'
+              }`}
+            >
+
+              <Ionicons
+                name={
+                  isDiscoverable
+                    ? 'globe-outline'
+                    : 'lock-closed-outline'
+                }
+                size={23}
+                color={
+                  isDiscoverable
+                    ? '#0E7A67'
+                    : '#256C78'
+                }
+              />
+
+            </View>
+
+            {/* Current visibility status */}
+
+            <View className="flex-1">
+
+              <Text
+                className={`font-inter-semibold text-[13px] leading-[19px] ${
+                  isDiscoverable
+                    ? 'text-brand-dark'
+                    : 'text-care-ink'
+                }`}
+              >
+                {isDiscoverable
+                  ? 'Discoverable profile'
+                  : 'Private profile'}
+              </Text>
+
+              <Text className="mt-[3px] font-inter-regular text-[11px] text-care-muted">
+                {isDiscoverable
+                  ? 'Directory visibility on'
+                  : 'Directory visibility off'}
+              </Text>
+
+            </View>
+
+            {/* Discoverability toggle */}
+
+            <Switch
+              value={isDiscoverable}
+              onValueChange={(value) =>
+                onUpdate({
+                  isDiscoverable: value,
+                })
+              }
+              accessibilityRole="switch"
+              accessibilityLabel="Make profile discoverable"
+              accessibilityState={{
+                checked: isDiscoverable,
+              }}
+              trackColor={{
+                false: '#D0D5D3',
+                true: '#0E7A67',
+              }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#D0D5D3"
+            />
+
+          </View>
+
+          {/* Privacy explanation */}
+
+          <View className="my-[12px] h-px bg-care-border" />
+
+          <Text className="font-inter-regular text-[12px] leading-[18px] text-care-muted">
+            {isDiscoverable
+              ? 'Families can find your profile in the caregiver directory and send care requests.'
+              : 'Your profile stays hidden from caregiver directory searches.'}
+          </Text>
+
+        </View>
+
       </View>
 
-      {/* 3. Discoverability Toggle Card */}
-      <View style={s.discoverCard}>
-        <View style={s.discoverLeft}>
-          <View style={[s.discoverIcon, isDiscoverable && s.discoverIconActive]}>
-            <Ionicons
-              name={isDiscoverable ? 'globe-outline' : 'lock-closed-outline'}
-              size={22}
-              color={isDiscoverable ? C.primary : C.textSecondary}
-            />
-          </View>
-          <View style={s.discoverTextWrap}>
-            <Text style={s.discoverTitle}>
-              {isDiscoverable ? 'Discoverable Profile (Public)' : 'Private Profile'}
-            </Text>
-            <Text style={s.discoverSub}>
-              {isDiscoverable
-                ? 'Allow families and patients in your area to view your profile and send care requests directly.'
-                : 'Hidden from directory search. Only families with your direct phone number or code can invite you.'}
-            </Text>
-          </View>
-        </View>
-        <Switch
-          value={isDiscoverable}
-          onValueChange={(val) => onUpdate({ isDiscoverable: val })}
-          trackColor={{ false: '#E5E7EB', true: C.primary }}
-          thumbColor="#FFFFFF"
-        />
-      </View>
     </OnboardingLayout>
   );
 };
-
-const s = StyleSheet.create({
-  section: {
-    marginBottom: 24,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontFamily: F.bold,
-    color: C.textPrimary,
-  },
-  counter: {
-    fontSize: 11,
-    fontFamily: F.medium,
-    color: C.textSecondary,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    fontFamily: F.regular,
-    color: C.textSecondary,
-    marginBottom: 10,
-    lineHeight: 16,
-  },
-  ratesRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rateField: {
-    flex: 1,
-  },
-  rateLabel: {
-    fontSize: 12,
-    fontFamily: F.medium,
-    color: C.textPrimary,
-    marginBottom: 6,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  currencyPrefix: {
-    fontSize: 16,
-    fontFamily: F.bold,
-    color: C.primary,
-    marginRight: 6,
-  },
-  rateInput: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: F.regular,
-    color: C.textPrimary,
-  },
-  bioInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 13,
-    fontFamily: F.regular,
-    color: C.textPrimary,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  discoverCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 4,
-  },
-  discoverLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    marginRight: 12,
-  },
-  discoverIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
-  },
-  discoverIconActive: {
-    backgroundColor: '#E6F4F1',
-  },
-  discoverTextWrap: {
-    flex: 1,
-  },
-  discoverTitle: {
-    fontSize: 13,
-    fontFamily: F.bold,
-    color: C.textPrimary,
-    marginBottom: 4,
-  },
-  discoverSub: {
-    fontSize: 12,
-    fontFamily: F.regular,
-    color: C.textSecondary,
-    lineHeight: 16,
-  },
-});

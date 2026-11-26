@@ -29,7 +29,12 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
 import { useFamilyContext } from '../../context/FamilyContext';
 import { fetchTodayOccurrences, type RoutineOccurrence } from '../../services/routineService';
-import { fetchPatientTelemetry, type PatientTelemetry } from '../../services/safetyService';
+import {
+  fetchPatientTelemetry,
+  listCircleSafetyAlerts,
+  type PatientTelemetry,
+  type SafetyAlert,
+} from '../../services/safetyService';
 import type { FamilyStackParams } from '../../types/navigation.types';
 import { C } from '../../theme/colors';
 import { F } from '../../theme/fonts';
@@ -53,21 +58,44 @@ export const PatientOverviewScreen: React.FC = () => {
   );
   const [occurrences, setOccurrences] = useState<RoutineOccurrence[]>([]);
   const [telemetry, setTelemetry] = useState<PatientTelemetry | null>(null);
+  const [patientAlerts, setPatientAlerts] = useState<SafetyAlert[]>([]);
+  const [telemetryError, setTelemetryError] = useState(false);
+  const [alertsError, setAlertsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const [occRes, telRes] = await Promise.all([
-        fetchTodayOccurrences(patientId),
-        fetchPatientTelemetry(patientId),
+      const [occRes, telRes, alertsRes] = await Promise.all([
+        fetchTodayOccurrences(patientId).catch(() => []),
+        fetchPatientTelemetry(patientId)
+          .then((res) => {
+            setTelemetryError(false);
+            return res;
+          })
+          .catch(() => {
+            setTelemetryError(true);
+            return null;
+          }),
+        activeCircle
+          ? listCircleSafetyAlerts(activeCircle.id)
+              .then((rows) => {
+                setAlertsError(false);
+                return rows;
+              })
+              .catch(() => {
+                setAlertsError(true);
+                return [] as SafetyAlert[];
+              })
+          : Promise.resolve([] as SafetyAlert[]),
       ]);
       setOccurrences(occRes);
       setTelemetry(telRes);
+      setPatientAlerts(alertsRes.filter((a) => a.patient_id === patientId && a.status !== 'RESOLVED'));
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, activeCircle]);
 
   useEffect(() => {
     void loadData();
@@ -267,54 +295,106 @@ export const PatientOverviewScreen: React.FC = () => {
                 </Pressable>
               </View>
 
-              <Pressable
-                style={styles.safetyCard}
-                onPress={() =>
-                  navigation.navigate('PatientSafetyScreen', {
-                    patientId,
-                    patientName,
-                  })
-                }
-              >
-                <View style={styles.safetyIconWrap}>
-                  <Ionicons name="location" size={20} color="#0E7A67" />
-                </View>
-                <View style={styles.safetyMeta}>
-                  <Text style={styles.safetyTitle}>In Safe Zone</Text>
-                  <Text style={styles.safetySub}>
-                    {telemetry?.current_zone_name || 'Home • Bengaluru'}
-                  </Text>
-                  <Text style={styles.safetyTime}>
-                    {telemetry?.last_ping_at ? 'Active telemetry' : 'Last updated 10 minutes ago'}
-                  </Text>
-                </View>
-                <View style={styles.safetySafeBadge}>
-                  <View style={styles.safetySafeDot} />
-                  <Text style={styles.safetySafeBadgeText}>Safe</Text>
-                </View>
-              </Pressable>
+              {(() => {
+                const freshness = telemetry?.freshness_tier ?? telemetry?.location_freshness ?? 'UNAVAILABLE';
+                const activeSos = patientAlerts.find((a) => a.alert_type === 'SOS_MANUAL') || telemetry?.sos_active;
+                const activeBreach = patientAlerts.find((a) => a.alert_type === 'ZONE_BREACH') || telemetry?.safety_state === 'BREACH';
 
-              <Pressable
-                style={styles.safetyCard}
-                onPress={() =>
-                  navigation.navigate('PatientSafetyScreen', {
-                    patientId,
-                    patientName,
-                  })
-                }
-              >
-                <View style={[styles.safetyIconWrap, { backgroundColor: '#E6F4F1' }]}>
-                  <Ionicons name="call" size={18} color="#0E7A67" />
-                </View>
-                <View style={styles.safetyMeta}>
-                  <Text style={styles.safetyTitle}>No active SOS</Text>
-                  <Text style={styles.safetySub}>All clear at the moment</Text>
-                </View>
-                <View style={styles.safetySafeBadge}>
-                  <View style={styles.safetySafeDot} />
-                  <Text style={styles.safetySafeBadgeText}>No alerts</Text>
-                </View>
-              </Pressable>
+                const locTitle = telemetryError
+                  ? 'Location Unavailable'
+                  : !telemetry || freshness === 'UNAVAILABLE'
+                    ? 'Location Unavailable'
+                    : freshness === 'CURRENT' && telemetry.current_zone_name
+                      ? 'Inside Safe Zone'
+                      : freshness === 'CURRENT' && telemetry.has_active_safe_zone === false
+                        ? 'No Safe Zone Configured'
+                        : freshness === 'CURRENT'
+                          ? 'Outside Safe Zones'
+                          : 'Last Known Location';
+
+                const locSub = telemetryError
+                  ? 'Could not load current location'
+                  : !telemetry || freshness === 'UNAVAILABLE'
+                    ? 'Waiting for device signal'
+                    : telemetry.current_zone_name
+                      ? telemetry.current_zone_name
+                      : telemetry.last_known_zone_name
+                        ? `Last near ${telemetry.last_known_zone_name}`
+                        : 'Coordinates recorded';
+
+                const locTime = telemetry?.last_ping_at
+                  ? `Updated ${new Date(telemetry.last_ping_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'No location timestamp';
+
+                const badgeLabel = activeBreach ? 'Alert' : telemetryError || !telemetry || freshness !== 'CURRENT' ? 'Unverified' : 'Current';
+
+                const sosTitle = alertsError
+                  ? 'Alert Status Unavailable'
+                  : activeSos
+                    ? 'SOS Alert Active'
+                    : activeBreach
+                      ? 'Safe Zone Breach Open'
+                      : patientAlerts.length > 0
+                        ? `${patientAlerts.length} Active Safety Alert`
+                        : 'No Active SOS';
+
+                const sosSub = alertsError
+                  ? 'Could not verify safety alerts'
+                  : patientAlerts.length > 0
+                    ? 'Tap to view alert details and respond'
+                    : 'No unresolved safety alerts';
+
+                const sosBadge = alertsError ? 'Error' : patientAlerts.length > 0 ? 'Active' : 'Clear';
+
+                return (
+                  <>
+                    <Pressable
+                      style={styles.safetyCard}
+                      onPress={() =>
+                        navigation.navigate('PatientSafetyScreen', {
+                          patientId,
+                          patientName,
+                        })
+                      }
+                    >
+                      <View style={styles.safetyIconWrap}>
+                        <Ionicons name="location" size={20} color="#0E7A67" />
+                      </View>
+                      <View style={styles.safetyMeta}>
+                        <Text style={styles.safetyTitle}>{locTitle}</Text>
+                        <Text style={styles.safetySub}>{locSub}</Text>
+                        <Text style={styles.safetyTime}>{locTime}</Text>
+                      </View>
+                      <View style={styles.safetySafeBadge}>
+                        <View style={styles.safetySafeDot} />
+                        <Text style={styles.safetySafeBadgeText}>{badgeLabel}</Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.safetyCard}
+                      onPress={() =>
+                        navigation.navigate('PatientSafetyScreen', {
+                          patientId,
+                          patientName,
+                        })
+                      }
+                    >
+                      <View style={[styles.safetyIconWrap, { backgroundColor: '#E6F4F1' }]}>
+                        <Ionicons name="call" size={18} color="#0E7A67" />
+                      </View>
+                      <View style={styles.safetyMeta}>
+                        <Text style={styles.safetyTitle}>{sosTitle}</Text>
+                        <Text style={styles.safetySub}>{sosSub}</Text>
+                      </View>
+                      <View style={styles.safetySafeBadge}>
+                        <View style={styles.safetySafeDot} />
+                        <Text style={styles.safetySafeBadgeText}>{sosBadge}</Text>
+                      </View>
+                    </Pressable>
+                  </>
+                );
+              })()}
             </View>
 
             {/* ─── Section 3: People involved ──────────────────────────────── */}

@@ -24,7 +24,7 @@ import { relativeTime } from "../../../utils/dateUtils";
 type Props = {
   patientName: string;
   patientPhone: string;
-  batteryLevel: number;
+  batteryLevel: number | null;
   batteryColor: string;
   patientCoords: Coords | null;
   coordsTs: number;
@@ -105,25 +105,31 @@ export const DashboardHomeTab: React.FC<Props> = ({
     return insideZones[0];
   }, [patientCoords, zones]);
 
-  const activeZoneLabel = patientState?.current_zone_name || computedActiveZone?.label || 'Home';
+  const activeZoneLabel = patientState?.current_zone_name || computedActiveZone?.label || null;
+  const effectiveTs = coordsTs || (patientState?.last_ping_at ? new Date(patientState.last_ping_at).getTime() : 0);
+  const deltaMs = Date.now() - effectiveTs;
+  const ageMin = effectiveTs > 0 && deltaMs >= -60_000 ? Math.max(0, deltaMs / 60000) : Infinity;
+  const isFreshLocation = effectiveTs > 0 && ageMin <= 5 && patientState?.location_state !== 'NO_SIGNAL';
 
   const safetyText = patientState?.sos_active || patientState?.safety_state === 'CRITICAL'
     ? 'EMERGENCY: SOS Active'
     : patientState?.safety_state === 'BREACH'
     ? 'Outside safe zone'
+    : unackedAlerts > 0
+    ? 'Active safety alert'
+    : !hasRealLocation && !patientState?.last_ping_at
+    ? 'Location unavailable'
+    : !isFreshLocation
+    ? 'Last known location'
+    : !hasRealZones
+    ? 'No Safe Zones configured'
     : patientState?.safety_state === 'APPROACHING'
     ? 'Approaching boundary'
-    : patientState?.safety_state === 'SAFE'
-    ? `Safe inside ${activeZoneLabel}`
-    : patientCoords && zones.length > 0
-    ? (() => {
-        const breach = checkBreach(patientCoords, zones);
-        if (breach.status === 'breach') return 'Outside safe zone';
-        if (breach.status === 'approaching') return 'Approaching boundary';
-        if (breach.status === 'safe') return `Safe at ${breach.zone?.label || 'Home'}`;
-        return 'Safe inside Home';
-      })()
-    : 'Safe inside Home';
+    : patientState?.current_zone_name && patientState?.location_state === 'STATIONARY_KNOWN'
+    ? `Inside ${patientState.current_zone_name}`
+    : patientState?.safety_state === 'SAFE' && activeZoneLabel && patientState?.location_state === 'STATIONARY_KNOWN'
+    ? `Inside ${activeZoneLabel}`
+    : 'Boundary state uncertain';
 
   const filteredRoutineItems = useMemo(() => {
     if (!activeFilter) return routineItems;
@@ -175,12 +181,14 @@ export const DashboardHomeTab: React.FC<Props> = ({
           <View style={styles.newHeaderInfo}>
             <Text style={styles.newHeaderName} numberOfLines={1}>{patientName}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-              <Text style={styles.newHeaderAge}>
-                {patientAge ? `Age ${patientAge}` : "Age 78"}
-              </Text>
-              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.textMuted, marginHorizontal: 6 }}>·</Text>
+              {patientAge ? (
+                <>
+                  <Text style={styles.newHeaderAge}>{`Age ${patientAge}`}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.textMuted, marginHorizontal: 6 }}>·</Text>
+                </>
+              ) : null}
               <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.textSecondary }}>
-                Active
+                {relationshipStatus === 'NOTICE_PERIOD' ? 'Notice period' : 'Active'}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -266,7 +274,7 @@ export const DashboardHomeTab: React.FC<Props> = ({
               <Feather name="clock" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
               <Text style={{ fontFamily: F.medium, fontSize: 12, color: '#FFFFFF' }}>
                 {(() => {
-                  if (!coordsTs) return "2 min ago";
+                  if (!coordsTs) return "Unavailable";
                   const diff = Math.round((Date.now() - coordsTs) / 60000);
                   if (diff < 1) return "just now";
                   if (diff < 60) return `${diff} min ago`;
@@ -279,7 +287,11 @@ export const DashboardHomeTab: React.FC<Props> = ({
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="battery-charging" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
               <Text style={{ fontFamily: F.medium, fontSize: 12, color: '#FFFFFF' }}>
-                {patientState?.battery_pct != null ? `${patientState.battery_pct}%` : `${batteryLevel}%`}
+                {patientState?.battery_pct != null
+                  ? `${patientState.battery_pct}%`
+                  : batteryLevel != null
+                    ? `${batteryLevel}%`
+                    : 'Unknown'}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -290,7 +302,7 @@ export const DashboardHomeTab: React.FC<Props> = ({
                  style={{ marginRight: 5 }} 
               />
               <Text style={{ fontFamily: F.medium, fontSize: 12, color: '#FFFFFF' }}>
-                {patientState?.network_status || 'Offline'}
+                {patientState?.network_status || 'Unknown'}
               </Text>
             </View>
           </View>

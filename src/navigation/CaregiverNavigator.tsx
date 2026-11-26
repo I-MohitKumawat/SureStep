@@ -10,7 +10,7 @@ import type { CaregiverStackParams } from '../types/navigation.types';
 import { PatientStateProvider } from '../context/PatientStateContext';
 import { TaskProvider }         from '../context/TaskContext';
 
-import { CaregiverTriageScreen }          from '../screens/caregiver/CaregiverTriageScreen';
+import { CaregiverDashboardScreen }       from '../screens/caregiver/CaregiverDashboardScreen';
 import { CaregiverPatientDetailScreen }   from '../screens/caregiver/CaregiverPatientDetailScreen';
 import { CaregiverAssessmentScreen }      from '../screens/caregiver/CaregiverAssessmentScreen';
 import { CaregiverPatientMapScreen }      from '../screens/caregiver/CaregiverPatientMapScreen';
@@ -34,7 +34,7 @@ const Stack = createNativeStackNavigator<CaregiverStackParams>();
 
 const CaregiverStack: React.FC = () => (
   <Stack.Navigator initialRouteName="CaregiverTriageScreen" screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="CaregiverTriageScreen"          component={CaregiverTriageScreen} />
+    <Stack.Screen name="CaregiverTriageScreen"          component={CaregiverDashboardScreen} />
     <Stack.Screen name="CareRequestDetailScreen"        component={CareRequestDetailScreen} />
     <Stack.Screen name="CareRequestsListScreen"         component={CareRequestsListScreen} />
     <Stack.Screen name="CaregiverPatientDetailScreen"   component={CaregiverPatientDetailScreen} />

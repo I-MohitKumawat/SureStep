@@ -20,6 +20,12 @@ import { updateCaregiverProfile, updatePatientProfile, updateMe, uploadProfilePh
 import { updateFamilyProfile } from '../../services/familyService';
 import { provisionUser } from '../../services/authService';
 import { ScreenContainer } from '../../components/shared/ScreenContainer';
+import {
+  CORE_SUPPORTED_LANGUAGES,
+  DEFAULT_LANGUAGE_CODE,
+  getLanguageDisplayName,
+  resolveLanguageCode,
+} from '../../constants/languages';
 
 type Props = NativeStackScreenProps<AuthStackParams, 'ProfileSetupScreen'>;
 
@@ -47,7 +53,6 @@ const AVAILABILITY = [
   "Emergency Calls",
 ];
 const GENDERS = ["Male", "Female"];
-const PREF_LANGUAGES = ["English", "Hindi", "Kannada", "Tamil", "Telugu"];
 const RELATION_OPTIONS = ["Spouse", "Parent", "Daughter", "Son", "Sibling", "Grandchild", "Friend", "Other"];
 
 // ─── Step Indicator ──────────────────────────────────────────────────────────
@@ -288,7 +293,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   const [dobDate, setDobDate] = useState<Date | null>(null);
   const [showDob, setShowDob] = useState(false);
   const [gender, setGender] = useState("");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE_CODE);
   const [city, setCity] = useState("");
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
@@ -313,7 +318,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
   const [hourlyRate, setHourlyRate] = useState("");
   const [dailyRate, setDailyRate] = useState("");
   const [bio, setBio] = useState("");
-  const [isDiscoverable, setIsDiscoverable] = useState(true);
+  const [isDiscoverable, setIsDiscoverable] = useState(false);
 
   // Validation / Location / API state
   const [showErrors, setShowErrors] = useState(false);
@@ -513,7 +518,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
           name: name.trim(),
           role: role as "PATIENT" | "CAREGIVER" | "FAMILY",
           phone: phone || undefined,
-          preferred_language: language === "Hindi" ? "hi" : "en",
+          preferred_language: resolveLanguageCode(language),
         });
         provisionedUser = provisionRes.data?.data?.user;
         if (!provisionedUser) {
@@ -550,7 +555,7 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
             : undefined,
           gender: draft.gender,
           city: draft.city,
-          preferred_language: language === "Hindi" ? "hi" : "en",
+          preferred_language: resolveLanguageCode(language),
           photo_url: remotePhotoUrl || undefined,
         });
         console.log("[ONBOARDING] Core user fields updated");
@@ -735,9 +740,9 @@ export default function ProfileSetupScreen({ route, navigation }: Props) {
 
                   <DropdownPicker
                     label="Preferred Language"
-                    value={language}
-                    options={PREF_LANGUAGES}
-                    onSelect={setLanguage}
+                    value={getLanguageDisplayName(language)}
+                    options={CORE_SUPPORTED_LANGUAGES.map((l) => l.name)}
+                    onSelect={(selected) => setLanguage(resolveLanguageCode(selected))}
                   />
 
                   <UnderlineInput

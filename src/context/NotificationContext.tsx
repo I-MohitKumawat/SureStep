@@ -88,6 +88,13 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     visible: false, title: '', body: '', type: 'GENERAL',
   });
 
+  useEffect(() => {
+    if (!user?.id) {
+      setUnreadCount(0);
+      setBanner({ visible: false, title: '', body: '', type: 'GENERAL' });
+    }
+  }, [user?.id]);
+
   // Navigation ref — injected lazily after NavigationContainer is ready
   const navigationRef = useRef<any>(null);
 
@@ -122,6 +129,20 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       if (role === 'PATIENT') {
         // Patients should be routed to PatientHomeScreen where the active reminder overlay is displayed
         ref.navigate('PatientHomeScreen');
+      } else if (role === 'FAMILY') {
+        if (t.includes('SOS') || t.includes('GEOFENCE') || t.includes('BREACH')) {
+          if (data.alert_id || data.alertId) {
+            ref.navigate('AlertDetailScreen', {
+              alertId: data.alert_id || data.alertId,
+              circleId: data.circle_id || data.circleId,
+              patientId: data.patient_id || data.patientId,
+            });
+          } else {
+            ref.navigate('FamilyAlertsScreen');
+          }
+        } else {
+          ref.navigate('NotificationHistoryScreen');
+        }
       } else {
         if (t.includes('SOS') || t.includes('GEOFENCE') || t.includes('BREACH')) {
           ref.navigate('CaregiverAlertFeedScreen');

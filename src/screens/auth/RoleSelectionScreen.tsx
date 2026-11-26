@@ -4,8 +4,9 @@
  * Minimal onboarding intent selection.
  */
 
-import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { BackHandler, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -94,13 +95,38 @@ export const RoleSelectionScreen: React.FC<Props> = ({
     }
   };
 
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('WelcomeScreen');
-    }
-  };
+  const handleBack = useCallback(() => {
+  const stack = navigation.getState();
+
+  const previousRoute =
+    stack.routes[stack.index - 1];
+
+  if (previousRoute?.name === 'WelcomeScreen') {
+    navigation.goBack();
+    return;
+  }
+
+  navigation.reset({
+    index: 0,
+    routes: [
+      { name: 'WelcomeScreen' },
+    ],
+  });
+}, [navigation]);
+
+useFocusEffect(
+  useCallback(() => {
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        handleBack();
+        return true;
+      }
+    );
+
+    return () => subscription.remove();
+  }, [handleBack])
+);
 
   return (
     <OnboardingLayout

@@ -41,6 +41,7 @@ export const FamilyAlertsScreen: React.FC = () => {
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<AlertFilter>('ALL');
 
   const loadAlerts = useCallback(async (isRefresh = false) => {
@@ -48,14 +49,16 @@ export const FamilyAlertsScreen: React.FC = () => {
       setLoading(false);
       return;
     }
+    setLoadError(null);
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
       const list = await listCircleSafetyAlerts(activeCircle.id);
       setAlerts(list || []);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('[FamilyAlertsScreen] loadAlerts error:', err);
+      setLoadError(err?.message || 'Unable to load safety alerts.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -137,7 +140,15 @@ export const FamilyAlertsScreen: React.FC = () => {
           }
           showsVerticalScrollIndicator={false}
         >
-          {filteredAlerts.length === 0 ? (
+          {loadError ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="warning-outline" size={36} color="#DC2626" />
+              <Text style={styles.emptyTitle}>Alerts Unavailable</Text>
+              <Text style={styles.emptyDesc}>
+                Could not load safety alerts. Pull down to retry.
+              </Text>
+            </View>
+          ) : filteredAlerts.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="shield-checkmark-outline" size={36} color="#0E7A67" />
               <Text style={styles.emptyTitle}>All Calm</Text>

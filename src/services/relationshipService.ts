@@ -29,7 +29,7 @@ export const mapCaregiverRow = (row: any): CaregiverListing => {
   const photoUrl = row.photoUrl || row.photo_url || row.profile_photo_url || null;
   const bio = row.fullBio || row.bio || row.bioSummary || row.bio_summary || '';
   const verificationStatus = row.verificationStatus || row.verification_status || (row.is_verified ? 'VERIFIED' : 'PENDING');
-  const isDiscoverable = Boolean(row.isDiscoverable ?? row.is_discoverable ?? true);
+  const isDiscoverable = Boolean(row.isDiscoverable ?? row.is_discoverable);
   const qualifications = Array.isArray(row.qualifications) ? row.qualifications : [];
 
   let feeFormatted = 'Contact for rates';

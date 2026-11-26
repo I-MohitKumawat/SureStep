@@ -5,9 +5,11 @@
  * A caregiver appears only when a Care Circle relationship is ACTIVE or in its
  * NOTICE_PERIOD and an active Patient assignment exists.
  */
-import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CaregiverListing } from '../screens/patient/CaregiverSearchView';
 import { fetchMyCaregivers } from '../services/relationshipService';
+import { getSocket } from '../services/socketClient';
+import { useAuth } from './AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,31 +28,57 @@ export const CaregiverContext = createContext<CaregiverContextValue | undefined>
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
+  const { status, user } = useAuth();
   const [caregivers, setCaregivers] = useState<CaregiverListing[]>([]);
   const [confirmedCaregiver, setConfirmedCaregiverState] = useState<CaregiverListing | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const hasLoadedRef = React.useRef(false);
+  const hasLoadedRef = useRef(false);
+  const reloadSeqRef = useRef(0);
+
+  useEffect(() => {
+    reloadSeqRef.current++;
+    hasLoadedRef.current = false;
+    setCaregivers([]);
+    setConfirmedCaregiverState(null);
+    setLoading(false);
+  }, [status, user?.id]);
 
   const reloadCaregivers = useCallback(
     async (force = false) => {
+      if (status !== 'authenticated' || !user?.id) {
+        setCaregivers([]);
+        setConfirmedCaregiverState(null);
+        return;
+      }
       if (hasLoadedRef.current && !force) {
         return;
       }
 
+      const seq = ++reloadSeqRef.current;
       setLoading(true);
       try {
         const team = await fetchMyCaregivers();
+        if (seq !== reloadSeqRef.current) return;
         setCaregivers(team);
         setConfirmedCaregiverState(team[0] || null);
         hasLoadedRef.current = true;
-      } catch (error) {
+      } catch (error: any) {
+        if (seq !== reloadSeqRef.current) return;
         console.warn('[CaregiverContext] reloadCaregivers failed:', error);
+        const httpStatus = error?.response?.status;
+        if (httpStatus === 401 || httpStatus === 403) {
+          setCaregivers([]);
+          setConfirmedCaregiverState(null);
+          hasLoadedRef.current = false;
+        }
       } finally {
-        setLoading(false);
+        if (seq === reloadSeqRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [],
+    [status, user?.id],
   );
 
   /**
@@ -58,23 +86,51 @@ export const CaregiverProvider = ({ children }: { children: ReactNode }) => {
    * Canonical relationships are resolved from the authenticated Patient.
    */
   const reloadCaregiver = useCallback(
-    async (_patientPhone?: string, force = false) => {
+    async (_patientPhone?: string, _force = false) => {
+      if (status !== 'authenticated' || !user?.id) {
+        setCaregivers([]);
+        setConfirmedCaregiverState(null);
+        return;
+      }
+      const seq = ++reloadSeqRef.current;
       setLoading(true);
       try {
         const team = await fetchMyCaregivers();
+        if (seq !== reloadSeqRef.current) return;
         setCaregivers(team);
         setConfirmedCaregiverState(team[0] || null);
         hasLoadedRef.current = true;
       } catch (error) {
+        if (seq !== reloadSeqRef.current) return;
         console.warn('[CaregiverContext] reloadCaregiver failed:', error);
         setCaregivers([]);
         setConfirmedCaregiverState(null);
+        hasLoadedRef.current = false;
       } finally {
-        setLoading(false);
+        if (seq === reloadSeqRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [],
+    [status, user?.id],
   );
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || status !== 'authenticated' || !user?.id) return;
+    const handleAccessChange = () => {
+      hasLoadedRef.current = false;
+      void reloadCaregivers(true);
+    };
+    socket.on('relationship:change', handleAccessChange);
+    socket.on('circle:terminated', handleAccessChange);
+    socket.on('circle:member_removed', handleAccessChange);
+    return () => {
+      socket.off('relationship:change', handleAccessChange);
+      socket.off('circle:terminated', handleAccessChange);
+      socket.off('circle:member_removed', handleAccessChange);
+    };
+  }, [status, user?.id, reloadCaregivers]);
 
   const value = useMemo<CaregiverContextValue>(
     () => ({

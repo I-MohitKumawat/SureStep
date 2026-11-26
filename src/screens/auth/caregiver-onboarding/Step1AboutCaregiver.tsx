@@ -1,24 +1,34 @@
+
 /**
  * SureStep — src/screens/auth/caregiver-onboarding/Step1AboutCaregiver.tsx
- * Caregiver Onboarding Step 1: Personal Details & Identity.
+ * Caregiver Onboarding Step 1: Personal details.
  */
+
 import React, { useState } from 'react';
+
 import {
   Alert,
   Image,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
+
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+
 import { OnboardingLayout } from '../../../components/onboarding/OnboardingLayout';
-import { C } from '../../../theme/colors';
-import { F } from '../../../theme/fonts';
+
+import {
+  SUPPORTED_LANGUAGES,
+  resolveLanguageCode,
+} from '../../../constants/languages';
 
 interface Step1Props {
   name: string;
@@ -27,6 +37,7 @@ interface Step1Props {
   language: string;
   city: string;
   photoUri?: string;
+
   onUpdate: (fields: {
     name?: string;
     dob?: string;
@@ -35,14 +46,71 @@ interface Step1Props {
     city?: string;
     photoUri?: string;
   }) => void;
+
   onNext: () => void;
   onBack: () => void;
 }
 
-const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'];
-const PRIMARY_LANGUAGES = ['English', 'Hindi', 'Kannada', 'Tamil', 'Telugu', 'Malayalam', 'Marathi', 'Bengali'];
+const GENDER_OPTIONS = [
+  'Female',
+  'Male',
+  'Non-binary',
+  'Prefer not to say',
+];
 
-export const Step1AboutCaregiver: React.FC<Step1Props> = ({
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0');
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const calculateAge = (
+  dobString: string
+): number | null => {
+  if (!dobString) return null;
+
+  const birthDate = new Date(
+    `${dobString}T12:00:00`
+  );
+
+  if (isNaN(birthDate.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+
+  let age =
+    today.getFullYear() -
+    birthDate.getFullYear();
+
+  const monthDifference =
+    today.getMonth() -
+    birthDate.getMonth();
+
+  if (
+    monthDifference < 0 ||
+    (
+      monthDifference === 0 &&
+      today.getDate() < birthDate.getDate()
+    )
+  ) {
+    age--;
+  }
+
+  return age;
+};
+
+export const Step1AboutCaregiver: React.FC<
+  Step1Props
+> = ({
   name,
   dob,
   gender,
@@ -53,343 +121,582 @@ export const Step1AboutCaregiver: React.FC<Step1Props> = ({
   onNext,
   onBack,
 }) => {
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateValue, setDateValue] = useState<Date>(
-    dob ? new Date(dob) : new Date(1990, 0, 1)
+
+  const [showDatePicker, setShowDatePicker] =
+    useState(false);
+
+  const [showLanguages, setShowLanguages] =
+    useState(false);
+
+  const [focusedField, setFocusedField] =
+    useState<'name' | 'city' | null>(null);
+
+  const [dateValue, setDateValue] =
+    useState<Date>(
+      dob
+        ? new Date(`${dob}T12:00:00`)
+        : new Date(1990, 0, 1)
+    );
+
+  /* Minimum caregiver age: 18 */
+
+  const maximumDate = new Date();
+
+  maximumDate.setFullYear(
+    maximumDate.getFullYear() - 18
   );
 
-  const calculateAge = (dobString: string): number | null => {
-    if (!dobString) return null;
-    const birthDate = new Date(dobString);
-    if (isNaN(birthDate.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
+  // Handle leap-year rollover conservatively.
+  if (maximumDate.getMonth() !== new Date().getMonth()) {
+    maximumDate.setDate(0);
+  }
 
-  const handleDateChange = (event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-    if (event.type === 'set' && selected) {
-      setDateValue(selected);
-      const iso = selected.toISOString().split('T')[0];
-      onUpdate({ dob: iso });
-    }
-  };
-
-  const pickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission Needed',
-        'Please allow access to photos to select a profile photo.'
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]?.uri) {
-      onUpdate({ photoUri: result.assets[0].uri });
-    }
-  };
+  const minimumDate = new Date(1940, 0, 1);
 
   const age = calculateAge(dob);
+
+  const selectedLanguage =
+    SUPPORTED_LANGUAGES.find(
+      (item) =>
+        Boolean(language) &&
+        resolveLanguageCode(language) === item.code
+    );
+
   const isComplete =
     name.trim().length > 0 &&
     dob.length > 0 &&
-    gender.length > 0 &&
+    age !== null &&
+    age >= 18 &&
+    dob >= formatLocalDate(minimumDate) &&
+    dob <= formatLocalDate(maximumDate) &&
+    GENDER_OPTIONS.includes(gender) &&
+    Boolean(selectedLanguage) &&
     city.trim().length > 0;
+
+  const formattedDate = dob
+    ? new Date(`${dob}T12:00:00`)
+        .toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+    : '';
+
+  /* Date selection */
+
+  const handleDateChange = (
+    event: DateTimePickerEvent,
+    selected?: Date
+  ) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+
+    if (event.type === 'set' && selected) {
+      setDateValue(selected);
+
+      onUpdate({
+        dob: formatLocalDate(selected),
+      });
+    }
+  };
+
+  /* Profile photo */
+
+  const pickPhoto = async () => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission needed',
+          'Please allow access to your photos.'
+        );
+
+        return;
+      }
+
+      const result =
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes:
+            ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.7,
+        });
+
+      if (
+        !result.canceled &&
+        result.assets[0]?.uri
+      ) {
+        onUpdate({
+          photoUri: result.assets[0].uri,
+        });
+      }
+    } catch {
+      Alert.alert(
+        'Unable to select photo',
+        'Please try again.'
+      );
+    }
+  };
 
   return (
     <OnboardingLayout
-      title="Professional Caregiver Profile"
-      subtitle="Tell us about yourself. This information will appear on your professional profile."
+      title="Your professional profile"
+      subtitle="Start with your personal details."
       currentStep={1}
       totalSteps={9}
-      iconName="person"
+      iconName="person-outline"
+      backgroundVariant="ocean"
+      layoutVariant="minimal"
       onBack={onBack}
       onNext={onNext}
       isNextDisabled={!isComplete}
     >
-      {/* Profile Photo Picker */}
-      <View style={s.photoSection}>
-        <Pressable onPress={pickPhoto} style={s.photoButton}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={s.photoPreview} />
-          ) : (
-            <View style={s.photoPlaceholder}>
-              <Ionicons name="camera-outline" size={28} color={C.primary} />
-              <Text style={s.photoText}>Add Photo</Text>
-            </View>
-          )}
-          <View style={s.photoBadge}>
-            <Ionicons name="pencil" size={12} color="#FFFFFF" />
-          </View>
-        </Pressable>
-        <Text style={s.photoHint}>A clear face photo helps families identify you</Text>
-      </View>
 
-      {/* Name Input */}
-      <View style={s.fieldGroup}>
-        <Text style={s.fieldLabel}>Full Legal Name *</Text>
-        <View style={s.inputContainer}>
-          <Ionicons name="person-outline" size={18} color="#9CA3AF" style={s.inputIcon} />
+      {/* Main white container */}
+
+      <View
+        className="rounded-[20px] border border-care-border bg-white p-[16px]"
+        style={{
+          shadowColor: '#254D51',
+          shadowOpacity: 0.08,
+          shadowOffset: {
+            width: 0,
+            height: 3,
+          },
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+
+        {/* Profile photo */}
+
+        <Pressable
+          onPress={pickPhoto}
+          accessibilityRole="button"
+          accessibilityLabel={
+            photoUri
+              ? 'Change profile photo'
+              : 'Add optional profile photo'
+          }
+          className="mb-[16px] flex-row items-center gap-[12px] active:opacity-70"
+        >
+
+          <View className="relative h-[56px] w-[56px]">
+
+            {photoUri ? (
+              <Image
+                source={{ uri: photoUri }}
+                className="h-[56px] w-[56px] rounded-full"
+              />
+            ) : (
+              <View className="h-[56px] w-[56px] items-center justify-center rounded-full bg-[#D2F1F1]">
+                <Ionicons
+                  name="camera-outline"
+                  size={24}
+                  color="#256C78"
+                />
+              </View>
+            )}
+
+            <View className="absolute bottom-0 right-0 h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-white bg-brand">
+              <Ionicons
+                name="pencil"
+                size={10}
+                color="#FFFFFF"
+              />
+            </View>
+
+          </View>
+
+          <View className="flex-1">
+            <Text className="font-inter-semibold text-[14px] text-care-ink">
+              {photoUri
+                ? 'Change profile photo'
+                : 'Add profile photo'}
+            </Text>
+
+            <Text className="mt-[3px] font-inter-regular text-[12px] text-care-muted">
+              Optional
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={17}
+            color="#52605D"
+          />
+
+        </Pressable>
+
+        <View className="mb-[16px] h-px bg-care-border" />
+
+        {/* Full legal name */}
+
+        <Text className="mb-[6px] font-inter-semibold text-[13px] text-care-ink">
+          Full legal name *
+        </Text>
+
+        <View
+          className={`mb-[16px] min-h-[48px] flex-row items-center gap-[10px] rounded-[12px] border bg-care-canvas px-[12px] ${
+            focusedField === 'name'
+              ? 'border-brand'
+              : 'border-care-border'
+          }`}
+        >
+          <Ionicons
+            name="person-outline"
+            size={18}
+            color={
+              focusedField === 'name'
+                ? '#0E7A67'
+                : '#256C78'
+            }
+          />
+
           <TextInput
-            style={s.input}
-            placeholder="e.g., Priya Sharma"
-            placeholderTextColor="#9CA3AF"
+            className="min-h-[48px] flex-1 font-inter-regular text-[14px] text-care-ink"
+            accessibilityLabel="Full legal name"
+            placeholder="Enter your full name"
+            placeholderTextColor="#68766F"
             value={name}
-            onChangeText={(t) => onUpdate({ name: t })}
+            onChangeText={(text) =>
+              onUpdate({ name: text })
+            }
+            onFocus={() =>
+              setFocusedField('name')
+            }
+            onBlur={() =>
+              setFocusedField(null)
+            }
             autoCapitalize="words"
+            autoComplete="name"
+            autoCorrect={false}
           />
         </View>
-      </View>
 
-      {/* Date of Birth */}
-      <View style={s.fieldGroup}>
-        <View style={s.labelRow}>
-          <Text style={s.fieldLabel}>Date of Birth *</Text>
-          {age !== null && age >= 0 ? (
-            <View style={s.ageBadge}>
-              <Text style={s.ageBadgeText}>{age} years old</Text>
-            </View>
-          ) : null}
-        </View>
-        <Pressable
-          style={s.datePickerBtn}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <Ionicons name="calendar-outline" size={18} color={C.primary} style={s.inputIcon} />
-          <Text style={[s.dateText, !dob && s.placeholderText]}>
-            {dob ? dob : 'Select date of birth'}
+        {/* Date of birth */}
+
+        <View className="mb-[6px] flex-row items-center justify-between gap-[8px]">
+
+          <Text className="font-inter-semibold text-[13px] text-care-ink">
+            Date of birth *
           </Text>
-          <Ionicons name="chevron-down" size={18} color="#9CA3AF" />
+
+          {age !== null && age >= 0 && (
+            <Text className="font-inter-medium text-[12px] text-brand-dark">
+              {age} years old
+            </Text>
+          )}
+
+        </View>
+
+        <Pressable
+          onPress={() => {
+            setShowLanguages(false);
+            setShowDatePicker(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Date of birth, ${
+            formattedDate || 'not selected'
+          }`}
+          className="min-h-[48px] flex-row items-center gap-[10px] rounded-[12px] border border-care-border bg-care-canvas px-[12px] active:opacity-70"
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color="#256C78"
+          />
+
+          <Text
+            className={`flex-1 font-inter-regular text-[14px] ${
+              dob
+                ? 'text-care-ink'
+                : 'text-care-muted'
+            }`}
+          >
+            {formattedDate ||
+              'Select date of birth'}
+          </Text>
+
+          <Ionicons
+            name="chevron-down"
+            size={16}
+            color="#52605D"
+          />
         </Pressable>
 
         {showDatePicker && (
-          <DateTimePicker
-            value={dateValue}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            maximumDate={new Date(new Date().getFullYear() - 18, 11, 31)}
-            minimumDate={new Date(1940, 0, 1)}
-            onChange={handleDateChange}
-          />
+          <View>
+
+            <DateTimePicker
+              value={
+                dateValue > maximumDate
+                  ? maximumDate
+                  : dateValue < minimumDate
+                    ? minimumDate
+                    : dateValue
+              }
+              mode="date"
+              display={
+                Platform.OS === 'ios'
+                  ? 'spinner'
+                  : 'default'
+              }
+              maximumDate={maximumDate}
+              minimumDate={minimumDate}
+              onChange={handleDateChange}
+            />
+
+            {Platform.OS === 'ios' && (
+              <Pressable
+                onPress={() =>
+                  setShowDatePicker(false)
+                }
+                accessibilityRole="button"
+                className="min-h-[44px] items-end justify-center"
+              >
+                <Text className="font-inter-semibold text-brand">
+                  Done
+                </Text>
+              </Pressable>
+            )}
+
+          </View>
         )}
-      </View>
 
-      {/* Gender Selection */}
-      <View style={s.fieldGroup}>
-        <Text style={s.fieldLabel}>Gender *</Text>
-        <View style={s.chipsRow}>
-          {GENDER_OPTIONS.map((opt) => {
-            const isSelected = gender === opt;
-            return (
-              <Pressable
-                key={opt}
-                onPress={() => onUpdate({ gender: opt })}
-                style={[s.chip, isSelected && s.chipSelected]}
-              >
-                <Text style={[s.chipText, isSelected && s.chipTextSelected]}>
-                  {opt}
-                </Text>
-              </Pressable>
-            );
-          })}
+        {age !== null && age < 18 && (
+          <Text className="mt-[6px] font-inter-regular text-[12px] text-red-600">
+            Caregivers must be at least 18 years old.
+          </Text>
+        )}
+
+        {/* Gender */}
+
+        <Text className="mb-[8px] mt-[16px] font-inter-semibold text-[13px] text-care-ink">
+          Gender *
+        </Text>
+
+        <View
+          className="gap-[8px]"
+          accessibilityRole="radiogroup"
+        >
+          {[
+            GENDER_OPTIONS.slice(0, 2),
+            GENDER_OPTIONS.slice(2, 4),
+          ].map((row, index) => (
+            <View
+              key={index}
+              className="flex-row gap-[8px]"
+            >
+              {row.map((item) => {
+                const selected = gender === item;
+
+                return (
+                  <Pressable
+                    key={item}
+                    onPress={() =>
+                      onUpdate({ gender: item })
+                    }
+                    accessibilityRole="radio"
+                    accessibilityState={{
+                      checked: selected,
+                    }}
+                    className={`min-h-[44px] flex-1 flex-row items-center justify-center gap-[5px] rounded-[12px] border px-[8px] py-[10px] active:opacity-70 ${
+                      selected
+                        ? 'border-brand bg-care-selected'
+                        : 'border-care-border bg-care-canvas'
+                    }`}
+                  >
+                    {selected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={14}
+                        color="#0E7A67"
+                      />
+                    )}
+
+                    <Text
+                      className={`shrink text-center font-inter-medium text-[13px] ${
+                        selected
+                          ? 'text-brand-dark'
+                          : 'text-care-ink'
+                      }`}
+                    >
+                      {item}
+                    </Text>
+
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </View>
-      </View>
 
-      {/* Primary Language */}
-      <View style={s.fieldGroup}>
-        <Text style={s.fieldLabel}>Primary Working Language *</Text>
-        <View style={s.chipsRow}>
-          {PRIMARY_LANGUAGES.map((lang) => {
-            const isSelected = language === lang;
-            return (
-              <Pressable
-                key={lang}
-                onPress={() => onUpdate({ language: lang })}
-                style={[s.chip, isSelected && s.chipSelected]}
-              >
-                <Text style={[s.chipText, isSelected && s.chipTextSelected]}>
-                  {lang}
-                </Text>
-              </Pressable>
+        {/* Primary working language */}
+
+        <Text className="mb-[6px] mt-[16px] font-inter-semibold text-[13px] text-care-ink">
+          Primary working language *
+        </Text>
+
+        <Pressable
+          onPress={() => {
+            setShowDatePicker(false);
+
+            setShowLanguages(
+              (previous) => !previous
             );
-          })}
-        </View>
-      </View>
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Primary working language, ${
+            selectedLanguage?.name ||
+            'not selected'
+          }`}
+          accessibilityState={{
+            expanded: showLanguages,
+          }}
+          className={`min-h-[48px] flex-row items-center gap-[10px] rounded-[12px] border bg-care-canvas px-[12px] active:opacity-70 ${
+            showLanguages
+              ? 'border-brand'
+              : 'border-care-border'
+          }`}
+        >
 
-      {/* Base City */}
-      <View style={s.fieldGroup}>
-        <Text style={s.fieldLabel}>Base City / Locality *</Text>
-        <View style={s.inputContainer}>
-          <Ionicons name="location-outline" size={18} color="#9CA3AF" style={s.inputIcon} />
+          <Ionicons
+            name="language-outline"
+            size={19}
+            color="#256C78"
+          />
+
+          <Text
+            className={`flex-1 font-inter-medium text-[14px] ${
+              selectedLanguage
+                ? 'text-care-ink'
+                : 'text-care-muted'
+            }`}
+          >
+            {selectedLanguage?.name ||
+              'Select language'}
+          </Text>
+
+          <Ionicons
+            name={
+              showLanguages
+                ? 'chevron-up'
+                : 'chevron-down'
+            }
+            size={16}
+            color="#52605D"
+          />
+
+        </Pressable>
+
+        {/* Expandable language selector */}
+
+        {showLanguages && (
+          <View
+            accessibilityRole="radiogroup"
+            className="mt-[8px] overflow-hidden rounded-[12px] border border-care-border bg-white"
+          >
+            {SUPPORTED_LANGUAGES.map(
+              (item, index) => {
+                const selected =
+                  selectedLanguage?.code === item.code;
+
+                return (
+                  <Pressable
+                    key={item.code}
+                    onPress={() => {
+                      onUpdate({
+                        language: item.code,
+                      });
+
+                      setShowLanguages(false);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{
+                      checked: selected,
+                    }}
+                    className={`min-h-[46px] flex-row items-center justify-between px-[14px] py-[10px] active:opacity-70 ${
+                      selected
+                        ? 'bg-care-selected'
+                        : 'bg-white'
+                    } ${
+                      index <
+                      SUPPORTED_LANGUAGES.length - 1
+                        ? 'border-b border-care-border'
+                        : ''
+                    }`}
+                  >
+
+                    <Text
+                      className={`font-inter-medium text-[13px] ${
+                        selected
+                          ? 'text-brand-dark'
+                          : 'text-care-ink'
+                      }`}
+                    >
+                      {item.name}
+                    </Text>
+
+                    {selected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={17}
+                        color="#0E7A67"
+                      />
+                    )}
+
+                  </Pressable>
+                );
+              }
+            )}
+          </View>
+        )}
+
+        {/* Base city */}
+
+        <Text className="mb-[6px] mt-[16px] font-inter-semibold text-[13px] text-care-ink">
+          Base city / locality *
+        </Text>
+
+        <View
+          className={`min-h-[48px] flex-row items-center gap-[10px] rounded-[12px] border bg-care-canvas px-[12px] ${
+            focusedField === 'city'
+              ? 'border-brand'
+              : 'border-care-border'
+          }`}
+        >
+          <Ionicons
+            name="location-outline"
+            size={18}
+            color="#256C78"
+          />
+
           <TextInput
-            style={s.input}
-            placeholder="e.g., Bengaluru (Indiranagar / Koramangala)"
-            placeholderTextColor="#9CA3AF"
+            className="min-h-[48px] flex-1 font-inter-regular text-[14px] text-care-ink"
+            accessibilityLabel="Base city or locality"
+            placeholder="Enter your city or locality"
+            placeholderTextColor="#68766F"
             value={city}
-            onChangeText={(t) => onUpdate({ city: t })}
+            onChangeText={(text) =>
+              onUpdate({ city: text })
+            }
+            onFocus={() =>
+              setFocusedField('city')
+            }
+            onBlur={() =>
+              setFocusedField(null)
+            }
+            autoCapitalize="words"
           />
         </View>
+
       </View>
+
     </OnboardingLayout>
   );
 };
-
-const s = StyleSheet.create({
-  photoSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  photoButton: {
-    position: 'relative',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    overflow: 'visible',
-  },
-  photoPreview: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-  },
-  photoPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#E6F4F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: C.primary,
-    borderStyle: 'dashed',
-  },
-  photoText: {
-    fontSize: 11,
-    fontFamily: F.medium,
-    color: C.primary,
-    marginTop: 4,
-  },
-  photoBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: C.primary,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  photoHint: {
-    fontSize: 12,
-    fontFamily: F.regular,
-    color: C.textSecondary,
-    marginTop: 8,
-  },
-  fieldGroup: {
-    marginBottom: 20,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontFamily: F.bold,
-    color: C.textPrimary,
-    letterSpacing: 0.3,
-    marginBottom: 8,
-  },
-  ageBadge: {
-    backgroundColor: '#E6F4F1',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  ageBadgeText: {
-    fontSize: 11,
-    fontFamily: F.medium,
-    color: C.primary,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: F.regular,
-    color: C.textPrimary,
-  },
-  datePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  dateText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: F.regular,
-    color: C.textPrimary,
-  },
-  placeholderText: {
-    color: '#9CA3AF',
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  chipSelected: {
-    backgroundColor: C.primary,
-    borderColor: C.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    fontFamily: F.medium,
-    color: C.textSecondary,
-  },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontFamily: F.bold,
-  },
-});

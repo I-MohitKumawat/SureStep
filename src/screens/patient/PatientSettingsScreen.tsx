@@ -20,6 +20,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import apiClient from '../../services/apiClient';
 import { triggerSOS } from '../../services/geofenceService';
+import { getLanguageDisplayName } from '../../constants/languages';
 import type { PatientStackParams } from '../../types/navigation.types';
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientSettingsScreen'>;
 
@@ -40,7 +41,7 @@ export const PatientSettingsScreen: React.FC<Props> = ({ navigation }) => {
   const isDark = mode === 'dark';
   const patientId = user?.id || null;
   const displayName = user?.name || 'Ramesh';
-  const currentLanguage = user?.preferred_language || (user as any)?.language || 'English';
+  const currentLanguage = getLanguageDisplayName(user?.preferred_language || (user as any)?.language);
   const photoUrl = (user as any)?.profile_photo_url || (user as any)?.photo_url || null;
 
   const initials = displayName
@@ -249,7 +250,7 @@ export const PatientSettingsScreen: React.FC<Props> = ({ navigation }) => {
               <View className="mt-5 flex-row items-center border-t border-white/20 pt-4">
                 <Ionicons name="person-outline" size={18} color="#D1FAE5" />
                 <Text className="ml-2 flex-1 font-medium text-white">View personal details</Text>
-                <Ionicons name="arrow-up-forward" size={18} color="#FFFFFF" />
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
               </View>
             </Pressable>
             {sectionTitle('ACCOUNT & PREFERENCES')}

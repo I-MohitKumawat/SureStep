@@ -55,24 +55,49 @@ function timeAgo(dateStr: string): string {
 }
 
 export const CaregiverAlertFeedScreen: React.FC<Props> = ({ navigation }) => {
-  const { firebaseUser } = useAuth();
+  const { user, status } = useAuth();
 
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const fetchSeqRef = React.useRef(0);
 
   const load = useCallback(async () => {
-    try {
-      const rows = await listMySafetyAlerts();
-      setAlerts(rows);
-    } finally {
+    if (status !== 'authenticated' || !user?.id) {
+      setAlerts([]);
       setLoading(false);
       setRefreshing(false);
+      return;
     }
-  }, []);
+    const seq = ++fetchSeqRef.current;
+    setLoadError(null);
+    try {
+      const rows = await listMySafetyAlerts();
+      if (seq !== fetchSeqRef.current) return;
+      setAlerts(rows);
+    } catch (err: any) {
+      if (seq !== fetchSeqRef.current) return;
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 401 || httpStatus === 403) {
+        setAlerts([]);
+      }
+      setLoadError(err?.message || 'Unable to load alerts.');
+    } finally {
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [status, user?.id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    fetchSeqRef.current++;
+    setAlerts([]);
+    setLoadError(null);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -83,16 +108,28 @@ export const CaregiverAlertFeedScreen: React.FC<Props> = ({ navigation }) => {
     };
     const onResponse = () => { void load(); };
     const onResolved = () => { void load(); };
+    const onAccessChange = () => {
+      fetchSeqRef.current++;
+      void load();
+    };
 
+    socket.on('sos:triggered', onNewOrUpdated);
     socket.on('alert:new', onNewOrUpdated);
     socket.on('alert:updated', onNewOrUpdated);
     socket.on('alert:response', onResponse);
     socket.on('alert:resolved', onResolved);
+    socket.on('relationship:change', onAccessChange);
+    socket.on('circle:member_removed', onAccessChange);
+    socket.on('circle:terminated', onAccessChange);
     return () => {
+      socket.off('sos:triggered', onNewOrUpdated);
       socket.off('alert:new', onNewOrUpdated);
       socket.off('alert:updated', onNewOrUpdated);
       socket.off('alert:response', onResponse);
       socket.off('alert:resolved', onResolved);
+      socket.off('relationship:change', onAccessChange);
+      socket.off('circle:member_removed', onAccessChange);
+      socket.off('circle:terminated', onAccessChange);
     };
   }, [load]);
 
@@ -216,6 +253,14 @@ export const CaregiverAlertFeedScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>Loading alerts...</Text>
+        </View>
+      ) : loadError && alerts.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="warning-outline" size={36} color="#DC2626" style={{ marginBottom: 10 }} />
+          <Text style={styles.emptyTitle}>Alerts unavailable</Text>
+          <Text style={styles.emptySub}>
+            Could not load safety alerts. Tap refresh to try again.
+          </Text>
         </View>
       ) : alerts.length === 0 ? (
         <View style={styles.center}>

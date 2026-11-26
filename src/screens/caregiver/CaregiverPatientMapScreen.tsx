@@ -32,6 +32,7 @@ import {
   type GeofenceZone,
 } from '../../utils/geofenceUtils';
 import { respondToAlert } from '../../services/safetyService';
+import { getPatientProfile } from '../../services/userService';
 import {
   listCareCirclePeopleForPatient,
   type CareCirclePerson,
@@ -39,6 +40,7 @@ import {
 import { getSocket } from '../../services/socketClient';
 import apiClient from '../../services/apiClient';
 import { relativeTime } from '../../utils/dateUtils';
+import { normalizeCallablePhone } from '../../utils/caregiverDashboardUtils';
 
 
 type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientMapScreen'>;
@@ -46,6 +48,7 @@ type Props = NativeStackScreenProps<CaregiverStackParams, 'CaregiverPatientMapSc
 export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }) => {
   const { patientId, patientName } = route.params;
   const { firebaseUser } = useAuth();
+  const [patientPhone, setPatientPhone] = useState<string>('');
   const [careCircle, setCareCircle] = useState<CareCirclePerson[]>([]);
   const [memberLocations, setMemberLocations] = useState<Record<string, {
     id: string;
@@ -78,6 +81,11 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
 
       const loadFreshData = async () => {
         try {
+          const profileRes = await getPatientProfile(patientId).catch(() => null);
+          const phone = profileRes?.data?.data?.phone || profileRes?.data?.data?.user?.phone || '';
+          if (active) {
+            setPatientPhone(phone);
+          }
           const fetchedZones = await fetchPatientGeofences(patientId);
           if (active && fetchedZones) {
             setZones(fetchedZones);
@@ -172,16 +180,18 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
 
   const computedActiveZone = useMemo(() => {
     if (!coords || !zones.length) return null;
+    if (accuracyM != null && accuracyM > 50) return null;
+    const accuracy = accuracyM != null && accuracyM > 0 ? accuracyM : 0;
     const insideZones = zones.filter((z) => {
       if (!z.isActive) return false;
       const d = haversineMeters(z.center.latitude, z.center.longitude, coords.latitude, coords.longitude);
-      return d <= z.radiusM;
+      return d + accuracy <= z.radiusM;
     });
     if (!insideZones.length) return null;
     // Overlapping priority rule: smallest radius (most specific zone) first
     insideZones.sort((a, b) => a.radiusM - b.radiusM);
     return insideZones[0];
-  }, [coords, zones]);
+  }, [coords, zones, accuracyM]);
 
   // ─── GPS quality label & color ───────────────────────────────────────────────────
   const gpsLabel  = accuracyM === undefined ? 'Unknown' : accuracyM < 15 ? 'High' : accuracyM < 50 ? 'Med' : 'Low';
@@ -189,17 +199,32 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
   const gpsBgColor = accuracyM === undefined ? '#F9FAFB' : accuracyM < 15 ? '#ECFDF5' : accuracyM < 50 ? '#FFFBEB' : '#FEF2F2';
 
   // ─── Safety status text ─────────────────────────────────────────────────────────
-  const activeZoneLabel = patientState?.current_zone_name || computedActiveZone?.label || 'Zone';
+  const activeZoneLabel = patientState?.current_zone_name || computedActiveZone?.label || null;
+  const nowMs = Date.now();
+  const deltaMs = nowMs - coordsTs;
+  const isFreshLocation =
+    !!coords &&
+    coordsTs > 0 &&
+    deltaMs >= -60_000 &&
+    deltaMs <= 5 * 60 * 1000 &&
+    (accuracyM == null || accuracyM <= 50) &&
+    patientState?.location_state !== 'NO_SIGNAL';
 
-  const safetyText  = patientState?.sos_active || patientState?.safety_state === 'CRITICAL'
+  const safetyText = patientState?.sos_active || patientState?.safety_state === 'CRITICAL'
     ? 'EMERGENCY: SOS Active'
     : patientState?.safety_state === 'BREACH'
-    ? 'Out of Safe Zone'
+    ? 'Outside Safe Zone'
+    : !coords
+    ? 'Location Unavailable'
+    : !isFreshLocation
+    ? 'Last Known Location'
+    : activeZones.length === 0
+    ? 'No Safe Zones Configured'
     : patientState?.safety_state === 'APPROACHING'
     ? 'Approaching Boundary'
-    : patientState?.safety_state === 'SAFE'
-    ? `Safe Inside ${activeZoneLabel}`
-    : 'Acquiring Status…';
+    : activeZoneLabel && (patientState?.location_state === 'STATIONARY_KNOWN' || computedActiveZone)
+    ? `Inside ${activeZoneLabel}`
+    : 'Boundary Uncertain';
 
   const safetyColor = patientState?.sos_active || ['CRITICAL', 'BREACH'].includes(patientState?.safety_state ?? '')
     ? '#EF4444'
@@ -373,24 +398,32 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
     void Linking.openURL(url);
   }, [coords]);
 
-  // ─── VoIP Phone Dialer launcher ────────────────────────────────────────────────
+  // ─── Phone Dialer launcher ────────────────────────────────────────────────
   const handleCall = async () => {
-    const patientPhone = '+919874563211';
-    const url = `tel:${patientPhone}`;
+    const sanitized = normalizeCallablePhone(patientPhone);
+    if (!sanitized) {
+      Alert.alert('Phone Unavailable', `No valid phone number is available for ${patientName || 'this patient'}.`);
+      return;
+    }
+    const url = `tel:${sanitized}`;
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Call Patient', `Calling ${patientName || 'Dorothy'} (${patientPhone}). tel: scheme not supported on this device.`);
+        Alert.alert('Dialer Unavailable', `Could not open dialer for ${patientName || 'patient'} (${sanitized}).`);
       }
     } catch (e) {
       console.warn(e);
+      Alert.alert('Unable to Call', 'Could not open the phone dialer.');
     }
   };
 
   const handleChat = () => {
-    Alert.alert('Message Patient', 'Message flow placeholder');
+    navigation.navigate('CaregiverCareCircleScreen', {
+      patientId,
+      patientName: patientName || 'Patient',
+    });
   };
 
   const handleAcknowledge = async () => {
@@ -427,7 +460,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
             <MapFallback
               latitude={coords?.latitude ?? fallbackCoords.latitude}
               longitude={coords?.longitude ?? fallbackCoords.longitude}
-              patientName={patientName || 'Dorothy'}
+              patientName={patientName || 'Patient'}
             />
           ) : (
             <View style={styles.mapContainer}>
@@ -611,12 +644,12 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                   <View style={{ marginLeft: 10 }}>
                     <Text style={styles.caregiverWidgetTitle}>Nearest Responder</Text>
                     <Text style={styles.caregiverWidgetSub}>
-                      {responding ? 'You are responding • Active' : `${patientName || 'Dorothy'}'s Caregiver • Alerted`}
+                      {responding ? 'You are responding • Active' : `${patientName || 'Patient'}'s Caregiver • Alerted`}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.caregiverWidgetRight}>
-                  <Text style={styles.caregiverWidgetDist}>0.4 km</Text>
+                  <Text style={styles.caregiverWidgetDist}>{distanceText}</Text>
                 </View>
               </View>
 
@@ -696,7 +729,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 </View>
 
                 <View style={styles.patientProfileMeta}>
-                  <Text style={styles.patientProfileName}>{patientName || 'Dorothy'}</Text>
+                  <Text style={styles.patientProfileName}>{patientName || 'Patient'}</Text>
 
                   {/* Dynamic live status from backend */}
                   <View style={styles.patientProfileStatusRow}>
@@ -756,7 +789,7 @@ export const CaregiverPatientMapScreen: React.FC<Props> = ({ navigation, route }
                 style={({ pressed }) => [styles.primaryNavBtn, pressed && { opacity: 0.85 }]}
               >
                 <Feather name="navigation" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.primaryNavBtnText}>Navigate to {patientName || 'Dorothy'}</Text>
+                <Text style={styles.primaryNavBtnText}>Navigate to {patientName || 'Patient'}</Text>
               </Pressable>
             </View>
           )}

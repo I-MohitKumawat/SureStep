@@ -6,7 +6,7 @@
  * and the Live Location Map screen.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Coords, GeofenceZone } from '../utils/geofenceUtils';
 import type { ApiPatientState } from '../services/geofenceService';
 import { fetchPatientState, requestLocationRefresh } from '../services/geofenceService';
@@ -34,7 +34,8 @@ type PatientTrackingContextValue = {
 export const PatientTrackingContext = createContext<PatientTrackingContextValue | undefined>(undefined);
 
 export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { firebaseUser } = useAuth();
+  const { status, user } = useAuth();
+  const authUserId = status === 'authenticated' ? user?.id : undefined;
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
 
   const [coords, setCoords] = useState<Coords | null>(null);
@@ -45,19 +46,36 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
   const [speedKmh, setSpeedKmh] = useState<number | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 1. Load initial data on patient change
+  const trackingEpochRef = useRef(0);
+
+  const clearTrackingState = useCallback(() => {
+    setCoords(null);
+    setCoordsTs(0);
+    setZones([]);
+    setPatientState(null);
+    setAccuracyM(undefined);
+    setSpeedKmh(undefined);
+    setRefreshing(false);
+  }, []);
+
+  // Clear active patient and cached telemetry immediately on signout or account switch
   useEffect(() => {
-    if (!activePatientId) {
-      setCoords(null);
-      setCoordsTs(0);
-      setZones([]);
-      setPatientState(null);
-      setAccuracyM(undefined);
-      setSpeedKmh(undefined);
+    trackingEpochRef.current++;
+    if (!authUserId) {
+      setActivePatientId(null);
+      clearTrackingState();
+    }
+  }, [authUserId, clearTrackingState]);
+
+  // 1. Load initial data on patient or auth change
+  useEffect(() => {
+    trackingEpochRef.current++;
+    if (!authUserId || !activePatientId) {
+      clearTrackingState();
       return;
     }
 
-    let isMounted = true;
+    const expectedEpoch = trackingEpochRef.current;
 
     const loadInitialData = async () => {
       try {
@@ -67,16 +85,18 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
           fetchPatientState(activePatientId),
         ]);
 
-        if (!isMounted) return;
+        if (expectedEpoch !== trackingEpochRef.current) return;
 
         if (latestLoc) {
           setCoords({ latitude: latestLoc.latitude, longitude: latestLoc.longitude });
-          setCoordsTs(fetchedState?.computed_at ? new Date(fetchedState.computed_at).getTime() : latestLoc.recordedAt);
+          const tsStr = latestLoc.recordedAt ? null : (fetchedState?.last_ping_at || fetchedState?.computed_at);
+          setCoordsTs(latestLoc.recordedAt || (tsStr ? new Date(tsStr).getTime() : 0));
           if (latestLoc.accuracyM !== undefined) setAccuracyM(latestLoc.accuracyM);
           if (latestLoc.speedKmh !== undefined) setSpeedKmh(latestLoc.speedKmh);
         } else if (fetchedState && fetchedState.last_known_lat != null && fetchedState.last_known_lng != null) {
           setCoords({ latitude: Number(fetchedState.last_known_lat), longitude: Number(fetchedState.last_known_lng) });
-          setCoordsTs(fetchedState.computed_at ? new Date(fetchedState.computed_at).getTime() : Date.now());
+          const tsStr = fetchedState.last_ping_at || fetchedState.computed_at;
+          setCoordsTs(tsStr ? new Date(tsStr).getTime() : 0);
         }
         if (fetchedZones) {
           setZones(fetchedZones);
@@ -84,7 +104,12 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
         if (fetchedState) {
           setPatientState(fetchedState);
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (expectedEpoch !== trackingEpochRef.current) return;
+        const httpStatus = err?.response?.status;
+        if (httpStatus === 401 || httpStatus === 403) {
+          clearTrackingState();
+        }
         console.warn('[PatientTrackingContext] Failed to load initial data:', err);
       }
     };
@@ -92,9 +117,9 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
     void loadInitialData();
 
     return () => {
-      isMounted = false;
+      trackingEpochRef.current++;
     };
-  }, [activePatientId]);
+  }, [authUserId, activePatientId, clearTrackingState]);
 
   // 2. Real-time WebSocket subscriptions scoped to activePatientId
   useEffect(() => {
@@ -106,30 +131,31 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
     const handleStateChange = (data: any) => {
       if (data.patient_id !== activePatientId) return;
 
-      const ts = data.computed_at ? new Date(data.computed_at).getTime() : Date.now();
+      const tsStr = data.last_ping_at ?? data.computed_at;
+      const ts = tsStr ? new Date(tsStr).getTime() : 0;
 
       if (data.coords) {
         setCoords({ latitude: data.coords.latitude, longitude: data.coords.longitude });
-        setCoordsTs(ts);
+        if (ts > 0) setCoordsTs(ts);
       } else if (data.last_known_lat != null && data.last_known_lng != null) {
         setCoords({ latitude: data.last_known_lat, longitude: data.last_known_lng });
-        setCoordsTs(ts);
+        if (ts > 0) setCoordsTs(ts);
       }
 
       setPatientState((prev) => ({
         patient_id:       activePatientId,
         location_state:   data.location_state   ?? prev?.location_state   ?? 'NO_SIGNAL',
-        safety_state:     data.safety_state     ?? prev?.safety_state     ?? 'SAFE',
-        routine_state:    data.routine_state    ?? prev?.routine_state    ?? 'ON_TRACK',
+        safety_state:     data.safety_state     ?? prev?.safety_state     ?? '',
+        routine_state:    data.routine_state    ?? prev?.routine_state    ?? '',
         engagement_state: data.engagement_state ?? prev?.engagement_state ?? 'NO_INTERACTION',
         last_known_lat:   data.last_known_lat   ?? prev?.last_known_lat   ?? null,
         last_known_lng:   data.last_known_lng   ?? prev?.last_known_lng   ?? null,
         last_known_zone_id: data.last_known_zone_id ?? prev?.last_known_zone_id ?? null,
-        current_zone_name: data.current_zone_name ?? prev?.current_zone_name ?? null,
-        last_ping_at:     data.computed_at      ?? prev?.last_ping_at     ?? null,
+        current_zone_name: data.current_zone_name !== undefined ? data.current_zone_name : (prev?.current_zone_name ?? null),
+        last_ping_at:     data.last_ping_at     ?? data.computed_at ?? prev?.last_ping_at ?? null,
         stationary_since: prev?.stationary_since ?? null,
         sos_active:       data.sos_active       ?? prev?.sos_active       ?? false,
-        computed_at:      data.computed_at      ?? prev?.computed_at      ?? new Date().toISOString(),
+        computed_at:      data.computed_at      ?? prev?.computed_at      ?? '',
         battery_pct:      data.battery_pct      ?? prev?.battery_pct      ?? null,
         network_status:   data.network_status   ?? prev?.network_status   ?? null,
       }));
@@ -147,43 +173,70 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
 
     const handleGeofencesChange = (data: any) => {
       if (data.patientId !== activePatientId) return;
+      const expectedEpoch = trackingEpochRef.current;
       fetchPatientGeofences(activePatientId)
         .then((fetchedZones) => {
+          if (expectedEpoch !== trackingEpochRef.current) return;
           if (fetchedZones) setZones(fetchedZones);
         })
         .catch((err) => {
+          if (expectedEpoch !== trackingEpochRef.current) return;
+          if (err?.response?.status === 401 || err?.response?.status === 403) {
+            clearTrackingState();
+          }
           console.warn('[PatientTrackingContext] Failed to refetch zones on socket event:', err);
         });
     };
 
+    const handleAccessRevoked = (data: any) => {
+      const targetPatient = data?.patientId ?? data?.patient_id;
+      if (!targetPatient || targetPatient === activePatientId) {
+        trackingEpochRef.current++;
+        clearTrackingState();
+      }
+    };
+
     socket.on('state:change', handleStateChange);
     socket.on('geofences:change', handleGeofencesChange);
+    socket.on('relationship:change', handleAccessRevoked);
+    socket.on('circle:member_removed', handleAccessRevoked);
+    socket.on('circle:member_left', handleAccessRevoked);
+    socket.on('circle:terminated', handleAccessRevoked);
 
     return () => {
       socket.off('state:change', handleStateChange);
       socket.off('geofences:change', handleGeofencesChange);
+      socket.off('relationship:change', handleAccessRevoked);
+      socket.off('circle:member_removed', handleAccessRevoked);
+      socket.off('circle:member_left', handleAccessRevoked);
+      socket.off('circle:terminated', handleAccessRevoked);
     };
-  }, [activePatientId]);
+  }, [activePatientId, clearTrackingState]);
 
   // 3. Centralized location and state refresh loop
   const refreshLocation = useCallback(async () => {
-    if (!activePatientId) return;
+    if (!authUserId || !activePatientId) return;
+    const expectedEpoch = trackingEpochRef.current;
     setRefreshing(true);
     try {
       // Refresh geofences directly
       fetchPatientGeofences(activePatientId)
         .then((fetchedZones) => {
+          if (expectedEpoch !== trackingEpochRef.current) return;
           if (fetchedZones) setZones(fetchedZones);
         })
         .catch(() => {});
 
       await requestLocationRefresh(activePatientId);
+      if (expectedEpoch !== trackingEpochRef.current) return;
       const currentCoordsTs = coordsTs;
 
       // Poll up to 6 times, waiting 1.5s between polls (9s max timeout)
       for (let poll = 0; poll < 6; poll++) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (expectedEpoch !== trackingEpochRef.current) return;
         const latestLoc = await fetchLatestPatientLocation(activePatientId);
+        if (expectedEpoch !== trackingEpochRef.current) return;
 
         if (latestLoc && latestLoc.recordedAt > currentCoordsTs) {
           setCoords({ latitude: latestLoc.latitude, longitude: latestLoc.longitude });
@@ -196,17 +249,22 @@ export const PatientTrackingProvider: React.FC<{ children: React.ReactNode }> = 
           }
 
           const state = await fetchPatientState(activePatientId);
-          if (state) setPatientState(state);
+          if (expectedEpoch === trackingEpochRef.current && state) setPatientState(state);
 
           break;
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (expectedEpoch === trackingEpochRef.current && (err?.response?.status === 401 || err?.response?.status === 403)) {
+        clearTrackingState();
+      }
       console.warn('[PatientTrackingContext] refreshLocation failed:', err);
     } finally {
-      setRefreshing(false);
+      if (expectedEpoch === trackingEpochRef.current) {
+        setRefreshing(false);
+      }
     }
-  }, [activePatientId, coordsTs]);
+  }, [authUserId, activePatientId, coordsTs, clearTrackingState]);
 
   const value = useMemo(() => ({
     activePatientId,

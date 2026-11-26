@@ -6,8 +6,9 @@
  * Responding records a responder action and never resolves an incident.
  * Resolution is Circle Owner-only and is enforced by the API.
  */
-import React, { createContext, useContext, useMemo, useState, useCallback, useEffect, type ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { getSocket } from '../services/socketClient';
+import { useAuth } from './AuthContext';
 import {
   listPatientSafetyAlerts,
   listCircleSafetyAlerts,
@@ -100,7 +101,17 @@ const mapApiAlertToPatientAlert = (alert: SafetyAlert): PatientAlert => {
 };
 
 export const AlertProvider = ({ children }: { children: ReactNode }) => {
+  const { status, user } = useAuth();
   const [alerts, setAlerts] = useState<PatientAlert[]>([]);
+  const sessionSeqRef = useRef(0);
+  const authUserId = status === 'authenticated' ? user?.id : undefined;
+
+  useEffect(() => {
+    sessionSeqRef.current++;
+    if (!authUserId) {
+      setAlerts([]);
+    }
+  }, [authUserId]);
 
   const getAlertsForPatient = useCallback((patientId: string) => {
     return alerts.filter(a => a.patientId === patientId);
@@ -111,17 +122,25 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
   }, [alerts]);
 
   const fetchPatientAlerts = useCallback(async (patientId: string) => {
+    if (!authUserId) return;
+    const seq = sessionSeqRef.current;
     try {
       const rows = await listPatientSafetyAlerts(patientId);
+      if (seq !== sessionSeqRef.current) return;
       const mapped = rows.map(mapApiAlertToPatientAlert);
       setAlerts((prev) => {
         const otherPatientsAlerts = prev.filter((a) => a.patientId !== patientId);
         return [...mapped, ...otherPatientsAlerts];
       });
-    } catch (err) {
-      console.warn('[AlertContext] Failed to fetch alerts:', err);
+    } catch (err: any) {
+      if (seq !== sessionSeqRef.current) return;
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 401 || httpStatus === 403) {
+        setAlerts((prev) => prev.filter((a) => a.patientId !== patientId));
+      }
+      throw err;
     }
-  }, []);
+  }, [authUserId]);
 
   const respondToAlert = useCallback(async (alertId: string) => {
     const alert = alerts.find(a => a.id === alertId);
@@ -200,11 +219,25 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
       setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, status: 'resolved' } : a)));
     };
 
+    const handleAccessRevoked = (data: any) => {
+      const revokedPatientId = data?.patientId ?? data?.patient_id;
+      if (revokedPatientId) {
+        setAlerts((prev) => prev.filter((a) => a.patientId !== revokedPatientId));
+      } else {
+        sessionSeqRef.current++;
+        setAlerts([]);
+      }
+    };
+
     socket.on('alert:new', handleAlertNewOrUpdated);
     socket.on('alert:updated', handleAlertNewOrUpdated);
     socket.on('alert:response', handleAlertResponse);
     socket.on('alert:resolved', handleAlertResolved);
     socket.on('sos:triggered', handleAlertNewOrUpdated);
+    socket.on('relationship:change', handleAccessRevoked);
+    socket.on('circle:member_removed', handleAccessRevoked);
+    socket.on('circle:member_left', handleAccessRevoked);
+    socket.on('circle:terminated', handleAccessRevoked);
 
     return () => {
       socket.off('alert:new', handleAlertNewOrUpdated);
@@ -212,6 +245,10 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
       socket.off('alert:response', handleAlertResponse);
       socket.off('alert:resolved', handleAlertResolved);
       socket.off('sos:triggered', handleAlertNewOrUpdated);
+      socket.off('relationship:change', handleAccessRevoked);
+      socket.off('circle:member_removed', handleAccessRevoked);
+      socket.off('circle:member_left', handleAccessRevoked);
+      socket.off('circle:terminated', handleAccessRevoked);
     };
   }, []);
 

@@ -48,12 +48,20 @@ export interface PatientTelemetry {
   latitude: number | null;
   longitude: number | null;
   accuracy_meters?: number | null;
+  accuracy_m?: number | null;
   battery_pct?: number | null;
   network_status?: string | null;
   safety_state?: string;
+  location_state?: string;
+  sos_active?: boolean;
   current_zone_name?: string | null;
+  last_known_zone_name?: string | null;
   last_ping_at?: string | null;
   freshness_tier?: 'CURRENT' | 'RECENT' | 'STALE' | 'UNAVAILABLE';
+  location_freshness?: 'CURRENT' | 'RECENT' | 'STALE' | 'UNAVAILABLE';
+  is_low_confidence?: boolean;
+  monitored_zone_count?: number;
+  has_active_safe_zone?: boolean;
 }
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
@@ -97,16 +105,11 @@ export async function listCircleSafetyAlerts(
   circleId: string,
   status?: string
 ): Promise<SafetyAlert[]> {
-  try {
-    const res = await apiClient.get(`/care-circles/${circleId}/alerts`, {
-      params: status ? { status } : undefined,
-    });
-    const rows = res.data?.data?.alerts ?? res.data?.data ?? res.data?.alerts ?? [];
-    return Array.isArray(rows) ? rows.map(normalizeAlert) : [];
-  } catch (err) {
-    console.warn('[safetyService] listCircleSafetyAlerts error:', err);
-    return [];
-  }
+  const res = await apiClient.get(`/care-circles/${circleId}/alerts`, {
+    params: status ? { status } : undefined,
+  });
+  const rows = res.data?.data?.alerts ?? res.data?.data ?? res.data?.alerts ?? [];
+  return Array.isArray(rows) ? rows.map(normalizeAlert) : [];
 }
 
 /** Aggregate canonical alerts across the caller's active Circles. */
@@ -152,11 +155,6 @@ export async function resolveAlert(
 // ─── Telemetry ───────────────────────────────────────────────────────────────
 
 export async function fetchPatientTelemetry(patientId: string): Promise<PatientTelemetry | null> {
-  try {
-    const res = await apiClient.get(`/location/patient/${patientId}/current`);
-    return res.data?.data ?? res.data ?? null;
-  } catch (err) {
-    console.warn('[safetyService] fetchPatientTelemetry error:', err);
-    return null;
-  }
+  const res = await apiClient.get(`/location/patient/${patientId}/current`);
+  return res.data?.data?.location ?? res.data?.location ?? res.data?.data ?? null;
 }

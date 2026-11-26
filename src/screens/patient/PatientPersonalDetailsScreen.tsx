@@ -33,12 +33,17 @@ import { useTheme } from '../../theme/ThemeContext';
 import { F } from '../../theme/fonts';
 import { useAuth } from '../../hooks/useAuth';
 import { getPatientProfile, updatePatientProfile } from '../../services/userService';
+import {
+  CORE_SUPPORTED_LANGUAGES,
+  DEFAULT_LANGUAGE_CODE,
+  getLanguageDisplayName,
+  resolveLanguageCode,
+} from '../../constants/languages';
 import type { PatientStackParams } from '../../types/navigation.types';
 
 type Props = NativeStackScreenProps<PatientStackParams, 'PatientPersonalDetailsScreen'>;
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
-const LANGUAGE_OPTIONS = ['English', 'Hindi', 'Kannada', 'Tamil', 'Telugu', 'Malayalam'];
 const LIVING_OPTIONS = [
   { id: 'ALONE', label: 'Living Alone' },
   { id: 'WITH_SPOUSE', label: 'With Spouse / Partner' },
@@ -81,7 +86,7 @@ export const PatientPersonalDetailsScreen: React.FC<Props> = ({ navigation }) =>
   const [name, setName] = useState('');
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState('');
-  const [language, setLanguage] = useState('English');
+  const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE_CODE);
   const [city, setCity] = useState('');
   const [living, setLiving] = useState('');
   const [careNeeds, setCareNeeds] = useState<string[]>([]);
@@ -103,7 +108,7 @@ export const PatientPersonalDetailsScreen: React.FC<Props> = ({ navigation }) =>
         setName(data.name || user?.name || '');
         setDob(data.date_of_birth ? String(data.date_of_birth).split('T')[0] : '');
         setGender(data.gender || '');
-        setLanguage(data.preferred_language || user?.preferred_language || 'English');
+        setLanguage(resolveLanguageCode(data.preferred_language || user?.preferred_language));
         setCity(data.city || user?.city || '');
         setLiving(data.living_arrangement || '');
         setCareNeeds(Array.isArray(data.care_needs) ? data.care_needs : []);
@@ -116,7 +121,7 @@ export const PatientPersonalDetailsScreen: React.FC<Props> = ({ navigation }) =>
       console.warn('[PatientPersonalDetailsScreen] Load failed:', err);
       if (user) {
         setName(user.name || '');
-        setLanguage(user.preferred_language || 'English');
+        setLanguage(resolveLanguageCode(user.preferred_language));
         setCity(user.city || '');
         setDob(user.date_of_birth || '');
         setGender(user.gender || '');
@@ -159,7 +164,7 @@ export const PatientPersonalDetailsScreen: React.FC<Props> = ({ navigation }) =>
         name: name.trim(),
         date_of_birth: dob.trim() || undefined,
         gender: gender || undefined,
-        preferred_language: language,
+        preferred_language: resolveLanguageCode(language),
         city: city.trim() || undefined,
         living_arrangement: living || undefined,
         care_needs: careNeeds,
@@ -321,28 +326,31 @@ export const PatientPersonalDetailsScreen: React.FC<Props> = ({ navigation }) =>
                   <Text style={styles.fieldLabel}>Preferred Language</Text>
                   {isEditing ? (
                     <View style={styles.chipWrap}>
-                      {LANGUAGE_OPTIONS.map((l) => (
-                        <Pressable
-                          key={l}
-                          onPress={() => setLanguage(l)}
-                          style={[
-                            styles.chip,
-                            language === l && styles.chipActive,
-                          ]}
-                        >
-                          <Text
+                      {CORE_SUPPORTED_LANGUAGES.map((l) => {
+                        const selected = resolveLanguageCode(language) === l.code;
+                        return (
+                          <Pressable
+                            key={l.code}
+                            onPress={() => setLanguage(l.code)}
                             style={[
-                              styles.chipText,
-                              language === l && styles.chipTextActive,
+                              styles.chip,
+                              selected && styles.chipActive,
                             ]}
                           >
-                            {l}
-                          </Text>
-                        </Pressable>
-                      ))}
+                            <Text
+                              style={[
+                                styles.chipText,
+                                selected && styles.chipTextActive,
+                              ]}
+                            >
+                              {l.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
                   ) : (
-                    <Text style={styles.fieldValue}>{language || 'English'}</Text>
+                    <Text style={styles.fieldValue}>{getLanguageDisplayName(language)}</Text>
                   )}
                 </View>
 

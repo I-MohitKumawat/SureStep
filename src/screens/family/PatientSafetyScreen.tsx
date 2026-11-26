@@ -38,11 +38,13 @@ export const PatientSafetyScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [telemetry, setTelemetry] = useState<PatientTelemetry | null>(null);
   const [safeZones, setSafeZones] = useState<SafeZone[]>([]);
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
 
   const loadData = useCallback(async () => {
+    setLoadError(null);
     try {
       const [telemetryRes, alertsRes, zonesRes] = await Promise.all([
         fetchPatientTelemetry(patientId),
@@ -54,8 +56,9 @@ export const PatientSafetyScreen: React.FC<Props> = ({ route, navigation }) => {
       const patientAlerts = alertsRes.filter((a) => a.patient_id === patientId);
       setAlerts(patientAlerts);
       setSafeZones(zonesRes);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('[PatientSafetyScreen] loadData error:', err);
+      setLoadError(err?.message || 'Unable to load safety data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -134,30 +137,71 @@ export const PatientSafetyScreen: React.FC<Props> = ({ route, navigation }) => {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#C93B2B" />
               </TouchableOpacity>
-            ) : (
+            ) : loadError ? (
               <View style={styles.safeBanner}>
                 <View style={styles.safeIconWrap}>
-                  <Ionicons name="shield-checkmark" size={22} color="#0E7A67" />
+                  <Ionicons name="alert-circle-outline" size={22} color="#B45309" />
                 </View>
                 <View style={styles.safeTextWrap}>
-                  <Text style={styles.safeTitle}>Within Safe Zone</Text>
+                  <Text style={styles.safeTitle}>Safety Status Unavailable</Text>
                   <Text style={styles.safeSubtitle}>
-                    {telemetry?.current_zone_name ? `Currently in ${telemetry.current_zone_name}` : 'Location normal'}
+                    Could not load current safety telemetry or alerts. Pull down to retry.
                   </Text>
                 </View>
-                <View style={styles.telemetryPills}>
-                  {telemetry?.battery_pct != null && (
-                    <View style={styles.telemetryPill}>
-                      <Ionicons name="battery-charging-outline" size={14} color="#52605D" />
-                      <Text style={styles.telemetryPillText}>{telemetry.battery_pct}%</Text>
-                    </View>
-                  )}
-                  <View style={styles.telemetryPill}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.telemetryPillText}>Live</Text>
-                  </View>
-                </View>
               </View>
+            ) : (
+              (() => {
+                const freshness = telemetry?.freshness_tier ?? telemetry?.location_freshness ?? 'UNAVAILABLE';
+                const hasZones = safeZones.filter((z) => z.is_active !== false).length > 0;
+                const bannerTitle = !telemetry || freshness === 'UNAVAILABLE'
+                  ? 'Location Unavailable'
+                  : freshness !== 'CURRENT'
+                    ? 'Last Known Location'
+                    : !hasZones
+                      ? 'No Safe Zones Configured'
+                      : telemetry.current_zone_name
+                        ? `Inside ${telemetry.current_zone_name}`
+                        : 'Outside Safe Zones';
+                const bannerSub = !telemetry || freshness === 'UNAVAILABLE'
+                  ? 'No current location signal available'
+                  : freshness !== 'CURRENT' && telemetry.last_ping_at
+                    ? `Last ping ${new Date(telemetry.last_ping_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : !hasZones
+                      ? 'Create and attach a Safe Zone to monitor boundaries'
+                      : telemetry.current_zone_name
+                        ? 'Current location verified inside boundary'
+                        : 'Patient location is outside configured boundaries';
+
+                return (
+                  <View style={styles.safeBanner}>
+                    <View style={styles.safeIconWrap}>
+                      <Ionicons
+                        name={freshness === 'CURRENT' && hasZones && telemetry?.current_zone_name ? 'shield-checkmark' : 'location-outline'}
+                        size={22}
+                        color="#0E7A67"
+                      />
+                    </View>
+                    <View style={styles.safeTextWrap}>
+                      <Text style={styles.safeTitle}>{bannerTitle}</Text>
+                      <Text style={styles.safeSubtitle}>{bannerSub}</Text>
+                    </View>
+                    <View style={styles.telemetryPills}>
+                      {telemetry?.battery_pct != null && (
+                        <View style={styles.telemetryPill}>
+                          <Ionicons name="battery-charging-outline" size={14} color="#52605D" />
+                          <Text style={styles.telemetryPillText}>{telemetry.battery_pct}%</Text>
+                        </View>
+                      )}
+                      {freshness === 'CURRENT' && (
+                        <View style={styles.telemetryPill}>
+                          <View style={styles.liveDot} />
+                          <Text style={styles.telemetryPillText}>Current</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()
             )}
 
             {/* Safe Zones Section */}

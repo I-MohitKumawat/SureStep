@@ -34,6 +34,7 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
   const [activeTab, setActiveTab] = useState<FilterTab>('active');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const {
     getAlertsForPatient,
@@ -52,7 +53,12 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
 
   // Load alerts from backend
   const loadAlerts = useCallback(async () => {
-    await fetchPatientAlerts(patientId);
+    setErrorMsg(null);
+    try {
+      await fetchPatientAlerts(patientId);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Unable to load safety alerts.');
+    }
   }, [patientId, fetchPatientAlerts]);
 
   const handleRefresh = async () => {
@@ -180,11 +186,19 @@ export const CaregiverPatientAlertsScreen: React.FC<Props> = ({ navigation, rout
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons name="notifications-off-outline" size={48} color="#D1D5DB" />
+              <Ionicons
+                name={errorMsg ? 'warning-outline' : 'notifications-off-outline'}
+                size={48}
+                color={errorMsg ? '#DC2626' : '#D1D5DB'}
+              />
             </View>
-            <Text style={styles.emptyTitle}>No Alerts Here</Text>
+            <Text style={styles.emptyTitle}>
+              {errorMsg ? 'Alerts Unavailable' : 'No Alerts Here'}
+            </Text>
             <Text style={styles.emptyText}>
-              All alerts in this category have been processed or cleared.
+              {errorMsg
+                ? 'Could not load safety alerts. Pull down to retry.'
+                : 'All alerts in this category have been processed or cleared.'}
             </Text>
           </View>
         }
